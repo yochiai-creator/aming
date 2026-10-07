@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>アーム刻印読取</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E9ECEA; --panel:#F7F8F6; --ink:#1C272B; --sub:#5B676B; --line:#C9CFCC;
+  --steel:#2F4650; --yellow:#F2B705; --ok:#2E7D4F; --warn:#B8860B; --ng:#B3362B; --stamp:#3A4A50;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151B1D; --panel:#1E2629; --ink:#E6EBEA; --sub:#9AA6A9; --line:#34403F;
+    --steel:#8FB3C2; --ok:#5DBB86; --warn:#E0B84A; --ng:#E36B5F; --stamp:#C9D4D6;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151B1D; --panel:#1E2629; --ink:#E6EBEA; --sub:#9AA6A9; --line:#34403F;
+  --steel:#8FB3C2; --ok:#5DBB86; --warn:#E0B84A; --ng:#E36B5F; --stamp:#C9D4D6;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",sans-serif;font-size:16px;line-height:1.6}
+main{max-width:560px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:4px 0 14px}
+h1{font-size:1.25rem;margin:0}
+.tag{font-size:.7em;background:var(--yellow);color:#1C272B;padding:1px 8px;border-radius:6px}
+#mstat{white-space:pre-line;font-size:.8rem;color:var(--sub);text-align:right}
+button{font:inherit;cursor:pointer;border:none;border-radius:10px}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+.shoot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;min-height:110px;background:var(--steel);color:var(--panel);font-size:1.25rem;font-weight:700;border-left:10px solid var(--yellow)}
+.shoot small{font-weight:400;font-size:.8rem;opacity:.85}
+.shoot:disabled{opacity:.5}
+.shoot.alt{margin-top:10px;min-height:64px;font-size:1.02rem;background:transparent;color:var(--ink);border:2px solid var(--steel);border-left:10px solid var(--yellow)}
+.tip{font-size:.82rem;color:var(--sub);margin:8px 2px 18px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+h2{font-size:1rem;margin:0 0 10px}
+#preview{display:none;flex-direction:column;gap:6px;margin-bottom:10px}
+#preview img{width:100%;border-radius:8px;border:1px solid var(--line)}
+#status{font-size:.9rem;color:var(--sub);min-height:1.4em}
+.plate{font-family:"Share Tech Mono",ui-monospace,monospace;color:var(--stamp);background:repeating-linear-gradient(135deg,transparent 0 6px,rgba(127,140,140,.07) 6px 12px);border:1px dashed var(--line);border-radius:8px;padding:10px 12px;letter-spacing:.12em;line-height:1.35;overflow-x:auto}
+.plate .l1{font-size:1.45rem}.plate .l2{font-size:1.15rem}
+.plate .fix{color:var(--warn);text-decoration:underline}
+.verdict{display:inline-block;font-weight:700;padding:2px 10px;border-radius:999px;font-size:.85rem;margin:10px 0 6px}
+.v-ok{background:var(--ok);color:#fff}.v-warn{background:var(--warn);color:#fff}.v-ng{background:var(--ng);color:#fff}
+.cand{display:block;width:100%;text-align:left;background:transparent;border:2px solid var(--line);padding:10px 12px;margin-top:8px;color:var(--ink)}
+.cand.best{border-color:var(--ok)}
+.cand b{font-family:"Share Tech Mono",ui-monospace,monospace;font-size:1.1rem;letter-spacing:.06em}
+.cand .meta{font-size:.85rem;color:var(--sub)}
+.chip{display:inline-block;font-size:.72rem;padding:0 6px;border-radius:5px;margin-left:6px;border:1px solid currentColor;color:var(--ok);font-family:"BIZ UDPGothic",sans-serif;letter-spacing:0}
+.dup{color:var(--ng);font-weight:700;font-size:.85rem}
+.row{display:flex;gap:8px;margin-top:10px}
+.btn{flex:1;padding:12px;font-weight:700;background:var(--ink);color:var(--panel)}
+.btn.sec{background:transparent;color:var(--ink);border:2px solid var(--line)}
+.btn.go{background:var(--yellow);color:#1C272B}
+input[type=text],textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+textarea{min-height:90px;font-size:.8rem}
+.log{list-style:none;margin:0;padding:0}
+.log li{display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding:8px 0;font-size:.88rem}
+.log li:first-child{border-top:none}
+.log .z{font-family:"Share Tech Mono",ui-monospace,monospace}
+.muted{color:var(--sub);font-size:.85rem}
+details summary{cursor:pointer;font-weight:700}
+.hidden{display:none!important}
+/* フルスクリーン（ファインダー・切り抜き） */
+.full{position:fixed;inset:0;z-index:10;background:#0B0F10;color:#fff;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.full .bar{display:flex;gap:8px;padding:12px}
+.full .bar .btn{background:#2A3438;color:#fff}
+.full .bar .btn.go{background:var(--yellow);color:#1C272B}
+.full .hint{text-align:center;font-size:.9rem;padding:10px 12px 0;color:#D7DEDF}
+#vfBox{position:relative;flex:1;overflow:hidden}
+#vfBox video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#guide{position:absolute;left:7%;width:86%;top:50%;transform:translateY(-50%);aspect-ratio:3.2/1;border:3px solid var(--yellow);border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.55)}
+#guide::after{content:"1行目：図番　2行目：◇ 年月-号機";position:absolute;left:0;right:0;top:calc(100% + 10px);text-align:center;font-size:.85rem;color:#fff}
+#cropStage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:8px}
+#cropWrap{position:relative;touch-action:none;line-height:0}
+#cropImg{max-width:100%;max-height:calc(100vh - 220px);display:block;user-select:none;-webkit-user-drag:none}
+#cropBox{position:absolute;border:3px solid var(--yellow);box-shadow:0 0 0 9999px rgba(0,0,0,.55);cursor:move;touch-action:none}
+#cropWrap{overflow:hidden}
+.h{position:absolute;width:30px;height:30px;background:var(--yellow);border-radius:50%;touch-action:none}
+.h.tl{left:-15px;top:-15px}.h.tr{right:-15px;top:-15px}.h.bl{left:-15px;bottom:-15px}.h.br{right:-15px;bottom:-15px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="ttl">アーム刻印読取</h1>
+    <div id="mstat">明細を読み込み中…</div>
+  </header>
+
+  <button class="shoot" id="shootBtn" type="button">刻印を撮影する<small>黄色い枠に図番と号機の2行を合わせる</small></button>
+  <button class="shoot alt" id="pickBtn" type="button">写真を選んで枠で切り抜く</button>
+  <button class="shoot alt hidden" id="demoBtn" type="button">サンプル写真で試す<small>実際の刻印写真（YN12B20269F1 1152号機）</small></button>
+  <input id="cam" type="file" accept="image/*" capture="environment" class="hidden">
+  <input id="pick" type="file" accept="image/*" class="hidden">
+  <p class="tip" id="tip">ライトを真横から当てて、打刻の影がはっきり出る角度で撮ると読み取りが安定します。</p>
+
+  <section id="resultSec" class="hidden">
+    <h2>読み取り結果</h2>
+    <div id="preview"><img id="pv1" alt="切り抜いた刻印"><img id="pv2" alt="凹凸強調"></div>
+    <div id="status"></div>
+    <div id="readout"></div>
+    <div id="cands"></div>
+  </section>
+
+  <section>
+    <h2>手入力で探す</h2>
+    <input type="text" id="q" placeholder="例: 20269 1152 / LS12B10010 39" autocomplete="off">
+    <div id="qres"></div>
+  </section>
+
+  <section>
+    <h2>記録</h2>
+    <ul class="log" id="log"><li class="muted">まだ記録はありません。</li></ul>
+  </section>
+
+  <section>
+    <details>
+      <summary>出荷明細を取り込む</summary>
+      <p class="muted">「アーム出荷明細」PDFを選ぶと、図番・号機・出荷日・出荷先を照合用に取り込みます。今の明細は置き換わります。</p>
+      <input type="file" id="pdfIn" accept="application/pdf">
+      <p class="muted" style="margin-top:12px">PDFが読めないときは、明細の文字をコピーしてここに貼り付けてください。</p>
+      <textarea id="pasteIn" placeholder="明細のテキスト"></textarea>
+      <div class="row"><button class="btn" id="pasteBtn" type="button">貼り付けた内容を取り込む</button></div>
+      <div id="impStat" class="muted"></div>
+    </details>
+  </section>
+</main>
+
+<!-- ファインダー -->
+<div class="full hidden" id="vf">
+  <div class="hint">枠いっぱいに刻印を合わせて「撮る」</div>
+  <div id="vfBox"><video id="video" playsinline muted autoplay></video><div id="guide"></div></div>
+  <div class="bar">
+    <button class="btn" id="vfCancel" type="button">やめる</button>
+    <button class="btn go" id="vfShot" type="button">撮る</button>
+  </div>
+</div>
+
+<!-- 切り抜き -->
+<div class="full hidden" id="crop">
+  <div class="hint">黄色い枠を刻印の2行に合わせる（ドラッグで移動、角で大きさ）</div>
+  <div id="cropStage"><div id="cropWrap"><img id="cropImg" alt="切り抜く写真"><div id="cropBox"><div class="h tl" data-h="tl"></div><div class="h tr" data-h="tr"></div><div class="h bl" data-h="bl"></div><div class="h br" data-h="br"></div></div></div></div>
+  <div class="bar">
+    <button class="btn" id="cropCancel" type="button">やめる</button>
+    <button class="btn go" id="cropOk" type="button">この範囲で読む</button>
+  </div>
+</div>
+
+<script>
+const DEMO = false;
+const DEMO_ROWS = null;
+const DEMO_IMG = null;
+</script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+let db = null, sample = null, myId = null;
+let master = [];
+let scans = [];
+
+/* ================= 照合ロジック ================= */
+const SIM = [["0","O","D","Q"],["1","I","L","7","T"],["2","Z"],["5","S","6"],["8","B","3"],["9","7","4"],["6","G","5"],["F","E","P"],["N","M"],["U","V"]];
+const simMap = {};
+SIM.forEach(g => g.forEach(a => g.forEach(b => { if (a !== b) simMap[a + b] = 1; })));
+function subCost(a, b) { if (a === b) return 0; if (a === "?" || b === "?") return 0.25; return simMap[a + b] ? 0.35 : 1; }
+function wdist(a, b) {
+  const m = a.length, n = b.length, d = Array.from({length: m + 1}, (_, i) => [i]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + subCost(a[i-1], b[j-1]));
+  return d[m][n];
+}
+function norm(s) { return String(s || "").toUpperCase().replace(/[ØΦθ∅]/g, "0").replace(/[^A-Z0-9?]/g, ""); }
+
+// 桁ごとの型で補正：英2・数2・B・数5・F・数1（+G数1）
+const TO_DIGIT = {O:"0",D:"0",Q:"0",I:"1",L:"1",T:"1",Z:"2",S:"5",B:"8",G:"6",A:"4"};
+const TO_ALPHA = {"0":"O","1":"I","2":"Z","5":"S","8":"B","6":"G","4":"A"};
+function fitZuban(raw) {
+  const z = norm(raw);
+  const tpl = z.length === 14 ? "AANNBNNNNNFNGN" : z.length === 12 ? "AANNBNNNNNFN" : null;
+  if (!tpl) return {z, fixed: []};
+  let out = "", fixed = [];
+  for (let i = 0; i < z.length; i++) {
+    let c = z[i], t = tpl[i], n = c;
+    if (c === "?") n = c;
+    else if (t === "N" && !/\d/.test(c)) n = TO_DIGIT[c] || c;
+    else if (t === "A" && /\d/.test(c)) n = TO_ALPHA[c] || c;
+    else if (t === "B" || t === "F" || t === "G") n = t;
+    if (n !== c) fixed.push(i);
+    out += n;
+  }
+  return {z: out, fixed};
+}
+function fitGoki(raw) { return norm(raw).split("").map(c => /\d|\?/.test(c) ? c : (TO_DIGIT[c] || "")).join(""); }
+
+function rank(z, g) {
+  const last = scans[0];
+  return master.map(r => {
+    const cz = z ? wdist(z, r.z) : 3;
+    const cg = g ? wdist(g, r.g) * 1.5 : 2;
+    let cost = cz + cg, seq = false;
+    // 号機の並び：直前の記録と同じ図番で、すぐ後の号機なら優先
+    if (last && last.z === r.z && /^\d+$/.test(r.g) && /^\d+$/.test(last.g)) {
+      const dg = +r.g - +last.g;
+      if (dg >= 1 && dg <= 5) { cost = Math.max(0, cost - 0.3); seq = true; }
+    }
+    if (scans.some(s => s.z === r.z && s.g === r.g)) cost += 0.5;
+    return {r, cost, seq};
+  }).sort((a, b) => a.cost - b.cost);
+}
+
+/* ================= 明細PDF ================= */
+function parseMaster(text) {
+  const re = /([A-Z]{2}\d{2}B\d{5}F\d(?:G\d)?)\s+(\d{1,4})(?=\s)/g;
+  const hits = []; let m;
+  while ((m = re.exec(text))) hits.push({z: m[1], g: m[2], s: m.index, e: re.lastIndex});
+  const out = [], seen = new Set();
+  hits.forEach((h, i) => {
+    const seg = text.slice(h.e, i + 1 < hits.length ? hits[i+1].s : h.e + 200);
+    const dm = /(\d{1,2})月(\d{1,2})日/.exec(seg); if (!dm) return;
+    const sp = seg.slice(0, dm.index).replace(/\s+/g, " ").trim();
+    const rest = seg.slice(dm.index + dm[0].length).replace(/^\s*\(旧[^)]*\)\s*/, "");
+    const to = (rest.match(/^\s*(\S+)/) || [])[1] || "";
+    const k = h.z + "#" + h.g; if (seen.has(k)) return; seen.add(k);
+    out.push({z: h.z, g: h.g, d: dm[1] + "/" + dm[2], to, sp});
+  });
+  return out;
+}
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+async function pdfText(file) {
+  const base = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/";
+  if (!window.pdfjsLib) { await loadScript(base + "pdf.min.js"); await loadScript(base + "pdf.worker.min.js"); }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = base + "pdf.worker.min.js";
+  const pdf = await pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
+  const lines = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const tc = await (await pdf.getPage(p)).getTextContent();
+    const rows = {};
+    tc.items.forEach(it => { const y = Math.round(it.transform[5] / 3); (rows[y] = rows[y] || []).push(it); });
+    Object.keys(rows).map(Number).sort((a, b) => b - a).forEach(y => lines.push(rows[y].sort((a, b) => a.transform[4] - b.transform[4]).map(i => i.str).join(" ")));
+  }
+  return lines.join("\n");
+}
+async function importText(text, source) {
+  const rows = parseMaster(text);
+  if (!rows.length) { $("impStat").textContent = "図番と号機が見つかりませんでした。アーム出荷明細のPDFか確認してください。"; return; }
+  master = rows; renderMstat(source);
+  if (db) {
+    try { await db.doc("master/current").set({rows, source, importedAt: Date.now(), count: rows.length}); $("impStat").textContent = rows.length + "件を取り込みました。"; }
+    catch (e) { $("impStat").textContent = rows.length + "件を読み込みました（保存できなかったので、この画面だけで使えます）。"; }
+  } else $("impStat").textContent = rows.length + "件を読み込みました（この画面だけで使えます）。";
+}
+function renderMstat(src) { $("mstat").textContent = master.length ? `照合対象 ${master.length}件` + (src ? `\n${src}` : "") : "出荷明細が未登録です"; }
+
+/* ================= 画像 ================= */
+function toBlob(c, q) { return new Promise(r => c.toBlob(r, "image/jpeg", q || 0.92)); }
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+// 切り抜いた canvas → 送信用2枚（元・凹凸強調）
+async function prepare(cv) {
+  const target = 1400, sc = Math.min(2.5, target / cv.width);
+  const w = Math.round(cv.width * sc), h = Math.round(cv.height * sc);
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(cv, 0, 0, w, h);
+  const orig = await toBlob(c);
+  const src = x.getImageData(0, 0, w, h);
+  const b = document.createElement("canvas"); b.width = w; b.height = h;
+  const bx = b.getContext("2d"); bx.filter = `blur(${Math.max(8, Math.round(h / 25))}px) grayscale(1)`; bx.drawImage(c, 0, 0);
+  const bl = bx.getImageData(0, 0, w, h).data, s = src.data, diff = new Float32Array(w * h);
+  const vals = [];
+  for (let i = 0, p = 0; i < s.length; i += 4, p++) {
+    const v = (0.299 * s[i] + 0.587 * s[i+1] + 0.114 * s[i+2]) - bl[i]; diff[p] = v; if (p % 7 === 0) vals.push(v);
+  }
+  vals.sort((a, b) => a - b);
+  const lo = vals[Math.floor(vals.length * 0.01)], hi = vals[Math.floor(vals.length * 0.99)], k = 255 / ((hi - lo) || 1);
+  for (let i = 0, p = 0; i < s.length; i += 4, p++) { const v = Math.max(0, Math.min(255, (diff[p] - lo) * k)); s[i] = s[i+1] = s[i+2] = v; }
+  x.putImageData(src, 0, 0);
+  const enh = await toBlob(c);
+  return {orig, enh};
+}
+
+/* ---------- ファインダー（枠つきカメラ） ---------- */
+let stream = null;
+async function openViewfinder() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camNote("このブラウザはカメラの直接起動に対応していません"); return false; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: "environment"}, width: {ideal: 3840}, height: {ideal: 2160}}, audio: false});
+  } catch (e) { camNote(e && e.name === "NotAllowedError" ? "カメラの使用が許可されていません" : "カメラを起動できませんでした（" + (e && e.name || "不明") + "）"); return false; }
+  const v = $("video"); v.srcObject = stream; $("vf").classList.remove("hidden");
+  try { await v.play(); } catch (e) {}
+  try { const t = stream.getVideoTracks()[0]; const cap = t.getCapabilities && t.getCapabilities(); if (cap && cap.torch) $("vf").dataset.torch = "1"; } catch (e) {}
+  return true;
+}
+function camNote(m) { $("tip").innerHTML = "⚠ " + m + "。枠つき撮影の代わりに、普通に撮ってから枠で切り抜きます。<br>Claudeアプリ内で開いている場合は、リンクをSafariやChromeで開くと枠つき撮影が使えることがあります。"; }
+function closeViewfinder() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; $("vf").classList.add("hidden"); }
+function shotFromViewfinder() {
+  const v = $("video"), box = $("vfBox").getBoundingClientRect(), g = $("guide").getBoundingClientRect();
+  const vw = v.videoWidth, vh = v.videoHeight; if (!vw) return null;
+  const scale = Math.max(box.width / vw, box.height / vh);
+  const ox = (box.width - vw * scale) / 2, oy = (box.height - vh * scale) / 2;
+  const mx = g.width * 0.06, my = g.height * 0.12;
+  let sx = (g.left - box.left - mx - ox) / scale, sy = (g.top - box.top - my - oy) / scale;
+  let sw = (g.width + mx * 2) / scale, sh = (g.height + my * 2) / scale;
+  sx = Math.max(0, sx); sy = Math.max(0, sy); sw = Math.min(vw - sx, sw); sh = Math.min(vh - sy, sh);
+  const c = document.createElement("canvas"); c.width = Math.round(sw); c.height = Math.round(sh);
+  c.getContext("2d").drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c;
+}
+
+/* ---------- 切り抜き枠 ---------- */
+let cropNat = null, cropResolve = null, rect = null, drag = null;
+function openCrop(img) {
+  return new Promise(res => {
+    cropResolve = res; cropNat = img;
+    const ci = $("cropImg");
+    $("cropBox").style.width = "0px";
+    $("crop").classList.remove("hidden");
+    const place = () => {
+      const W = ci.clientWidth, H = ci.clientHeight;
+      if (!W || !H) { setTimeout(place, 50); return; }
+      const w = W * 0.8, h = Math.max(60, Math.min(H * 0.6, w / 3.2));
+      rect = {x: (W - w) / 2, y: Math.max(0, (H - h) / 2), w, h}; drawRect();
+    };
+    ci.onload = () => requestAnimationFrame(place);
+    ci.src = img.src;
+    if (ci.complete && ci.naturalWidth) requestAnimationFrame(place);
+  });
+}
+function drawRect() { const b = $("cropBox").style; b.left = rect.x + "px"; b.top = rect.y + "px"; b.width = rect.w + "px"; b.height = rect.h + "px"; }
+$("cropBox").addEventListener("pointerdown", e => {
+  e.preventDefault(); $("cropBox").setPointerCapture(e.pointerId);
+  drag = {mode: e.target.dataset.h || "move", sx: e.clientX, sy: e.clientY, r: {...rect}};
+});
+$("cropBox").addEventListener("pointermove", e => {
+  if (!drag) return;
+  const W = $("cropImg").clientWidth, H = $("cropImg").clientHeight, dx = e.clientX - drag.sx, dy = e.clientY - drag.sy, r = {...drag.r}, MIN = 40;
+  if (drag.mode === "move") { r.x = Math.min(Math.max(0, r.x + dx), W - r.w); r.y = Math.min(Math.max(0, r.y + dy), H - r.h); }
+  else {
+    if (drag.mode.includes("l")) { const nx = Math.min(Math.max(0, r.x + dx), r.x + r.w - MIN); r.w += r.x - nx; r.x = nx; }
+    if (drag.mode.includes("r")) r.w = Math.min(Math.max(MIN, r.w + dx), W - r.x);
+    if (drag.mode.includes("t")) { const ny = Math.min(Math.max(0, r.y + dy), r.y + r.h - MIN); r.h += r.y - ny; r.y = ny; }
+    if (drag.mode.includes("b")) r.h = Math.min(Math.max(MIN, r.h + dy), H - r.y);
+  }
+  rect = r; drawRect();
+});
+["pointerup", "pointercancel"].forEach(ev => $("cropBox").addEventListener(ev, () => drag = null));
+$("cropCancel").onclick = () => { $("crop").classList.add("hidden"); cropResolve && cropResolve(null); };
+$("cropOk").onclick = () => {
+  const k = cropNat.naturalWidth / $("cropImg").clientWidth;
+  const c = document.createElement("canvas"); c.width = Math.round(rect.w * k); c.height = Math.round(rect.h * k);
+  c.getContext("2d").drawImage(cropNat, rect.x * k, rect.y * k, rect.w * k, rect.h * k, 0, 0, c.width, c.height);
+  $("crop").classList.add("hidden"); cropResolve && cropResolve(c);
+};
+async function cropFromFile(file) {
+  const url = URL.createObjectURL(file);
+  try { const img = await loadImg(url); return await openCrop(img); }
+  catch (e) { alert("写真を開けませんでした。"); return null; }
+}
+
+/* ================= 読み取り（2段階） ================= */
+const P1 = `建機アームに打刻された刻印を切り抜いた写真です。1枚目が元画像、2枚目が凹凸を強調した画像です。
+刻印は2行あります。
+1行目: 図番。形式は 英大文字2文字 + 数字2桁 + "B" + 数字5桁 + "F" + 数字1桁、末尾に "G"+数字1桁 が付くことがある（例: LS12B10010F1, YY12B00902F1G2）。
+2行目: ◇マーク、製作年月4桁(YYMM)、"-"、号機(1〜4桁の数字)、検査記号(例 UM)。
+スラッシュ付きの0は数字の0です。自信のない文字は ? にしてください。推測で埋めないこと。
+JSONだけで答えてください: {"zuban":"","seizo":"","goki":"","kensa":"","note":""}`;
+function p2(cands) {
+  return `同じ刻印の写真です。この刻印は次の候補のどれと一致しますか。1文字ずつ写真と見比べて判断してください。
+特に号機（2行目の "-" の後の数字）と図番の数字部分を丁寧に確認すること。
+${cands.map((c, i) => `${"ABCDE"[i]}: 図番 ${c.r.z}　号機 ${c.r.g}`).join("\n")}
+どれとも一致しなければ choice は "none"。
+JSONだけで答えてください: {"choice":"A","confidence":"高|中|低","reason":"一言"}`;
+}
+function uniqueTop(sc, n) { const out = [], seen = new Set(); for (const s of sc) { const k = s.r.z + "#" + s.r.g; if (!seen.has(k)) { seen.add(k); out.push(s); } if (out.length >= n) break; } return out; }
+
+async function readCanvas(cv, demoAnswer) {
+  $("resultSec").classList.remove("hidden");
+  $("cands").innerHTML = ""; $("readout").innerHTML = "";
+  $("status").textContent = "画像を準備中…";
+  const imgs = await prepare(cv);
+  $("pv1").src = URL.createObjectURL(imgs.orig); $("pv2").src = URL.createObjectURL(imgs.enh);
+  $("preview").style.display = "flex";
+  $("resultSec").scrollIntoView({behavior: "smooth", block: "start"});
+
+  let r1, r2 = null;
+  setBusy(true);
+  try {
+    if (demoAnswer) {
+      $("status").textContent = "1回目：刻印を読み取り中…"; await wait(1200); r1 = demoAnswer.r1;
+    } else {
+      if (!sample) throw {code: "no_sample"};
+      const lim = await sample.limits().catch(() => null);
+      if (!lim || !lim.images) throw {code: "no_images"};
+      const list = lim.images.maxCount >= 2 ? [imgs.orig, imgs.enh] : [imgs.enh];
+      $("status").textContent = "1回目：刻印を読み取り中…";
+      r1 = await sample.json(P1, {images: list, cache: false}) || {};
+      imgs.list = list;
+    }
+    const fz = fitZuban(r1.zuban), g = fitGoki(r1.goki);
+    showReadout(r1, fz, g);
+    if (!master.length) { $("status").textContent = ""; $("cands").innerHTML = '<p class="muted">出荷明細が未登録なので照合できません。下から取り込んでください。</p>' + rawBtn(); bindRaw(r1, fz, g); return; }
+
+    const sc = rank(fz.z, g), top = uniqueTop(sc, 5);
+    const sure = top[0].cost === 0 && (!top[1] || top[1].cost >= 2);
+    if (!sure) {
+      $("status").textContent = "2回目：候補と見比べて確認中…";
+      try {
+        if (demoAnswer) { await wait(1200); r2 = demoAnswer.r2(top); }
+        else r2 = await sample.json(p2(top), {images: imgs.list, cache: false});
+      } catch (e) { r2 = null; }
+    }
+    $("status").textContent = "";
+    showCands(top, r2, sure, r1, fz, g);
+  } catch (e) {
+    const msg = {no_sample: "このページではAI読み取りが使えません。下の手入力で探してください。", no_images: "このページでは画像を送れません。手入力で探してください。", not_granted: "AI読み取りが許可されていません。手入力で探してください。", rate_limited: "混み合っています。少し待ってから撮り直してください。", invalid_json: "読み取り結果を解釈できませんでした。撮り直してください。", image_rejected: "この画像は送れませんでした。撮り直してください。"}[e && e.code];
+    $("status").textContent = msg || "読み取りに失敗しました。撮り直すか、手入力で探してください。";
+  } finally { setBusy(false); }
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+function setBusy(b) { ["shootBtn", "pickBtn", "demoBtn"].forEach(id => $(id).disabled = b); }
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function seizoLabel(s) { const m = /^(\d{2})(\d{2})$/.exec(norm(s)); return m ? `20${m[1]}年${+m[2]}月製作` : ""; }
+function kensaLabel(k) { return /UM/.test(norm(k)) ? "UT・MT検査済" : (k ? "検査記号 " + k : ""); }
+function showReadout(r1, fz, g) {
+  const z = fz.z.split("").map((c, i) => fz.fixed.includes(i) ? `<span class="fix">${esc(c)}</span>` : esc(c)).join("") || "????";
+  const notes = [seizoLabel(r1.seizo), kensaLabel(r1.kensa), fz.fixed.length ? `下線は型に合わせて補正（読み取り: ${esc(r1.zuban)}）` : "", r1.note ? esc(r1.note) : ""].filter(Boolean);
+  $("readout").innerHTML = `<div class="plate"><div class="l1">${z}</div><div class="l2">◇ ${esc(r1.seizo || "????")}-${esc(g || "?")} ${esc(r1.kensa || "")}</div></div><div class="muted" style="margin-top:6px">${notes.join("／")}</div>`;
+}
+function showCands(top, r2, sure, r1, fz, g) {
+  let order = top.slice(), v, cls, note = "";
+  const idx = r2 && typeof r2.choice === "string" ? "ABCDE".indexOf(r2.choice.trim().toUpperCase()) : -1;
+  if (sure) { v = "明細と一致"; cls = "v-ok"; }
+  else if (idx >= 0 && idx < top.length) {
+    const chosen = top[idx]; order = [chosen, ...top.filter((_, i) => i !== idx)];
+    const conf = String(r2.confidence || "");
+    if (conf.includes("高")) { v = idx === 0 ? "明細と一致（2段階で確認）" : "2回目の確認で特定"; cls = "v-ok"; }
+    else { v = "候補あり・確認してください"; cls = "v-warn"; }
+    if (r2.reason) note = `<div class="muted">確認メモ: ${esc(r2.reason)}</div>`;
+  } else if (r2 && r2.choice === "none") { v = "明細に一致するものがありません"; cls = "v-ng"; }
+  else if (top[0].cost <= 0.6) { v = "候補あり・確認してください"; cls = "v-warn"; }
+  else { v = "明細に見当たりません"; cls = "v-ng"; }
+  let html = `<span class="verdict ${cls}">${v}</span>${note}`;
+  order.slice(0, 3).forEach((s, i) => { html += candHtml(s.r, i === 0 && cls !== "v-ng", s.seq); });
+  html += rawBtn();
+  $("cands").innerHTML = html;
+  document.querySelectorAll("#cands .cand").forEach(b => b.onclick = () => record(master.find(x => x.z === b.dataset.z && x.g === b.dataset.g), r1));
+  bindRaw(r1, fz, g);
+}
+function candHtml(row, best, seq) {
+  const dup = scans.some(s => s.z === row.z && s.g === row.g);
+  return `<button type="button" class="cand${best ? " best" : ""}" data-z="${esc(row.z)}" data-g="${esc(row.g)}">
+    <b>${esc(row.z)}　${esc(row.g)}号機</b>${seq ? '<span class="chip">前回の続き番号</span>' : ""}
+    <div class="meta">${esc(row.d)} 出荷 ／ ${esc(row.to)} ／ ${esc(row.sp)}</div>
+    ${dup ? '<div class="dup">記録済みです（二重チェックの可能性）</div>' : ""}
+    <div class="meta">タップでこの内容を記録</div></button>`;
+}
+function rawBtn() { return `<div class="row"><button type="button" class="btn sec" id="recRaw">読み取りどおり「明細外」で記録</button></div>`; }
+function bindRaw(r1, fz, g) { const b = $("recRaw"); if (b) b.onclick = () => record({z: fz.z, g, d: "", to: "明細外", sp: ""}, r1); }
+
+async function record(row, r) {
+  const doc = {z: row.z, g: row.g, d: row.d || "", to: row.to || "", sp: row.sp || "",
+    seizo: norm(r && r.seizo), kensa: norm(r && r.kensa), raw: r ? `${r.zuban || ""} / ${r.seizo || ""}-${r.goki || ""} ${r.kensa || ""}` : "手入力",
+    at: Date.now(), by: myId || ""};
+  let saved = false;
+  if (db) { try { await db.collection("scans").add(doc); saved = true; } catch (e) {} }
+  if (!saved) { scans.unshift(doc); renderLog(); }
+  $("cands").innerHTML = `<span class="verdict v-ok">記録しました</span><div class="muted">${esc(doc.z)}　${esc(doc.g)}号機 ／ ${esc(doc.to)}</div>`;
+  $("q").value = ""; $("qres").innerHTML = "";
+}
+function renderLog() {
+  if (!scans.length) { $("log").innerHTML = '<li class="muted">まだ記録はありません。</li>'; return; }
+  $("log").innerHTML = scans.slice(0, 50).map(s => {
+    const t = new Date(s.at), tt = `${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
+    return `<li><span><span class="z">${esc(s.z)} ${esc(s.g)}</span><br><span class="muted">${esc(s.to)}${s.d ? " " + esc(s.d) + "出荷" : ""}</span></span><span class="muted">${tt}</span></li>`;
+  }).join("");
+}
+
+/* ================= 手入力検索 ================= */
+$("q").addEventListener("input", () => {
+  const parts = $("q").value.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length || !master.length) { $("qres").innerHTML = ""; return; }
+  const [a, b] = parts;
+  const hits = master.filter(r => r.z.includes(norm(a)) && (!b || r.g === norm(b) || r.g.startsWith(norm(b))) || (parts.length === 1 && r.g === norm(a))).slice(0, 8);
+  $("qres").innerHTML = hits.length ? hits.map(r => candHtml(r, false, false)).join("") : '<p class="muted">該当なし</p>';
+  document.querySelectorAll("#qres .cand").forEach(btn => btn.onclick = () => record(master.find(x => x.z === btn.dataset.z && x.g === btn.dataset.g), null));
+});
+
+/* ================= イベント ================= */
+$("shootBtn").onclick = async () => { if (!(await openViewfinder())) $("cam").click(); };
+$("pickBtn").onclick = () => $("pick").click();
+$("vfCancel").onclick = closeViewfinder;
+$("vfShot").onclick = () => { const c = shotFromViewfinder(); closeViewfinder(); if (c) readCanvas(c); };
+[$("cam"), $("pick")].forEach(inp => inp.onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  const c = await cropFromFile(f); if (c) readCanvas(c);
+});
+$("pdfIn").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  $("impStat").textContent = "PDFを読み込み中…";
+  try { await importText(await pdfText(f), f.name); } catch (err) { $("impStat").textContent = "PDFを読み込めませんでした。文字をコピーして下に貼り付けてください。"; }
+};
+$("pasteBtn").onclick = () => { const t = $("pasteIn").value; if (t.trim()) importText(t, "貼り付け"); };
+
+/* ================= デモ ================= */
+if (DEMO) {
+  $("ttl").innerHTML = 'アーム刻印読取 <span class="tag">デモ</span>';
+  $("demoBtn").classList.remove("hidden");
+  $("tip").innerHTML = "デモ版：10月の出荷明細から抜粋した44件で照合します。記録はこの画面の中だけで保存されません。<br>ライトを真横から当てて、打刻の影がはっきり出る角度で撮ると読み取りが安定します。";
+  $("demoBtn").onclick = async () => {
+    const img = await loadImg(DEMO_IMG);
+    const c = await openCrop(img); if (!c) return;
+    readCanvas(c, {
+      r1: {zuban: "YN12BZ0Z69F1", seizo: "2609", goki: "11S2", kensa: "UM", note: "デモ用の読み取り例（わざと誤読を混ぜています）"},
+      r2: top => { const i = top.findIndex(t => t.r.z === "YN12B20269F1" && t.r.g === "1152"); return i >= 0 ? {choice: "ABCDE"[i], confidence: "高", reason: "2行目の号機が1152と読める"} : {choice: "none", confidence: "低", reason: ""}; }
+    });
+  };
+}
+
+/* ================= 起動 ================= */
+(async () => {
+  if (DEMO) { master = DEMO_ROWS; renderMstat("デモ用の抜粋データ"); }
+  else renderMstat();
+  if (!window.claude || !claude.use) return;
+  if (DEMO) { sample = await claude.use("sample"); return; }
+  let user;
+  [db, sample, user] = await Promise.all([claude.use("db"), claude.use("sample"), claude.use("user")]);
+  if (user && user.id) { try { myId = await user.id(); } catch (e) {} }
+  if (db) {
+    db.doc("master/current").onSnapshot(s => { if (s.exists) { const d = s.data(); master = d.rows || []; renderMstat(d.source); } else renderMstat(); }, () => renderMstat());
+    db.collection("scans").orderBy("at", "desc").limit(100).onSnapshot(q => { scans = q.docs.map(d => d.data()); renderLog(); }, () => {});
+  }
+})();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>アーム塗装後確認</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E9ECEA; --panel:#F7F8F6; --ink:#1C272B; --sub:#5B676B; --line:#C9CFCC;
+  --steel:#2F4650; --yellow:#F2B705; --ok:#2E7D4F; --warn:#B8860B; --ng:#B3362B; --stamp:#3A4A50;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151B1D; --panel:#1E2629; --ink:#E6EBEA; --sub:#9AA6A9; --line:#34403F;
+    --steel:#8FB3C2; --ok:#5DBB86; --warn:#E0B84A; --ng:#E36B5F; --stamp:#C9D4D6;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151B1D; --panel:#1E2629; --ink:#E6EBEA; --sub:#9AA6A9; --line:#34403F;
+  --steel:#8FB3C2; --ok:#5DBB86; --warn:#E0B84A; --ng:#E36B5F; --stamp:#C9D4D6;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",sans-serif;font-size:16px;line-height:1.6}
+main{max-width:640px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:4px 0 14px}
+h1{font-size:1.25rem;margin:0}
+.tag{font-size:.7em;background:var(--yellow);color:#1C272B;padding:1px 8px;border-radius:6px}
+#mstat{white-space:pre-line;font-size:.8rem;color:var(--sub);text-align:right}
+button{font:inherit;cursor:pointer;border:none;border-radius:10px}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+.shoot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;min-height:110px;background:var(--steel);color:var(--panel);font-size:1.25rem;font-weight:700;border-left:10px solid var(--yellow)}
+.shoot small{font-weight:400;font-size:.8rem;opacity:.85}
+.shoot:disabled{opacity:.5}
+.shoot.alt{margin-top:10px;min-height:64px;font-size:1.02rem;background:transparent;color:var(--ink);border:2px solid var(--steel);border-left:10px solid var(--yellow)}
+.tip{font-size:.82rem;color:var(--sub);margin:8px 2px 18px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+h2{font-size:1rem;margin:0 0 10px}
+#preview{display:none;flex-direction:column;gap:6px;margin-bottom:10px}
+#preview img{width:100%;border-radius:8px;border:1px solid var(--line)}
+#status{font-size:.9rem;color:var(--sub);min-height:1.4em}
+.plate{font-family:"Share Tech Mono",ui-monospace,monospace;color:var(--stamp);background:repeating-linear-gradient(135deg,transparent 0 6px,rgba(127,140,140,.07) 6px 12px);border:1px dashed var(--line);border-radius:8px;padding:10px 12px;letter-spacing:.12em;line-height:1.35;overflow-x:auto}
+.plate .l1{font-size:1.45rem}.plate .l2{font-size:1.15rem}
+.plate .fix{color:var(--warn);text-decoration:underline}
+.verdict{display:inline-block;font-weight:700;padding:2px 10px;border-radius:999px;font-size:.85rem;margin:10px 0 6px}
+.v-ok{background:var(--ok);color:#fff}.v-warn{background:var(--warn);color:#fff}.v-ng{background:var(--ng);color:#fff}
+.cand{display:block;width:100%;text-align:left;background:transparent;border:2px solid var(--line);padding:10px 12px;margin-top:8px;color:var(--ink)}
+.cand.best{border-color:var(--ok)}
+.cand b{font-family:"Share Tech Mono",ui-monospace,monospace;font-size:1.1rem;letter-spacing:.06em}
+.cand .meta{font-size:.85rem;color:var(--sub)}
+.chip{display:inline-block;font-size:.72rem;padding:0 6px;border-radius:5px;margin-left:6px;border:1px solid currentColor;color:var(--ok);font-family:"BIZ UDPGothic",sans-serif;letter-spacing:0}
+.dup{color:var(--ng);font-weight:700;font-size:.85rem}
+.row{display:flex;gap:8px;margin-top:10px}
+.btn{flex:1;padding:12px;font-weight:700;background:var(--ink);color:var(--panel)}
+.btn.sec{background:transparent;color:var(--ink);border:2px solid var(--line)}
+.btn.go{background:var(--yellow);color:#1C272B}
+input[type=text],textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+textarea{min-height:90px;font-size:.8rem}
+.log{list-style:none;margin:0;padding:0}
+.log li{display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding:8px 0;font-size:.88rem}
+.log li:first-child{border-top:none}
+.log .z{font-family:"Share Tech Mono",ui-monospace,monospace}
+.muted{color:var(--sub);font-size:.85rem}
+details summary{cursor:pointer;font-weight:700}
+.hidden{display:none!important}
+/* フルスクリーン（ファインダー・切り抜き） */
+.full{position:fixed;inset:0;z-index:10;background:#0B0F10;color:#fff;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.full .bar{display:flex;gap:8px;padding:12px}
+.full .bar .btn{background:#2A3438;color:#fff}
+.full .bar .btn.go{background:var(--yellow);color:#1C272B}
+.full .hint{text-align:center;font-size:.9rem;padding:10px 12px 0;color:#D7DEDF}
+#vfBox{position:relative;flex:1;overflow:hidden}
+#vfBox video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#guide{position:absolute;left:7%;width:86%;top:50%;transform:translateY(-50%);aspect-ratio:3.2/1;border:3px solid var(--yellow);border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.55)}
+#guide::after{content:"1行目：図番　2行目：◇ 年月-号機";position:absolute;left:0;right:0;top:calc(100% + 10px);text-align:center;font-size:.85rem;color:#fff}
+#cropStage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:8px}
+#cropWrap{position:relative;touch-action:none;line-height:0}
+#cropImg{max-width:100%;max-height:calc(100vh - 220px);display:block;user-select:none;-webkit-user-drag:none}
+#cropBox{position:absolute;border:3px solid var(--yellow);box-shadow:0 0 0 9999px rgba(0,0,0,.55);cursor:move;touch-action:none}
+#cropWrap{overflow:hidden}
+.h{position:absolute;width:30px;height:30px;background:var(--yellow);border-radius:50%;touch-action:none}
+.h.tl{left:-15px;top:-15px}.h.tr{right:-15px;top:-15px}.h.bl{left:-15px;bottom:-15px}.h.br{right:-15px;bottom:-15px}
+
+#nav{display:flex;gap:6px;margin:0 0 14px}
+#nav button{flex:1;padding:10px 0;font-weight:700;background:var(--panel);color:var(--ink);border:2px solid var(--line)}
+#nav button.on{background:var(--steel);color:var(--panel);border-color:var(--steel)}
+#meBtn{background:transparent;color:var(--sub);font-size:.8rem;padding:2px 0;text-decoration:underline}
+.btn.mini{flex:0 0 auto;padding:6px 10px;font-size:.8rem}
+.link{background:transparent;color:var(--steel);text-decoration:underline;padding:4px 6px;font-size:.85rem}
+.days{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:6px}
+.days button{flex:0 0 auto;padding:8px 14px;background:var(--panel);border:2px solid var(--line);color:var(--ink);font-weight:700}
+.days button.on{border-color:var(--yellow);background:var(--yellow);color:#1C272B}
+.lhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
+.lhead .row{margin-top:0}
+.arm{display:block;width:100%;text-align:left;background:transparent;border:none;border-top:1px solid var(--line);padding:12px 2px;color:var(--ink)}
+.az{font-family:"Share Tech Mono",ui-monospace,monospace;font-size:1.05rem;letter-spacing:.05em}
+.az b{margin-left:10px;font-size:1.2rem}
+.am{display:block;font-size:.82rem;color:var(--sub)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chip2{font-size:.75rem;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--sub)}
+.chip2.good{border-color:var(--ok);color:var(--ok)}.chip2.mid{border-color:var(--warn);color:var(--warn)}.chip2.bad{border-color:var(--ng);color:#fff;background:var(--ng)}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tabs button{flex:1;padding:12px 4px;font-weight:700;background:var(--panel);border:2px solid var(--line);color:var(--ink)}
+.tabs button.on{border-color:var(--steel);background:var(--steel);color:var(--panel)}
+.kv{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.kv:first-of-type{border-top:none}
+.kv label{flex:0 0 9.5em;font-size:.88rem;color:var(--sub)}
+.kv input[type=text]{flex:1;min-width:8em}
+.mono{font-family:"Share Tech Mono",ui-monospace,monospace;letter-spacing:.04em}
+.shead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+.shead h2{margin:0}
+.ngc{color:var(--ng)}
+.item{border-top:1px solid var(--line);padding:10px 0}
+.item.ng{background:linear-gradient(90deg,rgba(179,54,43,.10),transparent)}
+.iq{font-size:.92rem;line-height:1.5}
+.in{display:inline-block;min-width:1.6em;font-weight:700;color:var(--sub)}
+.ia{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;margin-top:6px}
+.ia textarea{min-height:60px;flex:1 1 100%}
+.nt{margin-top:6px}
+.seg{display:inline-flex;border:2px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{min-width:52px;padding:10px 12px;border-radius:0;background:var(--panel);color:var(--ink);font-weight:700}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on.v-good{background:var(--ok);color:#fff}
+.seg button.on.v-bad{background:var(--ng);color:#fff}
+.seg button.on.v-na{background:var(--sub);color:var(--panel)}
+.seg.sm button{min-width:36px;padding:6px 6px;font-size:.85rem}
+.num{width:6em;text-align:right}
+.num.s{width:3.6em;padding:6px}
+.s2{width:4.5em;padding:6px}
+.num.bad{border-color:var(--ng);color:var(--ng);font-weight:700}
+.vl{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--sub)}
+.sign{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border:2px dashed var(--line);background:transparent;color:var(--ink);text-align:left;min-width:150px}
+.sign.on{border-style:solid;border-color:var(--ok)}
+.sign .sl{font-size:.75rem;color:var(--sub)}
+.sign .sv{font-weight:700}
+.sign .sv small{font-weight:400;color:var(--sub);margin-left:6px;font-size:.75rem}
+.sign.sm{min-width:0;padding:6px 8px}
+.sign.sm .sl:empty{display:none}
+.signs{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.ssign{margin-top:10px;display:flex;justify-content:flex-end}
+.pick{padding:8px 12px;border:2px solid var(--line);background:transparent;color:var(--ink)}
+.films{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}
+.fl{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.9rem;padding:6px 10px;border:1px solid var(--line);border-radius:8px}
+.tw{overflow-x:auto;margin:0 -14px;padding:0 14px}
+.sheet{border-collapse:collapse;font-size:.85rem;white-space:nowrap}
+.sheet th{font-size:.72rem;color:var(--sub);font-weight:700;padding:6px 4px;border-bottom:2px solid var(--line);text-align:center;line-height:1.3}
+.sheet td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:center;vertical-align:middle}
+.sheet .hl{white-space:nowrap}
+.names{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.nm{display:inline-flex;align-items:center;gap:2px;padding:4px 4px 4px 12px;border:1px solid var(--line);border-radius:999px}
+.pickl .btn{flex:0 0 auto;min-width:5em}
+#modal{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
+#modalBody{background:var(--panel);width:100%;max-width:560px;border-radius:16px 16px 0 0;padding:18px 16px 22px;max-height:80vh;overflow:auto}
+@media (min-width:700px){#modal{align-items:center}#modalBody{border-radius:16px}}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(80px);background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:10px;transition:transform .25s;z-index:30;font-size:.9rem}
+#toast.show{transform:translateX(-50%) translateY(0)}
+@media (min-width:760px){main{max-width:980px} .item{display:flex;align-items:center;gap:12px}.item .iq{flex:1}.item .ia{margin-top:0;flex:0 0 auto}.item .nt{flex:1 1 100%}.item{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1 id="ttl">アーム塗装後確認</h1><button type="button" id="meBtn" data-act="me">自分の名前を設定</button></div>
+    <div id="mstat">明細を読み込み中…</div>
+  </header>
+  <nav id="nav"><button type="button" data-act="nav" data-v="scan" class="on">読取</button><button type="button" data-act="nav" data-v="list">一覧</button><button type="button" data-act="nav" data-v="settings">設定</button></nav>
+
+  <div id="scanView">
+  <button class="shoot" id="shootBtn" type="button">刻印を撮影する<small>黄色い枠に図番と号機の2行を合わせる</small></button>
+  <button class="shoot alt" id="pickBtn" type="button">写真を選んで枠で切り抜く</button>
+  <button class="shoot alt hidden" id="demoBtn" type="button">サンプル写真で試す<small>実際の刻印写真（YN12B20269F1 1152号機）</small></button>
+  <input id="cam" type="file" accept="image/*" capture="environment" class="hidden">
+  <input id="pick" type="file" accept="image/*" class="hidden">
+  <p class="tip" id="tip">刻印を読み取ると、そのアームの塗装後確認が開きます。ライトを真横から当てて、打刻の影がはっきり出る角度で撮ると読み取りが安定します。</p>
+
+  <section id="resultSec" class="hidden">
+    <h2>読み取り結果</h2>
+    <div id="preview"><img id="pv1" alt="切り抜いた刻印"><img id="pv2" alt="凹凸強調"></div>
+    <div id="status"></div>
+    <div id="readout"></div>
+    <div id="cands"></div>
+  </section>
+
+  <section>
+    <h2>手入力で探す</h2>
+    <input type="text" id="q" placeholder="例: 20269 1152 / LS12B10010 39" autocomplete="off">
+    <div id="qres"></div>
+  </section>
+
+  <section>
+    <details>
+      <summary>出荷明細を取り込む</summary>
+      <p class="muted">「アーム出荷明細」PDFを選ぶと、図番・号機・出荷日・出荷先を取り込みます。今の明細は置き換わります（入力済みの記録は消えません）。</p>
+      <input type="file" id="pdfIn" accept="application/pdf">
+      <p class="muted" style="margin-top:12px">PDFが読めないときは、明細の文字をコピーしてここに貼り付けてください。</p>
+      <textarea id="pasteIn" placeholder="明細のテキスト"></textarea>
+      <div class="row"><button class="btn" id="pasteBtn" type="button">貼り付けた内容を取り込む</button></div>
+      <div id="impStat" class="muted"></div>
+    </details>
+  </section>
+  </div>
+
+  <div id="view" class="hidden"></div>
+</main>
+
+<div class="full hidden" id="vf">
+  <div class="hint">枠いっぱいに刻印を合わせて「撮る」</div>
+  <div id="vfBox"><video id="video" playsinline muted autoplay></video><div id="guide"></div></div>
+  <div class="bar"><button class="btn" id="vfCancel" type="button">やめる</button><button class="btn go" id="vfShot" type="button">撮る</button></div>
+</div>
+<div class="full hidden" id="crop">
+  <div class="hint">黄色い枠を刻印の2行に合わせる（ドラッグで移動、角で大きさ）</div>
+  <div id="cropStage"><div id="cropWrap"><img id="cropImg" alt="切り抜く写真"><div id="cropBox"><div class="h tl" data-h="tl"></div><div class="h tr" data-h="tr"></div><div class="h bl" data-h="bl"></div><div class="h br" data-h="br"></div></div></div></div>
+  <div class="bar"><button class="btn" id="cropCancel" type="button">やめる</button><button class="btn go" id="cropOk" type="button">この範囲で読む</button></div>
+</div>
+<div id="modal" class="hidden"><div id="modalBody"></div></div>
+<div id="toast"></div>
+
+<script>
+const DEMO = false;
+const DEMO_ROWS = null;
+const DEMO_IMG = null;
+</script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+let db = null, sample = null, myId = null;
+let master = [];
+let scans = [];
+/* ================= 照合ロジック ================= */
+const SIM = [["0","O","D","Q"],["1","I","L","7","T"],["2","Z"],["5","S","6"],["8","B","3"],["9","7","4"],["6","G","5"],["F","E","P"],["N","M"],["U","V"]];
+const simMap = {};
+SIM.forEach(g => g.forEach(a => g.forEach(b => { if (a !== b) simMap[a + b] = 1; })));
+function subCost(a, b) { if (a === b) return 0; if (a === "?" || b === "?") return 0.25; return simMap[a + b] ? 0.35 : 1; }
+function wdist(a, b) {
+  const m = a.length, n = b.length, d = Array.from({length: m + 1}, (_, i) => [i]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + subCost(a[i-1], b[j-1]));
+  return d[m][n];
+}
+function norm(s) { return String(s || "").toUpperCase().replace(/[ØΦθ∅]/g, "0").replace(/[^A-Z0-9?]/g, ""); }
+
+// 桁ごとの型で補正：英2・数2・B・数5・F・数1（+G数1）
+const TO_DIGIT = {O:"0",D:"0",Q:"0",I:"1",L:"1",T:"1",Z:"2",S:"5",B:"8",G:"6",A:"4"};
+const TO_ALPHA = {"0":"O","1":"I","2":"Z","5":"S","8":"B","6":"G","4":"A"};
+function fitZuban(raw) {
+  const z = norm(raw);
+  const tpl = z.length === 14 ? "AANNBNNNNNFNGN" : z.length === 12 ? "AANNBNNNNNFN" : null;
+  if (!tpl) return {z, fixed: []};
+  let out = "", fixed = [];
+  for (let i = 0; i < z.length; i++) {
+    let c = z[i], t = tpl[i], n = c;
+    if (c === "?") n = c;
+    else if (t === "N" && !/\d/.test(c)) n = TO_DIGIT[c] || c;
+    else if (t === "A" && /\d/.test(c)) n = TO_ALPHA[c] || c;
+    else if (t === "B" || t === "F" || t === "G") n = t;
+    if (n !== c) fixed.push(i);
+    out += n;
+  }
+  return {z: out, fixed};
+}
+function fitGoki(raw) { return norm(raw).split("").map(c => /\d|\?/.test(c) ? c : (TO_DIGIT[c] || "")).join(""); }
+
+function rank(z, g) {
+  const last = scans[0];
+  return master.map(r => {
+    const cz = z ? wdist(z, r.z) : 3;
+    const cg = g ? wdist(g, r.g) * 1.5 : 2;
+    let cost = cz + cg, seq = false;
+    // 号機の並び：直前の記録と同じ図番で、すぐ後の号機なら優先
+    if (last && last.z === r.z && /^\d+$/.test(r.g) && /^\d+$/.test(last.g)) {
+      const dg = +r.g - +last.g;
+      if (dg >= 1 && dg <= 5) { cost = Math.max(0, cost - 0.3); seq = true; }
+    }
+    if (scans.some(s => s.z === r.z && s.g === r.g)) cost += 0.5;
+    return {r, cost, seq};
+  }).sort((a, b) => a.cost - b.cost);
+}
+
+/* ================= 明細PDF ================= */
+function parseMaster(text) {
+  const re = /([A-Z]{2}\d{2}B\d{5}F\d(?:G\d)?)\s+(\d{1,4})(?=\s)/g;
+  const hits = []; let m;
+  while ((m = re.exec(text))) hits.push({z: m[1], g: m[2], s: m.index, e: re.lastIndex});
+  const out = [], seen = new Set();
+  hits.forEach((h, i) => {
+    const seg = text.slice(h.e, i + 1 < hits.length ? hits[i+1].s : h.e + 200);
+    const dm = /(\d{1,2})月(\d{1,2})日/.exec(seg); if (!dm) return;
+    const sp = seg.slice(0, dm.index).replace(/\s+/g, " ").trim();
+    const rest = seg.slice(dm.index + dm[0].length).replace(/^\s*\(旧[^)]*\)\s*/, "");
+    const to = (rest.match(/^\s*(\S+)/) || [])[1] || "";
+    const k = h.z + "#" + h.g; if (seen.has(k)) return; seen.add(k);
+    out.push({z: h.z, g: h.g, d: dm[1] + "/" + dm[2], to, sp});
+  });
+  return out;
+}
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+async function pdfText(file) {
+  const base = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/";
+  if (!window.pdfjsLib) { await loadScript(base + "pdf.min.js"); await loadScript(base + "pdf.worker.min.js"); }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = base + "pdf.worker.min.js";
+  const pdf = await pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
+  const lines = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const tc = await (await pdf.getPage(p)).getTextContent();
+    const rows = {};
+    tc.items.forEach(it => { const y = Math.round(it.transform[5] / 3); (rows[y] = rows[y] || []).push(it); });
+    Object.keys(rows).map(Number).sort((a, b) => b - a).forEach(y => lines.push(rows[y].sort((a, b) => a.transform[4] - b.transform[4]).map(i => i.str).join(" ")));
+  }
+  return lines.join("\n");
+}
+async function importText(text, source) {
+  const rows = parseMaster(text);
+  if (!rows.length) { $("impStat").textContent = "図番と号機が見つかりませんでした。アーム出荷明細のPDFか確認してください。"; return; }
+  master = rows; renderMstat(source);
+  if (db) {
+    try { await db.doc("master/current").set({rows, source, importedAt: Date.now(), count: rows.length}); $("impStat").textContent = rows.length + "件を取り込みました。"; }
+    catch (e) { $("impStat").textContent = rows.length + "件を読み込みました（保存できなかったので、この画面だけで使えます）。"; }
+  } else $("impStat").textContent = rows.length + "件を読み込みました（この画面だけで使えます）。";
+}
+
+/* ================= 画像 ================= */
+function toBlob(c, q) { return new Promise(r => c.toBlob(r, "image/jpeg", q || 0.92)); }
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+// 切り抜いた canvas → 送信用2枚（元・凹凸強調）
+async function prepare(cv) {
+  const target = 1400, sc = Math.min(2.5, target / cv.width);
+  const w = Math.round(cv.width * sc), h = Math.round(cv.height * sc);
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(cv, 0, 0, w, h);
+  const orig = await toBlob(c);
+  const src = x.getImageData(0, 0, w, h);
+  const b = document.createElement("canvas"); b.width = w; b.height = h;
+  const bx = b.getContext("2d"); bx.filter = `blur(${Math.max(8, Math.round(h / 25))}px) grayscale(1)`; bx.drawImage(c, 0, 0);
+  const bl = bx.getImageData(0, 0, w, h).data, s = src.data, diff = new Float32Array(w * h);
+  const vals = [];
+  for (let i = 0, p = 0; i < s.length; i += 4, p++) {
+    const v = (0.299 * s[i] + 0.587 * s[i+1] + 0.114 * s[i+2]) - bl[i]; diff[p] = v; if (p % 7 === 0) vals.push(v);
+  }
+  vals.sort((a, b) => a - b);
+  const lo = vals[Math.floor(vals.length * 0.01)], hi = vals[Math.floor(vals.length * 0.99)], k = 255 / ((hi - lo) || 1);
+  for (let i = 0, p = 0; i < s.length; i += 4, p++) { const v = Math.max(0, Math.min(255, (diff[p] - lo) * k)); s[i] = s[i+1] = s[i+2] = v; }
+  x.putImageData(src, 0, 0);
+  const enh = await toBlob(c);
+  return {orig, enh};
+}
+
+/* ---------- ファインダー（枠つきカメラ） ---------- */
+let stream = null;
+async function openViewfinder() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camNote("このブラウザはカメラの直接起動に対応していません"); return false; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: "environment"}, width: {ideal: 3840}, height: {ideal: 2160}}, audio: false});
+  } catch (e) { camNote(e && e.name === "NotAllowedError" ? "カメラの使用が許可されていません" : "カメラを起動できませんでした（" + (e && e.name || "不明") + "）"); return false; }
+  const v = $("video"); v.srcObject = stream; $("vf").classList.remove("hidden");
+  try { await v.play(); } catch (e) {}
+  try { const t = stream.getVideoTracks()[0]; const cap = t.getCapabilities && t.getCapabilities(); if (cap && cap.torch) $("vf").dataset.torch = "1"; } catch (e) {}
+  return true;
+}
+function camNote(m) { $("tip").innerHTML = "⚠ " + m + "。枠つき撮影の代わりに、普通に撮ってから枠で切り抜きます。<br>Claudeアプリ内で開いている場合は、リンクをSafariやChromeで開くと枠つき撮影が使えることがあります。"; }
+function closeViewfinder() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; $("vf").classList.add("hidden"); }
+function shotFromViewfinder() {
+  const v = $("video"), box = $("vfBox").getBoundingClientRect(), g = $("guide").getBoundingClientRect();
+  const vw = v.videoWidth, vh = v.videoHeight; if (!vw) return null;
+  const scale = Math.max(box.width / vw, box.height / vh);
+  const ox = (box.width - vw * scale) / 2, oy = (box.height - vh * scale) / 2;
+  const mx = g.width * 0.06, my = g.height * 0.12;
+  let sx = (g.left - box.left - mx - ox) / scale, sy = (g.top - box.top - my - oy) / scale;
+  let sw = (g.width + mx * 2) / scale, sh = (g.height + my * 2) / scale;
+  sx = Math.max(0, sx); sy = Math.max(0, sy); sw = Math.min(vw - sx, sw); sh = Math.min(vh - sy, sh);
+  const c = document.createElement("canvas"); c.width = Math.round(sw); c.height = Math.round(sh);
+  c.getContext("2d").drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c;
+}
+
+/* ---------- 切り抜き枠 ---------- */
+let cropNat = null, cropResolve = null, rect = null, drag = null;
+function openCrop(img) {
+  return new Promise(res => {
+    cropResolve = res; cropNat = img;
+    const ci = $("cropImg");
+    $("cropBox").style.width = "0px";
+    $("crop").classList.remove("hidden");
+    const place = () => {
+      const W = ci.clientWidth, H = ci.clientHeight;
+      if (!W || !H) { setTimeout(place, 50); return; }
+      const w = W * 0.8, h = Math.max(60, Math.min(H * 0.6, w / 3.2));
+      rect = {x: (W - w) / 2, y: Math.max(0, (H - h) / 2), w, h}; drawRect();
+    };
+    ci.onload = () => requestAnimationFrame(place);
+    ci.src = img.src;
+    if (ci.complete && ci.naturalWidth) requestAnimationFrame(place);
+  });
+}
+function drawRect() { const b = $("cropBox").style; b.left = rect.x + "px"; b.top = rect.y + "px"; b.width = rect.w + "px"; b.height = rect.h + "px"; }
+$("cropBox").addEventListener("pointerdown", e => {
+  e.preventDefault(); $("cropBox").setPointerCapture(e.pointerId);
+  drag = {mode: e.target.dataset.h || "move", sx: e.clientX, sy: e.clientY, r: {...rect}};
+});
+$("cropBox").addEventListener("pointermove", e => {
+  if (!drag) return;
+  const W = $("cropImg").clientWidth, H = $("cropImg").clientHeight, dx = e.clientX - drag.sx, dy = e.clientY - drag.sy, r = {...drag.r}, MIN = 40;
+  if (drag.mode === "move") { r.x = Math.min(Math.max(0, r.x + dx), W - r.w); r.y = Math.min(Math.max(0, r.y + dy), H - r.h); }
+  else {
+    if (drag.mode.includes("l")) { const nx = Math.min(Math.max(0, r.x + dx), r.x + r.w - MIN); r.w += r.x - nx; r.x = nx; }
+    if (drag.mode.includes("r")) r.w = Math.min(Math.max(MIN, r.w + dx), W - r.x);
+    if (drag.mode.includes("t")) { const ny = Math.min(Math.max(0, r.y + dy), r.y + r.h - MIN); r.h += r.y - ny; r.y = ny; }
+    if (drag.mode.includes("b")) r.h = Math.min(Math.max(MIN, r.h + dy), H - r.y);
+  }
+  rect = r; drawRect();
+});
+["pointerup", "pointercancel"].forEach(ev => $("cropBox").addEventListener(ev, () => drag = null));
+$("cropCancel").onclick = () => { $("crop").classList.add("hidden"); cropResolve && cropResolve(null); };
+$("cropOk").onclick = () => {
+  const k = cropNat.naturalWidth / $("cropImg").clientWidth;
+  const c = document.createElement("canvas"); c.width = Math.round(rect.w * k); c.height = Math.round(rect.h * k);
+  c.getContext("2d").drawImage(cropNat, rect.x * k, rect.y * k, rect.w * k, rect.h * k, 0, 0, c.width, c.height);
+  $("crop").classList.add("hidden"); cropResolve && cropResolve(c);
+};
+async function cropFromFile(file) {
+  const url = URL.createObjectURL(file);
+  try { const img = await loadImg(url); return await openCrop(img); }
+  catch (e) { alert("写真を開けませんでした。"); return null; }
+}
+
+/* ================= 読み取り（2段階） ================= */
+
+/* ================= 読み取り（2段階） ================= */
+const P1 = `建機アームに打刻された刻印を切り抜いた写真です。1枚目が元画像、2枚目が凹凸を強調した画像です。
+刻印は2行あります。
+1行目: 図番。形式は 英大文字2文字 + 数字2桁 + "B" + 数字5桁 + "F" + 数字1桁、末尾に "G"+数字1桁 が付くことがある（例: LS12B10010F1, YY12B00902F1G2）。
+2行目: ◇マーク、製作年月4桁(YYMM)、"-"、号機(1〜4桁の数字)、検査記号(例 UM)。
+スラッシュ付きの0は数字の0です。自信のない文字は ? にしてください。推測で埋めないこと。
+JSONだけで答えてください: {"zuban":"","seizo":"","goki":"","kensa":"","note":""}`;
+function p2(cands) {
+  return `同じ刻印の写真です。この刻印は次の候補のどれと一致しますか。1文字ずつ写真と見比べて判断してください。
+特に号機（2行目の "-" の後の数字）と図番の数字部分を丁寧に確認すること。
+${cands.map((c, i) => `${"ABCDE"[i]}: 図番 ${c.r.z}　号機 ${c.r.g}`).join("\n")}
+どれとも一致しなければ choice は "none"。
+JSONだけで答えてください: {"choice":"A","confidence":"高|中|低","reason":"一言"}`;
+}
+function uniqueTop(sc, n) { const out = [], seen = new Set(); for (const s of sc) { const k = s.r.z + "#" + s.r.g; if (!seen.has(k)) { seen.add(k); out.push(s); } if (out.length >= n) break; } return out; }
+
+async function readCanvas(cv, demoAnswer) {
+  $("resultSec").classList.remove("hidden");
+  $("cands").innerHTML = ""; $("readout").innerHTML = "";
+  $("status").textContent = "画像を準備中…";
+  const imgs = await prepare(cv);
+  $("pv1").src = URL.createObjectURL(imgs.orig); $("pv2").src = URL.createObjectURL(imgs.enh);
+  $("preview").style.display = "flex";
+  $("resultSec").scrollIntoView({behavior: "smooth", block: "start"});
+
+  let r1, r2 = null;
+  setBusy(true);
+  try {
+    if (demoAnswer) {
+      $("status").textContent = "1回目：刻印を読み取り中…"; await wait(1200); r1 = demoAnswer.r1;
+    } else {
+      if (!sample) throw {code: "no_sample"};
+      const lim = await sample.limits().catch(() => null);
+      if (!lim || !lim.images) throw {code: "no_images"};
+      const list = lim.images.maxCount >= 2 ? [imgs.orig, imgs.enh] : [imgs.enh];
+      $("status").textContent = "1回目：刻印を読み取り中…";
+      r1 = await sample.json(P1, {images: list, cache: false}) || {};
+      imgs.list = list;
+    }
+    const fz = fitZuban(r1.zuban), g = fitGoki(r1.goki);
+    showReadout(r1, fz, g);
+    if (!master.length) { $("status").textContent = ""; $("cands").innerHTML = '<p class="muted">出荷明細が未登録なので照合できません。下から取り込んでください。</p>' + rawBtn(); bindRaw(r1, fz, g); return; }
+
+    const sc = rank(fz.z, g), top = uniqueTop(sc, 5);
+    const sure = top[0].cost === 0 && (!top[1] || top[1].cost >= 2);
+    if (!sure) {
+      $("status").textContent = "2回目：候補と見比べて確認中…";
+      try {
+        if (demoAnswer) { await wait(1200); r2 = demoAnswer.r2(top); }
+        else r2 = await sample.json(p2(top), {images: imgs.list, cache: false});
+      } catch (e) { r2 = null; }
+    }
+    $("status").textContent = "";
+    showCands(top, r2, sure, r1, fz, g);
+  } catch (e) {
+    const msg = {no_sample: "このページではAI読み取りが使えません。下の手入力で探してください。", no_images: "このページでは画像を送れません。手入力で探してください。", not_granted: "AI読み取りが許可されていません。手入力で探してください。", rate_limited: "混み合っています。少し待ってから撮り直してください。", invalid_json: "読み取り結果を解釈できませんでした。撮り直してください。", image_rejected: "この画像は送れませんでした。撮り直してください。"}[e && e.code];
+    $("status").textContent = msg || "読み取りに失敗しました。撮り直すか、手入力で探してください。";
+  } finally { setBusy(false); }
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+function setBusy(b) { ["shootBtn", "pickBtn", "demoBtn"].forEach(id => $(id).disabled = b); }
+
+function seizoLabel(s) { const m = /^(\d{2})(\d{2})$/.exec(norm(s)); return m ? `20${m[1]}年${+m[2]}月製作` : ""; }
+function kensaLabel(k) { return /UM/.test(norm(k)) ? "UT・MT検査済" : (k ? "検査記号 " + k : ""); }
+function showReadout(r1, fz, g) {
+  const z = fz.z.split("").map((c, i) => fz.fixed.includes(i) ? `<span class="fix">${esc(c)}</span>` : esc(c)).join("") || "????";
+  const notes = [seizoLabel(r1.seizo), kensaLabel(r1.kensa), fz.fixed.length ? `下線は型に合わせて補正（読み取り: ${esc(r1.zuban)}）` : "", r1.note ? esc(r1.note) : ""].filter(Boolean);
+  $("readout").innerHTML = `<div class="plate"><div class="l1">${z}</div><div class="l2">◇ ${esc(r1.seizo || "????")}-${esc(g || "?")} ${esc(r1.kensa || "")}</div></div><div class="muted" style="margin-top:6px">${notes.join("／")}</div>`;
+}
+
+/* ================= 項目 ================= */
+const DAY_SIGNS = [["b","仕上検査 B班確認者"],["qa","品質保証班 確認者"],["w","Wチェック者"],["hancho","アーム課 班長"],["shokucho","アーム課 職長"],["qaKa","品質保証課 確認"]];
+const PAINT_YN = [["gomi","ゴミ噛み"],["spatter","スパッタ"],["kebadachi","毛羽立ち"],["sabi","錆"]];
+const FILM = [["top","上部"],["bottom","下部"],["right","右"],["left","左"]];
+
+/* ================= データ ================= */
+const docs = {};               // "arms/xxx" → data
+let people = [], film = {};
+let view = "scan", curArm = null, curDay = null, armTab = "paint";
+const ui = {notes: {}, open: {}};
+let me = ""; try { me = localStorage.getItem("kokuin.me") || ""; } catch (e) {}
+
+function armId(z, g) { return "arms/" + z + "_" + g; }
+function dayId(d) { return "days/" + String(d).replace("/", "-"); }
+function getPath(o, p) { return p.split(".").reduce((a, k) => a == null ? a : a[k], o); }
+function mkObj(p, v) { return p.split(".").reduceRight((acc, k) => ({[k]: acc}), v); }
+function deepMerge(t, s) {
+  for (const k in s) {
+    const v = s[k];
+    if (v && typeof v === "object" && !Array.isArray(v)) { if (!t[k] || typeof t[k] !== "object") t[k] = {}; deepMerge(t[k], v); }
+    else t[k] = v;
+  }
+  return t;
+}
+const queues = {};
+function patch(path, obj) {
+  deepMerge(docs[path] = docs[path] || {}, obj);
+  render();
+  if (!db) return;
+  queues[path] = (queues[path] || Promise.resolve()).then(async () => {
+    try { await db.doc(path).update(obj); }
+    catch (e) {
+      if (e && (e.code === "invalid_argument" || e.code === "not_found")) { try { await db.doc(path).set(JSON.parse(JSON.stringify(docs[path]))); } catch (e2) { toast("保存できませんでした"); } }
+      else toast("保存できませんでした");
+    }
+  });
+}
+function setPath(path, p, v) { patch(path, mkObj(p, v)); }
+function ensureArm(row) {
+  const id = armId(row.z, row.g);
+  if (!docs[id]) patch(id, {z: row.z, g: row.g, d: row.d || "", to: row.to || "", sp: row.sp || "", created: Date.now()});
+  return id;
+}
+function scansList() { return Object.values(docs).filter(a => a && a.scan && a.scan.at).sort((a, b) => b.scan.at - a.scan.at); }
+
+/* ================= 進捗 ================= */
+function paintStat(a) {
+  const p = (a && a.paint) || {};
+  const filled = PAINT_YN.every(([k]) => p[k]) && FILM.every(([k]) => p.film && p.film[k] !== undefined && p.film[k] !== "");
+  const issues = PAINT_YN.filter(([k]) => p[k] === "有").length + (p.tap === "否" ? 1 : 0);
+  const fixed = !issues || (p.touchup && p.touchup.name && p.fixcheck && p.fixcheck.name);
+  return {filled, issues, fixed};
+}
+function filmBad(v) {
+  if (v === undefined || v === "" || isNaN(+v)) return false;
+  return (film.min !== undefined && film.min !== "" && +v < +film.min) || (film.max !== undefined && film.max !== "" && +v > +film.max);
+}
+function specOf(z) { return String(z || "").slice(0, 2); }
+
+/* ================= 表示 ================= */
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmtAt(t) { if (!t) return ""; const d = new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
+function dates() {
+  const set = new Map();
+  master.forEach(r => { if (r.d) set.set(r.d, true); });
+  return [...set.keys()].sort((a, b) => { const [am, ad] = a.split("/").map(Number), [bm, bd] = b.split("/").map(Number); return am - bm || ad - bd; });
+}
+function defaultDay() {
+  const ds = dates(); if (!ds.length) return null;
+  const now = new Date(), t = (now.getMonth() + 1) * 100 + now.getDate();
+  return ds.find(d => { const [m, dd] = d.split("/").map(Number); return m * 100 + dd >= t; }) || ds[ds.length - 1];
+}
+function rowsOfDay(d) {
+  const rows = master.filter(r => r.d === d);
+  Object.values(docs).forEach(a => { if (a && a.z && a.d === d && !rows.some(r => r.z === a.z && r.g === a.g)) rows.push(a); });
+  return rows;
+}
+function signBtn(path, p, label, small) {
+  const s = getPath(docs[path], p);
+  return `<button type="button" class="sign${s && s.name ? " on" : ""}${small ? " sm" : ""}" data-act="sign" data-doc="${esc(path)}" data-p="${esc(p)}">
+    <span class="sl">${esc(label)}</span><span class="sv">${s && s.name ? esc(s.name) + "<small>" + fmtAt(s.at) + "</small>" : (label ? "タップで確認" : "未")}</span></button>`;
+}
+function seg(path, p, opts, cls) {
+  const cur = getPath(docs[path], p);
+  return `<span class="seg ${cls || ""}">${opts.map(o => `<button type="button" class="${cur === o ? "on v-" + (o === "否" || o === "有" ? "bad" : o === "－" ? "na" : "good") : ""}" data-act="set" data-doc="${esc(path)}" data-p="${esc(p)}" data-v="${esc(o)}">${esc(o)}</button>`).join("")}</span>`;
+}
+function inp(path, p, attrs) {
+  const v = getPath(docs[path], p);
+  return `<input ${attrs || ""} data-doc="${esc(path)}" data-p="${esc(p)}" value="${esc(v ?? "")}">`;
+}
+
+let pendingRender = false;
+function render() {
+  const ae = document.activeElement;
+  if (ae && $("view").contains(ae) && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) { pendingRender = true; return; }
+  pendingRender = false;
+  scans = scansList();
+  film = docs["settings/film"] || {};
+  document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.v === view || (view === "arm" && b.dataset.v === "list") || (view === "day" && b.dataset.v === "list")));
+  $("scanView").classList.toggle("hidden", view !== "scan");
+  $("view").classList.toggle("hidden", view === "scan");
+  $("meBtn").textContent = me ? "自分：" + me : "自分の名前を設定";
+  if (view === "list") $("view").innerHTML = renderList();
+  else if (view === "arm") $("view").innerHTML = renderArm();
+  else if (view === "day") $("view").innerHTML = renderDay();
+  else if (view === "settings") $("view").innerHTML = renderSettings();
+}
+$("view").addEventListener("focusout", () => setTimeout(() => { if (pendingRender) render(); }, 0));
+
+function renderList() {
+  const ds = dates();
+  if (!ds.length) return `<section><p>出荷明細が未登録です。「読取」タブの一番下から取り込んでください。</p></section>`;
+  if (!curDay || !ds.includes(curDay)) curDay = defaultDay();
+  const rows = rowsOfDay(curDay);
+  let h = `<div class="days">${ds.map(d => `<button type="button" class="${d === curDay ? "on" : ""}" data-act="day" data-v="${esc(d)}">${esc(d)}</button>`).join("")}</div>`;
+  h += `<section><div class="lhead"><h2>${esc(curDay)} 出荷分　${rows.length}本</h2>
+    <div class="row"><button type="button" class="btn go" data-act="nav" data-v="day">塗装後確認を表で入力</button><button type="button" class="btn sec" data-act="csv">CSV出力</button></div></div>`;
+  h += rows.map(r => {
+    const a = docs[armId(r.z, r.g)] || {}, p = paintStat(a);
+    const pcls = p.issues && !p.fixed ? "bad" : p.filled ? "good" : (a.paint ? "mid" : "");
+    return `<button type="button" class="arm" data-act="openArm" data-z="${esc(r.z)}" data-g="${esc(r.g)}">
+      <span class="az">${esc(r.z)}<b>${esc(r.g)}</b></span>
+      <span class="am">${esc(r.to)}　${esc(r.sp)}</span>
+      <span class="chips"><span class="chip2 ${a.scan ? "good" : ""}">刻印${a.scan ? "✓" : "未"}</span><span class="chip2 ${pcls}">塗装後 ${p.filled ? "✓" : "未"}${p.issues ? " 要修正" + p.issues : ""}</span></span></button>`;
+  }).join("");
+  return h + "</section>";
+}
+
+function renderArm() {
+  const id = curArm, a = docs[id] || {};
+  const sc = a.scan;
+  const match = sc && sc.z === a.z && sc.g === a.g;
+  let h = `<div class="row" style="margin-bottom:10px"><button type="button" class="btn sec" data-act="nav" data-v="list">← 一覧</button></div>
+  <section class="armhead"><div class="plate"><div class="l1">${esc(a.z)}</div><div class="l2">${esc(a.g)}号機</div></div>
+   <div class="muted" style="margin-top:6px">${esc(a.d)} 出荷 ／ ${esc(a.to)} ／ ${esc(a.sp)}</div>
+   <div style="margin-top:6px">${sc ? `<span class="verdict ${match ? "v-ok" : "v-ng"}">刻印 ${esc(sc.z)} ◇${esc(sc.seizo || "")}-${esc(sc.g)} ${esc(sc.kensa || "")}${match ? "（一致）" : "（不一致）"}</span><span class="muted">　${esc(sc.by || "")} ${fmtAt(sc.at)}</span>` : `<span class="verdict v-warn">刻印 未読取</span>`}
+   <button type="button" class="link" data-act="nav" data-v="scan">刻印を読み取る</button></div></section>
+`;
+  return h + renderPaint(id, a);
+}
+
+function paintFields(id, a, compact) {
+  const p = (a && a.paint) || {};
+  const nameBtn = (k, l) => `<button type="button" class="pick" data-act="pick" data-doc="${esc(id)}" data-p="paint.${k}">${p[k] ? esc(p[k]) : (compact ? "－" : l + "を選ぶ")}</button>`;
+  return {
+    yn: PAINT_YN.map(([k, l]) => compact ? `<td>${seg(id, "paint." + k, ["有","無"], "sm")}</td>` : `<div class="kv"><label>${l}</label>${seg(id, "paint." + k, ["有","無"])}</div>`).join(""),
+    tap: compact ? `<td>${seg(id, "paint.tap", ["良","否"], "sm")}</td>` : `<div class="kv"><label>ねじ穴タップ</label>${seg(id, "paint.tap", ["良","否"])}</div>`,
+    holes: compact ? `<td class="hl">${inp(id, "paint.holesDone", `type="text" inputmode="numeric" class="num s"`)}/${inp(id, "paint.holes", `type="text" inputmode="numeric" class="num s"`)}</td>`
+      : `<div class="kv"><label>ねじ穴数（処置／全数）</label>${inp(id, "paint.holesDone", `type="text" inputmode="numeric" class="num"`)}<span>／</span>${inp(id, "paint.holes", `type="text" inputmode="numeric" class="num"`)}</div>`,
+    touch: compact ? `<td>${signBtn(id, "paint.touchup", "", true)}</td><td>${signBtn(id, "paint.fixcheck", "", true)}</td>`
+      : `<div class="signs">${signBtn(id, "paint.touchup", "タッチアップ確認")}${signBtn(id, "paint.fixcheck", "修正確認")}</div>`,
+    fixer: compact ? `<td>${nameBtn("fixer", "修正者")}</td>` : `<div class="kv"><label>修正者</label>${nameBtn("fixer", "修正者")}</div>`,
+    color: compact ? `<td>${inp(id, "paint.color", `type="text" class="s2" placeholder="グレー"`)}</td>` : `<div class="kv"><label>色</label>${inp(id, "paint.color", `type="text" placeholder="グレー"`)}</div>`,
+    meas: compact ? `<td>${nameBtn("measurer", "測定者")}</td>` : `<div class="kv"><label>測定者</label>${nameBtn("measurer", "測定者")}</div>`,
+    film: FILM.map(([k, l]) => { const v = getPath(p, "film." + k); return compact ? `<td>${inp(id, "paint.film." + k, `type="text" inputmode="decimal" class="num s${filmBad(v) ? " bad" : ""}"`)}</td>`
+      : `<label class="fl">${l}${inp(id, "paint.film." + k, `type="text" inputmode="decimal" class="num${filmBad(v) ? " bad" : ""}"`)}</label>`; }).join("")
+  };
+}
+function renderPaint(id, a) {
+  const f = paintFields(id, a, false);
+  return `<section><h2>確認内容 <span class="muted">仕様 ${esc(specOf(a.z))}</span></h2>${f.yn}${f.tap}${f.holes}</section>
+   <section><h2>修正</h2>${f.touch}${f.fixer}</section>
+   <section><h2>膜厚測定（μm）</h2>${f.color}${f.meas}<div class="films">${f.film}</div></section>`;
+}
+
+function renderDay() {
+  if (!curDay) curDay = defaultDay();
+  const rows = rowsOfDay(curDay), did = dayId(curDay);
+  let h = `<div class="row" style="margin-bottom:10px"><button type="button" class="btn sec" data-act="nav" data-v="list">← 一覧</button><button type="button" class="btn sec" data-act="csv">CSV出力</button></div>
+  <section><h2>塗装後確認チェックリスト　${esc(curDay)} 出荷分 ${rows.length}本</h2>
+  <div class="tw"><table class="sheet"><thead><tr><th>仕様</th><th>号機</th>${PAINT_YN.map(([, l]) => `<th>${l}</th>`).join("")}<th>ねじ穴<br>タップ</th><th>処置/穴数</th><th>タッチ<br>アップ</th><th>修正<br>確認</th><th>修正者</th><th>色</th><th>測定者</th>${FILM.map(([, l]) => `<th>膜厚<br>${l}</th>`).join("")}</tr></thead><tbody>`;
+  rows.forEach(r => {
+    const id = armId(r.z, r.g), a = docs[id] || {}, f = paintFields(id, a, true);
+    h += `<tr><td class="mono">${esc(specOf(r.z))}</td><td><button type="button" class="link mono" data-act="openArm" data-z="${esc(r.z)}" data-g="${esc(r.g)}">${esc(r.g)}</button></td>${f.yn}${f.tap}${f.holes}${f.touch}${f.fixer}${f.color}${f.meas}${f.film}</tr>`;
+  });
+  h += `</tbody></table></div><p class="muted">有＝要修正。号機をタップするとそのアームだけの入力画面を開きます。表に入れた行は自動でアームの記録になります。</p></section>
+  <section><h2>確認・承認</h2><div class="signs">${DAY_SIGNS.map(([k, l]) => signBtn(did, "signs." + k, l)).join("")}</div>
+  <p class="muted">全数外観確認→要修正発見→出荷場取り出し依頼（野田組）→修正（仕上げ検査B）→出荷場へ運搬（野田組）</p></section>`;
+  return h;
+}
+
+function renderSettings() {
+  return `<section><h2>名前の一覧</h2><p class="muted">確認ボタンや修正者・測定者で選ぶ名前です。</p>
+   <div class="names">${people.map((n, i) => `<span class="nm">${esc(n)}<button type="button" class="link" data-act="delName" data-i="${i}">×</button></span>`).join("") || '<span class="muted">まだありません</span>'}</div>
+   <div class="row"><input type="text" id="newName" placeholder="例: 小谷"><button type="button" class="btn" data-act="addName">追加</button></div></section>
+  <section><h2>膜厚の判定（μm）</h2><p class="muted">入れておくと範囲外の値が赤くなります。空欄なら判定しません。</p>
+   <div class="row"><label class="fl">下限${inp("settings/film", "min", `type="text" inputmode="decimal" class="num"`)}</label><label class="fl">上限${inp("settings/film", "max", `type="text" inputmode="decimal" class="num"`)}</label></div></section>`;
+}
+
+/* ================= 名前選択 ================= */
+function modal(html) { $("modalBody").innerHTML = html; $("modal").classList.remove("hidden"); }
+function closeModal() { $("modal").classList.add("hidden"); }
+let pickCb = null;
+function pickName(title, cb) {
+  pickCb = cb;
+  modal(`<h2>${esc(title)}</h2><div class="names pickl">${people.map(n => `<button type="button" class="btn sec" data-act="pickDo" data-v="${esc(n)}">${esc(n)}</button>`).join("")}</div>
+   <div class="row"><input type="text" id="pickNew" placeholder="一覧にない名前"><button type="button" class="btn" data-act="pickNew">決定</button></div>
+   <div class="row"><button type="button" class="btn sec" data-act="close">やめる</button></div>`);
+}
+function addPerson(n) { n = n.trim(); if (!n || people.includes(n)) return; people = [...people, n]; patch("settings/people", {names: people}); }
+function toast(m) { const t = $("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2200); }
+
+/* ================= 操作 ================= */
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const act = b.dataset.act, path = b.dataset.doc, p = b.dataset.p;
+  if (act === "nav") { view = b.dataset.v; render(); window.scrollTo(0, 0); }
+  else if (act === "day") { curDay = b.dataset.v; render(); }
+  else if (act === "armTab") { armTab = b.dataset.v; render(); }
+  else if (act === "openArm") { const row = master.find(r => r.z === b.dataset.z && r.g === b.dataset.g) || {z: b.dataset.z, g: b.dataset.g}; curArm = ensureArm(row); view = "arm"; armTab = "mfg"; render(); window.scrollTo(0, 0); }
+  else if (act === "set") { const cur = getPath(docs[path], p); setPath(path, p, cur === b.dataset.v ? null : b.dataset.v); }
+  else if (act === "note") { ui.notes[b.dataset.k] = !ui.notes[b.dataset.k]; render(); }
+  else if (act === "sign") {
+    const s = getPath(docs[path], p);
+    if (s && s.name) modal(`<h2>確認済み</h2><p>${esc(s.name)}　${fmtAt(s.at)}</p><div class="row"><button type="button" class="btn sec" data-act="close">閉じる</button><button type="button" class="btn" data-act="unsign" data-doc="${esc(path)}" data-p="${esc(p)}">取り消す</button></div>`);
+    else if (me) setPath(path, p, {name: me, at: Date.now()});
+    else pickName("自分の名前を選ぶ", n => { setMe(n); setPath(path, p, {name: n, at: Date.now()}); });
+  }
+  else if (act === "unsign") { setPath(path, p, null); closeModal(); }
+  else if (act === "pick") pickName("名前を選ぶ", n => setPath(path, p, n));
+  else if (act === "pickDo") { closeModal(); pickCb && pickCb(b.dataset.v); }
+  else if (act === "pickNew") { const n = $("pickNew").value.trim(); if (!n) return; addPerson(n); closeModal(); pickCb && pickCb(n); }
+  else if (act === "close") closeModal();
+  else if (act === "addName") { addPerson($("newName").value); }
+  else if (act === "delName") { people = people.filter((_, i) => i !== +b.dataset.i); patch("settings/people", {names: people}); }
+  else if (act === "csv") exportCsv();
+  else if (act === "me") pickName("自分の名前を選ぶ", setMe);
+});
+document.addEventListener("change", e => {
+  const t = e.target; if (!t.dataset || !t.dataset.doc || !t.dataset.p) return;
+  setPath(t.dataset.doc, t.dataset.p, t.value.trim());
+});
+function setMe(n) { me = n; try { localStorage.setItem("kokuin.me", n); } catch (e) {} render(); }
+
+/* ================= 刻印読取 → アームを開く ================= */
+function showCands(top, r2, sure, r1, fz, g) {
+  let order = top.slice(), v, cls, note = "";
+  const idx = r2 && typeof r2.choice === "string" ? "ABCDE".indexOf(r2.choice.trim().toUpperCase()) : -1;
+  if (sure) { v = "明細と一致"; cls = "v-ok"; }
+  else if (idx >= 0 && idx < top.length) {
+    const chosen = top[idx]; order = [chosen, ...top.filter((_, i) => i !== idx)];
+    if (String(r2.confidence || "").includes("高")) { v = idx === 0 ? "明細と一致（2段階で確認）" : "2回目の確認で特定"; cls = "v-ok"; }
+    else { v = "候補あり・確認してください"; cls = "v-warn"; }
+    if (r2.reason) note = `<div class="muted">確認メモ: ${esc(r2.reason)}</div>`;
+  } else if (r2 && r2.choice === "none") { v = "明細に一致するものがありません"; cls = "v-ng"; }
+  else if (top[0].cost <= 0.6) { v = "候補あり・確認してください"; cls = "v-warn"; }
+  else { v = "明細に見当たりません"; cls = "v-ng"; }
+  let h = `<span class="verdict ${cls}">${v}</span>${note}`;
+  order.slice(0, 3).forEach((s, i) => { h += candHtml(s.r, i === 0 && cls !== "v-ng", s.seq); });
+  h += rawBtn();
+  $("cands").innerHTML = h; lastRead = r1;
+  bindRaw(r1, fz, g);
+}
+let lastRead = null;
+function candHtml(row, best, seq) {
+  const a = docs[armId(row.z, row.g)], dup = a && a.scan;
+  return `<button type="button" class="cand${best ? " best" : ""}" data-act="pickCand" data-z="${esc(row.z)}" data-g="${esc(row.g)}">
+    <b>${esc(row.z)}　${esc(row.g)}号機</b>${seq ? '<span class="chip">前回の続き番号</span>' : ""}
+    <div class="meta">${esc(row.d)} 出荷 ／ ${esc(row.to)} ／ ${esc(row.sp)}</div>
+    ${dup ? `<div class="dup">刻印読取済み（${esc(dup.by || "")} ${fmtAt(dup.at)}）</div>` : ""}
+    <div class="meta">タップでこのアームの塗装後確認を開く</div></button>`;
+}
+function rawBtn() { return `<div class="row"><button type="button" class="btn sec" id="recRaw">読み取りどおり「明細外」で開く</button></div>`; }
+function bindRaw(r1, fz, g) { const b = $("recRaw"); if (b) b.onclick = () => openFromScan({z: fz.z, g, d: "", to: "明細外", sp: ""}, r1); }
+document.addEventListener("click", e => {
+  const b = e.target.closest('[data-act="pickCand"]'); if (!b) return;
+  const row = master.find(x => x.z === b.dataset.z && x.g === b.dataset.g);
+  openFromScan(row, b.closest("#qres") ? null : lastRead);
+});
+function openFromScan(row, r) {
+  const id = ensureArm(row);
+  const o = {};
+  if (r) {
+    o.scan = {z: row.z, g: row.g, seizo: norm(r.seizo), kensa: norm(r.kensa), raw: `${r.zuban || ""} / ${r.seizo || ""}-${r.goki || ""} ${r.kensa || ""}`, at: Date.now(), by: me || ""};
+  }
+  if (Object.keys(o).length) patch(id, o);
+  curArm = id; view = "arm"; armTab = "mfg";
+  $("cands").innerHTML = ""; $("resultSec").classList.add("hidden");
+  render(); window.scrollTo(0, 0);
+}
+function renderMstat(src) { $("mstat").textContent = master.length ? `照合対象 ${master.length}件` + (src ? `\n${src}` : "") : "出荷明細が未登録です"; if (view !== "scan") render(); }
+
+/* ================= 手入力検索 ================= */
+$("q").addEventListener("input", () => {
+  const parts = $("q").value.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length || !master.length) { $("qres").innerHTML = ""; return; }
+  const [a, b] = parts;
+  const hits = master.filter(r => r.z.includes(norm(a)) && (!b || r.g === norm(b) || r.g.startsWith(norm(b))) || (parts.length === 1 && r.g === norm(a))).slice(0, 8);
+  $("qres").innerHTML = hits.length ? hits.map(r => candHtml(r, false, false)).join("") : '<p class="muted">該当なし</p>';
+});
+
+/* ================= CSV ================= */
+async function exportCsv() {
+  if (!curDay) curDay = defaultDay();
+  const rows = rowsOfDay(curDay), q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const head = ["出荷日","図番","号機","出荷先","仕様","刻印","刻印読取者","刻印読取日時"];
+  PAINT_YN.forEach(([, l]) => head.push(l)); head.push("ねじ穴タップ","処置数","ねじ穴数","タッチアップ確認","修正確認","修正者","色","測定者", ...FILM.map(([, l]) => "膜厚" + l));
+  const lines = [head.map(q).join(",")];
+  rows.forEach(r => {
+    const a = docs[armId(r.z, r.g)] || {}, sc = a.scan || {}, p = a.paint || {}, c = [curDay, r.z, r.g, r.to, r.sp, sc.z ? `${sc.z} ${sc.seizo}-${sc.g} ${sc.kensa}` : "", sc.by, fmtAt(sc.at)];
+    PAINT_YN.forEach(([k]) => c.push(p[k] || "")); c.push(p.tap || "", p.holesDone || "", p.holes || "", p.touchup ? p.touchup.name : "", p.fixcheck ? p.fixcheck.name : "", p.fixer || "", p.color || "", p.measurer || "", ...FILM.map(([k]) => getPath(p, "film." + k) || ""));
+    lines.push(c.map(q).join(","));
+  });
+  const ds = docs[dayId(curDay)] || {};
+  lines.push("", q("出荷日承認"));
+  DAY_SIGNS.forEach(([k, l]) => { const sg = getPath(ds, "signs." + k) || {}; lines.push([l, sg.name || "", fmtAt(sg.at)].map(q).join(",")); });
+  const data = "\uFEFF" + lines.join("\r\n"), fn = `塗装後確認_${curDay.replace("/", "月")}日出荷.csv`;
+  const dl = window.claude && claude.use ? await claude.use("downloads").catch(() => null) : null;
+  if (!dl) { toast("この画面ではファイルを保存できません"); return; }
+  try { await dl.save({filename: fn, data}); } catch (e) { if (e && e.code !== "declined") toast("保存できませんでした"); }
+}
+
+/* ================= 読取画面のイベント ================= */
+$("shootBtn").onclick = async () => { if (!(await openViewfinder())) $("cam").click(); };
+$("pickBtn").onclick = () => $("pick").click();
+$("vfCancel").onclick = closeViewfinder;
+$("vfShot").onclick = () => { const c = shotFromViewfinder(); closeViewfinder(); if (c) readCanvas(c); };
+[$("cam"), $("pick")].forEach(i => i.onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  const c = await cropFromFile(f); if (c) readCanvas(c);
+});
+$("pdfIn").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  $("impStat").textContent = "PDFを読み込み中…";
+  try { await importText(await pdfText(f), f.name); } catch (err) { $("impStat").textContent = "PDFを読み込めませんでした。文字をコピーして下に貼り付けてください。"; }
+};
+$("pasteBtn").onclick = () => { const t = $("pasteIn").value; if (t.trim()) importText(t, "貼り付け"); };
+$("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
+
+/* ================= デモ ================= */
+if (DEMO) {
+  $("ttl").innerHTML = 'アーム塗装後確認 <span class="tag">デモ</span>';
+  $("demoBtn").classList.remove("hidden");
+  $("tip").innerHTML = "デモ版：10月の出荷明細から抜粋した44件で動きます。入力はこの画面の中だけで保存されません。<br>刻印を読み取ると、そのアームの塗装後確認が開きます。";
+  $("demoBtn").onclick = async () => {
+    const img = await loadImg(DEMO_IMG);
+    const c = await openCrop(img); if (!c) return;
+    readCanvas(c, {
+      r1: {zuban: "YN12BZ0Z69F1", seizo: "2609", goki: "11S2", kensa: "UM", note: "デモ用の読み取り例（わざと誤読を混ぜています）"},
+      r2: top => { const i = top.findIndex(t => t.r.z === "YN12B20269F1" && t.r.g === "1152"); return i >= 0 ? {choice: "ABCDE"[i], confidence: "高", reason: "2行目の号機が1152と読める"} : {choice: "none", confidence: "低", reason: ""}; }
+    });
+  };
+}
+
+/* ================= 起動 ================= */
+(async () => {
+  if (DEMO) {
+    master = DEMO_ROWS;
+    people = ["小谷","山本","斉藤","山元","佐伯","Y崎","K谷","Y原","F嶋"];
+    const t = Date.now() - 3600e3;
+    docs[armId("LC12B10556F1", "396")] = {z: "LC12B10556F1", g: "396", d: "10/7", to: "正和", sp: "SK300 3.3m10型", scan: {z: "LC12B10556F1", g: "396", seizo: "2609", kensa: "UM", at: t, by: "小谷"},
+      paint: {gomi: "有", spatter: "有", kebadachi: "有", sabi: "無", tap: "良", holesDone: "69", holes: "69", touchup: {name: "山元", at: t}, fixcheck: {name: "山元", at: t}, fixer: "山元", color: "グレー", measurer: "佐伯", film: {top: "42", bottom: "38", right: "39", left: "37"}}};
+    docs[armId("LS12B10010F1", "39")] = {z: "LS12B10010F1", g: "39", d: "10/7", to: "あゆみ", sp: "SK400 新3.45m", paint: {gomi: "無", spatter: "有", kebadachi: "有", sabi: "無", tap: "良", holesDone: "33", holes: "33", color: "グレー", film: {top: "44", bottom: "37"}}};
+    curDay = "10/7";
+    renderMstat("デモ用の抜粋データ");
+    if (window.claude && claude.use) sample = await claude.use("sample").catch(() => null);
+    return;
+  }
+  renderMstat();
+  if (!window.claude || !claude.use) return;
+  let user;
+  [db, sample, user] = await Promise.all([claude.use("db"), claude.use("sample"), claude.use("user")]);
+  if (!db) return;
+  db.doc("master/current").onSnapshot(s => { if (s.exists) { const d = s.data(); master = d.rows || []; renderMstat(d.source); } else renderMstat(); }, () => {});
+  db.collection("arms").onSnapshot(q => { q.docs.forEach(d => { docs["arms/" + d.id] = d.data(); }); render(); }, () => {});
+  db.collection("days").onSnapshot(q => { q.docs.forEach(d => { docs["days/" + d.id] = d.data(); }); render(); }, () => {});
+  db.collection("settings").onSnapshot(q => { q.docs.forEach(d => { docs["settings/" + d.id] = d.data(); }); people = (docs["settings/people"] || {}).names || []; film = docs["settings/film"] || {}; render(); }, () => {});
+})();
+})();
+</script>
+</body>
+</html>
