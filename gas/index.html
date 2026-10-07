@@ -213,7 +213,7 @@ function renderHead() {
 /* ================= 一覧 ================= */
 async function renderList() {
   const el = $("listView");
-  if (!day) day = (boot.days.find(d => d.date >= boot.today) || boot.days[boot.days.length - 1] || {}).date || boot.today;
+  if (!day || !boot.days.some(d => d.date === day)) day = (boot.days[0] || {}).date || boot.today;
   el.innerHTML = `<div class="days">${boot.days.map(d => `<button type="button" data-act="day" data-d="${d.date}" class="${d.date === day ? "on" : ""} ${d.todo ? "has-todo" : ""}">${md(d.date)}(${wd(d.date)})<small>${d.todo ? "未" + d.todo + " / " : ""}${d.total}本</small></button>`).join("")}</div>
     <section id="uncheckedSec" class="warnbox hidden"></section>
     <section><h2>${esc(md(day))} 出荷分</h2><div id="dayList" class="muted">読み込み中…</div></section>`;

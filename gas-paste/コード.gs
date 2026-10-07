@@ -350,9 +350,9 @@ function saveHoles_(z, n, now) {
   else sh.getRange(i + 2, 2, 1, 2).setValues([[n, now]]);
 }
 
-/** 出荷日ごとの本数と未チェック数（7日前〜21日後） */
+/** 出荷日ごとの本数と未チェック数（今日〜21日後。過ぎた出荷日は出さない） */
 function apiDays() {
-  const today = today_(), from = shiftDate_(today, -7), to = shiftDate_(today, 21);
+  const today = today_(), from = today, to = shiftDate_(today, 21);
   const last = latestTaps_(loadTaps_());
   const m = {};
   loadArms_().forEach(a => {
