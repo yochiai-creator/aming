@@ -162,23 +162,32 @@ textarea{min-height:64px}
 #toast:not(.show){visibility:hidden;transition:transform .25s,visibility 0s .25s}
 #toast.show{transform:translateX(-50%) translateY(0)}
 
-/* ===== パワーショベル ===== */
-:root{--body:#E9EEF0;--body2:#B9C4CA;--dark:#2A3236;--arm:#00A7B5;--glass:#3FD0FF}
-.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:6px}
-.hero{min-height:150px;align-items:stretch}
+/* ===== パワーショベル（設計図風） ===== */
+.hero{display:flex;justify-content:space-between;gap:6px;min-height:156px;align-items:stretch}
 .hero>div:first-child{position:relative;z-index:1}
-.hero .exc{position:absolute;right:4px;bottom:-2px;width:62%;max-width:310px;filter:drop-shadow(0 8px 10px rgba(0,0,0,.6))}
+.hero .exc{position:absolute;right:2px;bottom:0;width:66%;max-width:330px}
+.bp{overflow:visible}
+.bp .ln{fill:rgba(0,167,181,.07);stroke:#3FE0EA;stroke-width:1.1;stroke-linejoin:round;stroke-linecap:round}
+.bp .thin{stroke-width:.6;fill:none;opacity:.8}
+.bp .cyl{stroke-width:3.2;fill:none;opacity:.75}
+.bp .dim{stroke-width:.6;fill:none;opacity:.7}
+.bp .ext{stroke-width:.4;fill:none;opacity:.45;stroke-dasharray:2 2}
+.bp .leader{fill:none;stroke:#F5B800;stroke-width:.8}
+.bp .tx{font-family:"Share Tech Mono",monospace;font-size:7px;fill:#7FD9E2;stroke:none;letter-spacing:.08em}
+.bp .tx.hot{fill:#F5B800;font-size:8.5px}
+.bp .tx.ttl{font-size:6px;fill:#4F8A93}
+.hero .bp .ttl{display:none}
+.bp .cmark{fill:none;stroke:#F5B800;stroke-width:.7}
+.bp .armln{stroke:#FFFFFF}
+.bp .armpart{fill:rgba(63,224,234,.28);stroke:#FFFFFF;stroke-width:1.4;filter:drop-shadow(0 0 3px #3FE0EA) drop-shadow(0 0 6px rgba(63,224,234,.6))}
 .exc .trk-tread{animation:tread .8s linear infinite}
-@keyframes tread{to{stroke-dashoffset:-16}}
-.exc .boom{transform-box:view-box;transform-origin:208px 100px;animation:boom 4s ease-in-out infinite alternate}
-.exc .arm{transform-box:view-box;transform-origin:296px 26px;animation:armk 4s ease-in-out infinite alternate}
-.exc .bkt{transform-box:view-box;transform-origin:316px 116px;animation:bkt 4s ease-in-out infinite alternate}
-@keyframes boom{0%{transform:rotate(-8deg)}100%{transform:rotate(7deg)}}
-@keyframes armk{0%{transform:rotate(-22deg)}100%{transform:rotate(14deg)}}
-@keyframes bkt{0%{transform:rotate(-35deg)}100%{transform:rotate(40deg)}}
-.exc .armpart{fill:url(#gBody);stroke:var(--accent-hi);stroke-width:2;filter:drop-shadow(0 0 5px rgba(63,224,234,.95))}
-.exc .dust{animation:dust 4s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center}
-@keyframes dust{0%,70%{opacity:0;transform:scale(.4)}100%{opacity:.7;transform:scale(1.2)}}
+@keyframes tread{to{stroke-dashoffset:-10}}
+.exc .boom{transform-box:view-box;transform-origin:142px 110px;animation:boom 4s ease-in-out infinite alternate}
+.exc .arm{transform-box:view-box;transform-origin:250px 38px;animation:armk 4s ease-in-out infinite alternate}
+.exc .bkt{transform-box:view-box;transform-origin:270px 104px;animation:bkt 4s ease-in-out infinite alternate}
+@keyframes boom{0%{transform:rotate(-7deg)}100%{transform:rotate(5deg)}}
+@keyframes armk{0%{transform:rotate(-18deg)}100%{transform:rotate(12deg)}}
+@keyframes bkt{0%{transform:rotate(-30deg)}100%{transform:rotate(35deg)}}
 .tracks{height:16px;margin:0 0 12px;background:
   repeating-linear-gradient(90deg,#3A464D 0 10px,#1A2125 10px 12px,#4C5E69 12px 18px,#1A2125 18px 20px);
   border-top:2px solid #0A0D0F;border-bottom:2px solid #0A0D0F;box-shadow:inset 0 2px 0 rgba(255,255,255,.08),inset 0 -3px 0 rgba(0,0,0,.4);
@@ -187,7 +196,8 @@ textarea{min-height:64px}
 #busy{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
   background:radial-gradient(ellipse at center,#18222A 0%,#070A0C 70%)}
 #busy .exc{width:min(86vw,420px)}
-#busy .exc .boom,#busy .exc .arm,#busy .exc .bkt,#busy .exc .dust{animation-duration:1.1s}
+#busy .exc .boom,#busy .exc .arm,#busy .exc .bkt{animation-duration:1.1s}
+#busy{background:linear-gradient(rgba(63,224,234,.06) 1px,transparent 1px) 0 0/16px 16px,linear-gradient(90deg,rgba(63,224,234,.06) 1px,transparent 1px) 0 0/16px 16px,radial-gradient(ellipse at center,#0E2A31 0%,#05090B 75%)!important}
 #busy p{margin:0;font-family:"Orbitron","Share Tech Mono",monospace;letter-spacing:.3em;color:var(--accent-hi);text-shadow:0 0 10px rgba(0,200,215,.6);font-size:1rem}
 #busy small{font-family:"Share Tech Mono","BIZ UDPGothic",monospace;color:var(--sub);letter-spacing:.06em}
 #busy .ground{width:min(86vw,420px);height:8px;margin-top:-18px;background:repeating-linear-gradient(-45deg,#F5B800 0 10px,#111 10px 20px)}
@@ -249,13 +259,13 @@ h1{font-size:1.9rem}
   <div id="cropStage"><div id="cropWrap"><img id="cropImg" alt="切り抜く写真"><div id="cropBox"><div class="h tl" data-h="tl"></div><div class="h tr" data-h="tr"></div><div class="h bl" data-h="bl"></div><div class="h br" data-h="br"></div></div></div></div>
   <div class="bar"><button class="btn" id="cropCancel" type="button">やめる</button><button class="btn go" id="cropOk" type="button">この範囲で読む</button></div>
 </div>
-<div id="busy" class="hidden"><div data-exc></div><div class="ground"></div><p id="busyT">READING</p><small id="busyS"></small></div>
+<div id="busy" class="hidden"><div data-exc></div><p id="busyT">READING</p><small id="busyS"></small></div>
 <div id="toast"></div>
 
 <script>
 (() => {
 const $ = id => document.getElementById(id);
-const EXC_SVG = '<svg class="exc" viewBox="0 0 360 170" aria-hidden="true">\n  <defs>\n    <linearGradient id="gBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#E4EAED"/><stop offset="1" stop-color="#A9B6BD"/></linearGradient>\n    <linearGradient id="gDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A565C"/><stop offset="1" stop-color="#1B2124"/></linearGradient>\n    <linearGradient id="gGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9FEFFF"/><stop offset=".5" stop-color="#2AA9C9"/><stop offset="1" stop-color="#0B3B4C"/></linearGradient>\n    <linearGradient id="gRod" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#8C9AA1"/></linearGradient>\n    <radialGradient id="gSpot" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#00A7B5" stop-opacity=".35"/><stop offset="1" stop-color="#00A7B5" stop-opacity="0"/></radialGradient>\n  </defs>\n  <ellipse cx="190" cy="100" rx="170" ry="70" fill="url(#gSpot)"/>\n  <ellipse cx="150" cy="160" rx="120" ry="7" fill="#000" opacity=".55"/>\n  <!-- 足回り -->\n  <path d="M40 132 a16 16 0 0 1 16 -16 h150 a16 16 0 0 1 0 32 h-150 a16 16 0 0 1 -16 -16 z" fill="#15191B" stroke="#050708" stroke-width="2"/>\n  <path d="M44 132 a12 12 0 0 1 12 -12 h150 a12 12 0 0 1 0 24 h-150 a12 12 0 0 1 -12 -12 z" fill="none" stroke="#56636A" stroke-width="6" stroke-dasharray="5 3" class="trk-tread"/>\n  <rect x="58" y="124" width="146" height="16" rx="4" fill="url(#gDark)"/>\n  <circle cx="58" cy="132" r="11" fill="#2B3337" stroke="#0A0D0F" stroke-width="2"/><circle cx="58" cy="132" r="4" fill="#8C9AA1"/>\n  <circle cx="204" cy="132" r="10" fill="#2B3337" stroke="#0A0D0F" stroke-width="2"/><circle cx="204" cy="132" r="3.5" fill="#8C9AA1"/>\n  <g fill="#0E1214"><circle cx="90" cy="141" r="4"/><circle cx="118" cy="141" r="4"/><circle cx="146" cy="141" r="4"/><circle cx="174" cy="141" r="4"/></g>\n  <rect x="104" y="112" width="70" height="12" fill="#1B2124"/>\n  <!-- 上部旋回体 -->\n  <path d="M46 84 q0 -10 10 -12 h52 v42 h-52 q-10 -2 -10 -12 z" fill="url(#gDark)"/>\n  <path d="M96 70 h122 l10 12 v30 h-132 z" fill="url(#gBody)" stroke="#7D8B92" stroke-width=".8"/>\n  <g stroke="#8C9AA1" stroke-width="2"><path d="M106 78 h40"/><path d="M106 84 h40"/><path d="M106 90 h40"/></g>\n  <path d="M96 100 h132 v6 h-132 z" fill="#00A7B5"/>\n  <path d="M96 94 l132 -10 v5 l-132 10 z" fill="#00A7B5" opacity=".75"/>\n  <path d="M96 112 h132" stroke="#5E6C73" stroke-width="2"/>\n  <path d="M120 70 v-6 h40 v6" fill="none" stroke="#C9D3D8" stroke-width="2"/>\n  <!-- キャブ -->\n  <path d="M176 22 h28 q8 0 12 8 l12 40 h-52 z" fill="#2B3337" stroke="#0A0D0F" stroke-width="1.5"/>\n  <path d="M181 27 h22 q5 0 8 6 l10 33 h-40 z" fill="url(#gGlass)"/>\n  <path d="M184 29 h8 l-6 37 h-3 z" fill="#fff" opacity=".45"/>\n  <path d="M176 50 h46" stroke="#2B3337" stroke-width="2"/>\n  <!-- ブーム（弓なり）→ アーム → バケット -->\n  <g class="boom">\n    <path d="M200 96 Q236 34 290 20 L300 32 Q252 48 220 104 Z" fill="url(#gBody)" stroke="#7D8B92" stroke-width="1"/>\n    <path d="M207 92 Q240 40 292 26" fill="none" stroke="#00A7B5" stroke-width="3"/>\n    <!-- ブームシリンダー -->\n    <path d="M196 108 L232 66" stroke="#2B3337" stroke-width="8" stroke-linecap="round"/>\n    <path d="M222 78 L244 52" stroke="url(#gRod)" stroke-width="4" stroke-linecap="round"/>\n    <circle cx="208" cy="100" r="6" fill="#2B3337" stroke="#0A0D0F"/>\n    <g class="arm">\n      <!-- アームシリンダー -->\n      <path d="M262 36 L286 16" stroke="#2B3337" stroke-width="7" stroke-linecap="round"/>\n      <path d="M280 21 L296 10" stroke="url(#gRod)" stroke-width="3.5" stroke-linecap="round"/>\n      <path class="armpart" d="M290 10 L304 16 L322 112 L310 120 L300 30 Z"/>\n      <path d="M298 24 L314 112" stroke="#00A7B5" stroke-width="3"/>\n      <circle cx="296" cy="26" r="5.5" fill="#2B3337" stroke="#0A0D0F"/>\n      <g class="bkt">\n        <path d="M308 112 q30 2 34 30 q-20 14 -44 2 l2 -8 z" fill="url(#gDark)" stroke="#0A0D0F" stroke-width="1.5"/>\n        <path d="M298 146 l5 6 l6 -5 l6 6 l6 -5 l6 5 l6 -5" fill="none" stroke="#C9D3D8" stroke-width="2.2" stroke-linejoin="round"/>\n        <circle cx="316" cy="116" r="4.5" fill="#15191B" stroke="#8C9AA1"/>\n      </g>\n    </g>\n  </g>\n  <ellipse class="dust" cx="320" cy="160" rx="30" ry="6" fill="#8A7A5C"/>\n</svg>';
+const EXC_SVG = '<svg class="exc bp" viewBox="0 0 360 170" aria-hidden="true">\n  <defs>\n    <pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0 V4" stroke="#3FE0EA" stroke-width=".6" opacity=".55"/></pattern>\n    <pattern id="ghatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0 V5" stroke="#3FE0EA" stroke-width=".5" opacity=".35"/></pattern>\n    <marker id="ar" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L6 3 L0 6 z" fill="#3FE0EA"/></marker>\n  </defs>\n  <g class="ln">\n    <!-- 地面 -->\n    <path d="M14 150 H346"/>\n    <rect x="14" y="150" width="332" height="6" fill="url(#ghatch)" stroke="none"/>\n    <!-- 足回り -->\n    <path d="M70 130 H150 A10 10 0 0 1 150 150 H70 A10 10 0 0 1 70 130 Z"/>\n    <path d="M72 134 H148 A6 6 0 0 1 148 146 H72 A6 6 0 0 1 72 134 Z" class="thin trk-tread" stroke-dasharray="3 2"/>\n    <circle cx="70" cy="140" r="7"/><circle cx="150" cy="140" r="6"/>\n    <circle cx="92" cy="146" r="2.5" class="thin"/><circle cx="110" cy="146" r="2.5" class="thin"/><circle cx="128" cy="146" r="2.5" class="thin"/>\n    <path d="M100 130 V124 H124 V130" class="thin"/>\n    <!-- 上部旋回体 -->\n    <path d="M44 104 Q44 96 52 96 H80 V124 H52 Q44 124 44 116 Z" fill="url(#hatch)"/>\n    <path d="M80 96 H150 L156 102 V124 H80 Z"/>\n    <path d="M86 102 H112 M86 106 H112 M86 110 H112" class="thin"/>\n    <path d="M80 118 H156" class="thin"/>\n    <!-- キャブ -->\n    <path d="M118 96 V64 H138 Q144 64 146 70 L152 96"/>\n    <path d="M122 92 V68 H137 Q141 68 142 72 L147 92 Z" class="thin"/>\n    <path d="M120 80 H149" class="thin"/>\n    <!-- 全高の寸法線 -->\n    <path d="M30 150 V64" class="dim" marker-start="url(#ar)" marker-end="url(#ar)"/>\n    <path d="M26 64 H116" class="ext"/>\n    <text x="22" y="110" class="tx" transform="rotate(-90 22 110)">2,950</text>\n    <!-- 全長（足回り）の寸法線 -->\n    <path d="M60 162 H160" class="dim" marker-start="url(#ar)" marker-end="url(#ar)"/>\n    <text x="96" y="168" class="tx">4,450</text>\n    <text x="60" y="90" class="tx">UPPER</text>\n  </g>\n  <!-- 作業機 -->\n  <g class="boom">\n    <g class="ln">\n      <path d="M136 108 Q176 52 246 34 L254 44 Q190 64 148 114 Z"/>\n      <path d="M144 106 Q182 60 248 40" class="thin" stroke-dasharray="6 3"/>\n      <!-- ブームシリンダー -->\n      <path d="M120 118 L170 76" class="cyl"/>\n      <path d="M158 86 L182 66" class="thin"/>\n      <text x="186" y="80" class="tx">BOOM</text>\n    </g>\n    <g class="cmark"><circle cx="142" cy="110" r="3.5"/><path d="M136 110 H148 M142 104 V116"/></g>\n    <g class="arm">\n      <g class="ln">\n        <!-- アームシリンダー -->\n        <path d="M216 46 L244 26" class="cyl"/>\n        <path d="M236 32 L250 22" class="thin"/>\n      </g>\n      <g class="ln armln"><path class="armpart" d="M244 30 L258 34 L276 102 L266 108 Z"/></g>\n      <g class="cmark"><circle cx="250" cy="38" r="3.5"/><path d="M244 38 H256 M250 32 V44"/></g>\n      <g class="bkt">\n        <g class="ln">\n          <path d="M264 104 Q292 106 294 130 Q280 142 256 134 L262 120 Z"/>\n          <path d="M256 134 L252 140 M264 137 L261 143 M272 138 L270 144 M280 137 L279 143" class="thin"/>\n        </g>\n        <g class="cmark"><circle cx="270" cy="104" r="3"/><path d="M265 104 H275 M270 99 V109"/></g>\n      </g>\n    </g>\n  </g>\n  <g class="ln"><path d="M300 74 H346" class="leader"/><text x="318" y="70" class="tx hot">ARM</text><text x="302" y="146" class="tx">BUCKET</text></g>\n  <text x="14" y="12" class="tx ttl">SIDE ELEVATION  /  20t CLASS</text>\n</svg>';
 document.querySelectorAll("[data-exc]").forEach(el => { el.outerHTML = EXC_SVG; });
 function busy(on, title, sub) { $("busy").classList.toggle("hidden", !on); if (on) { $("busyT").textContent = title || "WORKING"; $("busyS").textContent = sub || ""; } }
 const run = (fn, ...args) => new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
