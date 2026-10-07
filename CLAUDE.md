@@ -10,6 +10,7 @@
 | `gas/03_取込.js` | Excel(.xlsm)→Googleシート変換→`parseShipValues_`→台帳へ上書きマージ。列は**見出し名で探す** |
 | `gas/03_照合.js` | `fitZuban_`/`fitGoki_`/`wdist_`/`rankArms_`（純粋関数・nodeでテスト可） |
 | `gas/03_AI読取.js` | `apiRead`：Gemini（既定）か Claude で2段階読取（JSONスキーマ指定）＋刻印写真をDrive保存 |
+| `gas/03_フォント見本.js` | 刻印機 Telesis TMC470 の11x16ドットフォント見本（PNG base64）。AI読取の1枚目に添える。元画像 `data/telesis_font_11x16.png` |
 | `gas/03_通知.js` | `notifyUnchecked`：出荷N日前までに「良」がないアームをメール |
 | `gas/04_テスト.js` | GASエディタで実行する確認用関数 |
 | `gas/index.html` | 画面（読取／一覧／記録／設定）。カメラ枠・切り抜き・凹凸強調は旧版から移植 |
@@ -81,6 +82,7 @@ npm i && npm run build && npm test   # "errors []" が出ればOK
 ## 刻印の仕様
 - 1行目 図番：`[A-Z]{2}\d{2}B\d{5}F\d(G\d)?` 例 `LS12B10010F1`, `YY12B00902F1G2`
 - 2行目：`◇ + 製作年月YYMM + "-" + 号機 + 検査記号`。例 `◇2609-39 UM`（2026年9月製作・39号機・UT/MT検査済）
+- 刻印機は **Telesis TMC470（ドットピン）、11x16フォント**。0は斜線入り、2は角ばった斜線、9は右がまっすぐ（ユーザー提供の取説 5章で確認）
 - 白塗装面の浅い打刻でコントラストが非常に低い。**ライトを真横から当てるのが精度の最大要因**
 
 ## 実装済みの仕組み（src/arm-kensa.html 内）

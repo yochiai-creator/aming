@@ -300,11 +300,13 @@ function apiCsv(from, to) {
  * 1回目：自由読取 → 台帳から上位5候補 → 2回目：写真と候補を見比べて選択（1回目で確定なら省略）
  */
 const P1 = [
-  '建機アームに打刻された刻印を切り抜いた写真です。1枚目が元画像、2枚目が凹凸を強調した画像です。',
+  '1枚目は刻印機（Telesis）のドットフォント見本です。上段 0123456789、中段 ?@ABCDEFGHIJKLM、下段 NOPQRSTUVWXYZ。',
+  '2枚目が建機アームに打刻された刻印を切り抜いた写真、3枚目がその凹凸を強調した画像です。刻印は見本と同じフォントで、点の打刻で文字ができています。',
   '刻印は2行あります。',
   '1行目: 図番。形式は 英大文字2文字 + 数字2桁 + "B" + 数字5桁 + "F" + 数字1桁、末尾に "G"+数字1桁 が付くことがある（例: LS12B10010F1, YY12B00902F1G2）。',
-  '2行目: ◇マーク、製作年月4桁(YYMM)、"-"、号機(1〜4桁の数字)、検査記号(例 UM)。',
-  'スラッシュ付きの0は数字の0です。自信のない文字は ? にしてください。推測で埋めないこと。'
+  '2行目: ◇マーク、製作年月4桁(YYMM)、"-"またはすき間、号機(1〜4桁の数字)、検査記号(例 UM)。',
+  'このフォントの見分け方: 0は斜線入り（Oは斜線なし）。2は角ばって斜めの線。9は丸い頭とまっすぐ下に伸びる右の縦線。5は上が平ら。B・Dは左側がまっすぐな縦線（8・0と区別）。1は上に小さな旗。',
+  '文字ごとに見本と見比べてください。自信のない文字は ? にしてください。推測で埋めないこと。'
 ].join('\n');
 const P1_SCHEMA = {
   type: 'object', additionalProperties: false,
@@ -317,7 +319,8 @@ const P2_SCHEMA = {
   properties: {choice: {type: 'string', enum: ['A', 'B', 'C', 'D', 'E', 'none']}, confidence: {type: 'string', enum: ['高', '中', '低']}, reason: {type: 'string'}}
 };
 function p2Prompt_(top) {
-  return '同じ刻印の写真です。この刻印は次の候補のどれと一致しますか。1文字ずつ写真と見比べて判断してください。\n' +
+  return '1枚目は刻印機のドットフォント見本（上段 0-9、中段 ?@A-M、下段 N-Z）、2枚目・3枚目が同じ刻印の写真（元画像・凹凸強調）です。\n' +
+    'この刻印は次の候補のどれと一致しますか。1文字ずつ見本の字形と写真を見比べて判断してください。\n' +
     '特に号機（2行目の "-" の後の数字）と図番の数字部分を丁寧に確認すること。\n' +
     top.map((c, i) => 'ABCDE'[i] + ': 図番 ' + c.arm.z + '　号機 ' + c.arm.g).join('\n') +
     '\nどれとも一致しなければ choice は "none"。';
@@ -329,7 +332,7 @@ function p2Prompt_(top) {
  */
 function apiRead(orig, enh, last) {
   const photoId = savePhoto_(orig);
-  const imgs = [orig, enh];
+  const imgs = [{data: FONT_REF_PNG, mime: 'image/png'}, orig, enh];
   const r1 = callAI_(P1, imgs, P1_SCHEMA);
   const fz = fitZuban_(r1.zuban), g = fitGoki_(r1.goki);
 
@@ -352,6 +355,8 @@ function apiRead(orig, enh, last) {
   };
 }
 
+// 画像は base64文字列（JPEG）か {data, mime}
+function img_(x) { return typeof x === 'string' ? {data: x, mime: 'image/jpeg'} : x; }
 function callAI_(prompt, imgsB64, schema) {
   return CONFIG.AI_PROVIDER === 'claude' ? callClaude_(prompt, imgsB64, schema) : callGemini_(prompt, imgsB64, schema);
 }
@@ -359,7 +364,7 @@ function callAI_(prompt, imgsB64, schema) {
 function callGemini_(prompt, imgsB64, schema) {
   const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!key) throw new Error('GEMINI_API_KEY が未設定です');
-  const parts = imgsB64.map(b => ({inline_data: {mime_type: 'image/jpeg', data: b}}));
+  const parts = imgsB64.map(img_).map(i => ({inline_data: {mime_type: i.mime, data: i.data}}));
   parts.push({text: prompt});
   const body = {
     contents: [{role: 'user', parts: parts}],
@@ -393,7 +398,7 @@ function geminiSchema_(s) {
 function callClaude_(prompt, imgsB64, schema) {
   const key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
   if (!key) throw new Error('ANTHROPIC_API_KEY が未設定です');
-  const content = imgsB64.map(b => ({type: 'image', source: {type: 'base64', media_type: 'image/jpeg', data: b}}));
+  const content = imgsB64.map(img_).map(i => ({type: 'image', source: {type: 'base64', media_type: i.mime, data: i.data}}));
   content.push({type: 'text', text: prompt});
   const body = {
     model: CONFIG.CLAUDE_MODEL,
@@ -421,6 +426,13 @@ function savePhoto_(b64) {
   const name = 'kokuin_' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss') + '.jpg';
   return DriveApp.getFolderById(id).createFile(Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg', name)).getId();
 }
+
+/* ===== 03_フォント見本.js ===== */
+/**
+ * 刻印機（Telesis TMC470）11x16 ドットフォントの見本（数字0-9・英大文字）。AI読取の1枚目に添える
+ * 元: data/telesis_font_11x16.png（取扱説明書 5.3 から切り出し）
+ */
+const FONT_REF_PNG = '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';
 
 /* ===== 03_取込.js ===== */
 /**
@@ -687,7 +699,7 @@ function testReadLatestPhoto() {
   while (it.hasNext()) { const x = it.next(); if (!f || x.getDateCreated() > f.getDateCreated()) f = x; }
   if (!f) { console.log('写真がありません'); return; }
   const b = Utilities.base64Encode(f.getBlob().getBytes());
-  console.log(JSON.stringify(callAI_(P1, [b], P1_SCHEMA)));
+  console.log(JSON.stringify(callAI_(P1, [{data: FONT_REF_PNG, mime: 'image/png'}, b, b], P1_SCHEMA)));
 }
 // AIキーが通るか（画像なしで短く1回呼ぶ）
 function testAiKey() {

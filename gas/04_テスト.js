@@ -23,7 +23,7 @@ function testReadLatestPhoto() {
   while (it.hasNext()) { const x = it.next(); if (!f || x.getDateCreated() > f.getDateCreated()) f = x; }
   if (!f) { console.log('写真がありません'); return; }
   const b = Utilities.base64Encode(f.getBlob().getBytes());
-  console.log(JSON.stringify(callAI_(P1, [b], P1_SCHEMA)));
+  console.log(JSON.stringify(callAI_(P1, [{data: FONT_REF_PNG, mime: 'image/png'}, b, b], P1_SCHEMA)));
 }
 // AIキーが通るか（画像なしで短く1回呼ぶ）
 function testAiKey() {

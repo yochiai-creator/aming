@@ -3,11 +3,13 @@
  * 1回目：自由読取 → 台帳から上位5候補 → 2回目：写真と候補を見比べて選択（1回目で確定なら省略）
  */
 const P1 = [
-  '建機アームに打刻された刻印を切り抜いた写真です。1枚目が元画像、2枚目が凹凸を強調した画像です。',
+  '1枚目は刻印機（Telesis）のドットフォント見本です。上段 0123456789、中段 ?@ABCDEFGHIJKLM、下段 NOPQRSTUVWXYZ。',
+  '2枚目が建機アームに打刻された刻印を切り抜いた写真、3枚目がその凹凸を強調した画像です。刻印は見本と同じフォントで、点の打刻で文字ができています。',
   '刻印は2行あります。',
   '1行目: 図番。形式は 英大文字2文字 + 数字2桁 + "B" + 数字5桁 + "F" + 数字1桁、末尾に "G"+数字1桁 が付くことがある（例: LS12B10010F1, YY12B00902F1G2）。',
-  '2行目: ◇マーク、製作年月4桁(YYMM)、"-"、号機(1〜4桁の数字)、検査記号(例 UM)。',
-  'スラッシュ付きの0は数字の0です。自信のない文字は ? にしてください。推測で埋めないこと。'
+  '2行目: ◇マーク、製作年月4桁(YYMM)、"-"またはすき間、号機(1〜4桁の数字)、検査記号(例 UM)。',
+  'このフォントの見分け方: 0は斜線入り（Oは斜線なし）。2は角ばって斜めの線。9は丸い頭とまっすぐ下に伸びる右の縦線。5は上が平ら。B・Dは左側がまっすぐな縦線（8・0と区別）。1は上に小さな旗。',
+  '文字ごとに見本と見比べてください。自信のない文字は ? にしてください。推測で埋めないこと。'
 ].join('\n');
 const P1_SCHEMA = {
   type: 'object', additionalProperties: false,
@@ -20,7 +22,8 @@ const P2_SCHEMA = {
   properties: {choice: {type: 'string', enum: ['A', 'B', 'C', 'D', 'E', 'none']}, confidence: {type: 'string', enum: ['高', '中', '低']}, reason: {type: 'string'}}
 };
 function p2Prompt_(top) {
-  return '同じ刻印の写真です。この刻印は次の候補のどれと一致しますか。1文字ずつ写真と見比べて判断してください。\n' +
+  return '1枚目は刻印機のドットフォント見本（上段 0-9、中段 ?@A-M、下段 N-Z）、2枚目・3枚目が同じ刻印の写真（元画像・凹凸強調）です。\n' +
+    'この刻印は次の候補のどれと一致しますか。1文字ずつ見本の字形と写真を見比べて判断してください。\n' +
     '特に号機（2行目の "-" の後の数字）と図番の数字部分を丁寧に確認すること。\n' +
     top.map((c, i) => 'ABCDE'[i] + ': 図番 ' + c.arm.z + '　号機 ' + c.arm.g).join('\n') +
     '\nどれとも一致しなければ choice は "none"。';
@@ -32,7 +35,7 @@ function p2Prompt_(top) {
  */
 function apiRead(orig, enh, last) {
   const photoId = savePhoto_(orig);
-  const imgs = [orig, enh];
+  const imgs = [{data: FONT_REF_PNG, mime: 'image/png'}, orig, enh];
   const r1 = callAI_(P1, imgs, P1_SCHEMA);
   const fz = fitZuban_(r1.zuban), g = fitGoki_(r1.goki);
 
@@ -55,6 +58,8 @@ function apiRead(orig, enh, last) {
   };
 }
 
+// 画像は base64文字列（JPEG）か {data, mime}
+function img_(x) { return typeof x === 'string' ? {data: x, mime: 'image/jpeg'} : x; }
 function callAI_(prompt, imgsB64, schema) {
   return CONFIG.AI_PROVIDER === 'claude' ? callClaude_(prompt, imgsB64, schema) : callGemini_(prompt, imgsB64, schema);
 }
@@ -62,7 +67,7 @@ function callAI_(prompt, imgsB64, schema) {
 function callGemini_(prompt, imgsB64, schema) {
   const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!key) throw new Error('GEMINI_API_KEY が未設定です');
-  const parts = imgsB64.map(b => ({inline_data: {mime_type: 'image/jpeg', data: b}}));
+  const parts = imgsB64.map(img_).map(i => ({inline_data: {mime_type: i.mime, data: i.data}}));
   parts.push({text: prompt});
   const body = {
     contents: [{role: 'user', parts: parts}],
@@ -96,7 +101,7 @@ function geminiSchema_(s) {
 function callClaude_(prompt, imgsB64, schema) {
   const key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
   if (!key) throw new Error('ANTHROPIC_API_KEY が未設定です');
-  const content = imgsB64.map(b => ({type: 'image', source: {type: 'base64', media_type: 'image/jpeg', data: b}}));
+  const content = imgsB64.map(img_).map(i => ({type: 'image', source: {type: 'base64', media_type: i.mime, data: i.data}}));
   content.push({type: 'text', text: prompt});
   const body = {
     model: CONFIG.CLAUDE_MODEL,
