@@ -25,7 +25,11 @@
 - フォルダ「アームトレーサビリティ」 https://drive.google.com/drive/folders/1qEAxXRBG7y0edZhMCNvVLe4QjBjlIZw8
   - 台帳スプレッドシート `13Fj89c-17Ec0YsUUuKdIykSkZV2442SrA35UNoMHUd8`（6シート・見出し・書式TEXT済、穴数マスタに2件）
   - アーム出荷明細_取込 `17Wno8F_OIiGc42WZXi1PGKRVQeQaS0Dm` ／ _取込済 `14XGF3BnMr2-fdt4wiqFMejk7UD5RxSuW` ／ アーム刻印写真 `1g82k8Y4gCAlBVXAWbeSTkvlHUvcNJ1_0`
-- Apps Scriptプロジェクト本体はコネクタで作れない（`script+json` 取込不可）。ユーザーが clasp か貼り付けで作る
+- Apps Scriptプロジェクト：scriptId `1Wm4YGpwWU-pTtsohOmXprg1ssC4NRJqUHo4RjqVP0qK6zm0X9zf_NttW`（`gas/.clasp.json`）。2026-10-07 にクラウド環境から clasp push 済み
+- ウェブアプリ @1：https://script.google.com/a/macros/nodagumi40.com/s/AKfycbxASmlgFgrQyYGJ1e5OtipzMPre5pfU6H_Lv_IfasA69LtgXnsZ4LPky-XXTH0S5buI3g/exec
+  - 更新は `clasp push` → `clasp deploy -i AKfycbxASmlgFgrQyYGJ1e5OtipzMPre5pfU6H_Lv_IfasA69LtgXnsZ4LPky-XXTH0S5buI3g`（同じURLのまま新版）
+- 注意：`clasp create` は appsscript.json を初期値で上書きするので git checkout で戻すこと
+- 注意：nodagumi40.com のWorkspaceは clasp に spreadsheets/drive スコープ追加を**ブロック**。クラウド環境からは script.google.com にも出られないので、`?fn=`（gas-run.sh）での関数実行はできない。関数実行・権限承認はユーザーがブラウザで
 
 ### デプロイ手順
 1. clasp：`git pull` → `cd gas && clasp create --type standalone --title "アームトレーサビリティ"` → `clasp push`
