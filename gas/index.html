@@ -316,7 +316,7 @@ function renderSettings() {
     <div class="row"><button type="button" class="btn" data-act="savePeople">保存</button></div>
   </section>
   <section><h2>生産管理Excelの取込</h2>
-    <p class="muted">Googleドライブの「アーム出荷明細_取込」フォルダに .xlsm を入れて、下のボタンを押してください（時間トリガーを設定していれば自動で取り込みます）。</p>
+    <p class="muted">Googleドライブ「'001_アーム出荷明細」の一番新しいExcelを取り込みます（取込済みなら何もしません。時間トリガーを設定していれば自動）。</p>
     <div class="row"><button type="button" class="btn" data-act="import">今すぐ取り込む</button></div>
     <div id="impMsg" class="muted"></div>
   </section>
@@ -501,7 +501,7 @@ document.addEventListener("click", async e => {
     b.disabled = true; $("impMsg").textContent = "取込中…（1〜3分かかります）";
     try {
       const r = await run("apiImportNow");
-      $("impMsg").textContent = r ? `${r.file}：${r.count}本（新規 ${r.added} / 更新 ${r.updated} / 重複 ${r.dups}）` : "取込フォルダにExcelがありません";
+      $("impMsg").textContent = !r ? "フォルダにExcelがありません" : r.skipped ? `${r.file} は取込済みです` : `${r.file}：${r.count}本（新規 ${r.added} / 更新 ${r.updated} / 重複 ${r.dups}）`;
       refreshDays();
     } catch (err) { $("impMsg").textContent = "取込失敗：" + errMsg(err); }
     b.disabled = false;

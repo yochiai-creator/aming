@@ -13,6 +13,7 @@ function doGet(e) {
 const CLI_FUNCTIONS = {
   healthCheck: () => healthCheck(),
   importLatest: () => importLatest(),
+  importForce: () => importLatest(true),
   apiDays: () => apiDays(),
   apiUnchecked: () => apiUnchecked().length,
   apiSearch: q => apiSearch(q)
@@ -32,10 +33,8 @@ function healthCheck() {
   const ss = ss_();
   const counts = {};
   Object.keys(CONFIG.SHEETS).forEach(k => { const sh = ss.getSheetByName(CONFIG.SHEETS[k]); counts[CONFIG.SHEETS[k]] = sh ? sh.getLastRow() - 1 : 'なし'; });
-  const files = [];
-  const it = DriveApp.getFolderById(cfg_('INBOX_FOLDER_ID')).getFiles();
-  while (it.hasNext()) files.push(it.next().getName());
-  return {ss: ss.getName(), counts: counts, inbox: files, ai: CONFIG.AI_PROVIDER, apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
+  const latest = latestSourceFile_();
+  return {ss: ss.getName(), counts: counts, latest: latest ? latest.getName() : null, lastImported: PropertiesService.getScriptProperties().getProperty('LAST_IMPORTED'), ai: CONFIG.AI_PROVIDER, apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
 }
 
 /** 初回だけ実行：台帳スプレッドシートとフォルダを作る */

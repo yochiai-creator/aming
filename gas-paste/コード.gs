@@ -5,10 +5,11 @@
  */
 const CONFIG = {
   SS_ID: '13Fj89c-17Ec0YsUUuKdIykSkZV2442SrA35UNoMHUd8',        // 台帳スプレッドシート（ドライブ「アームトレーサビリティ」）
-  INBOX_FOLDER_ID: '17Wno8F_OIiGc42WZXi1PGKRVQeQaS0Dm',  // アーム出荷明細_取込（.xlsm をここに置く）
-  DONE_FOLDER_ID: '14XGF3BnMr2-fdt4wiqFMejk7UD5RxSuW',   // アーム出荷明細_取込済
+  INBOX_FOLDER_ID: '1NS4WoClO0xlGWSxvFimFcqFGUT0jOKQL',  // '001_アーム出荷明細（元Excelがたまるフォルダ。読むだけで動かさない）
+  DONE_FOLDER_ID: '14XGF3BnMr2-fdt4wiqFMejk7UD5RxSuW',   // 変換用の一時ファイル置き場（取込後すぐゴミ箱へ）
   PHOTO_FOLDER_ID: '1g82k8Y4gCAlBVXAWbeSTkvlHUvcNJ1_0',  // アーム刻印写真
 
+  SRC_FILE_RE: /\.xls[xm]$/i,      // 対象ファイル
   SRC_SHEET: '出荷明細',           // Excel側のシート名
   SRC_HEADER_MARK: '注文番号（写し）', // ヘッダー行を探す目印（A列）
 
@@ -71,6 +72,7 @@ function doGet(e) {
 const CLI_FUNCTIONS = {
   healthCheck: () => healthCheck(),
   importLatest: () => importLatest(),
+  importForce: () => importLatest(true),
   apiDays: () => apiDays(),
   apiUnchecked: () => apiUnchecked().length,
   apiSearch: q => apiSearch(q)
@@ -90,10 +92,8 @@ function healthCheck() {
   const ss = ss_();
   const counts = {};
   Object.keys(CONFIG.SHEETS).forEach(k => { const sh = ss.getSheetByName(CONFIG.SHEETS[k]); counts[CONFIG.SHEETS[k]] = sh ? sh.getLastRow() - 1 : 'なし'; });
-  const files = [];
-  const it = DriveApp.getFolderById(cfg_('INBOX_FOLDER_ID')).getFiles();
-  while (it.hasNext()) files.push(it.next().getName());
-  return {ss: ss.getName(), counts: counts, inbox: files, ai: CONFIG.AI_PROVIDER, apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
+  const latest = latestSourceFile_();
+  return {ss: ss.getName(), counts: counts, latest: latest ? latest.getName() : null, lastImported: PropertiesService.getScriptProperties().getProperty('LAST_IMPORTED'), ai: CONFIG.AI_PROVIDER, apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
 }
 
 /** 初回だけ実行：台帳スプレッドシートとフォルダを作る */
@@ -424,23 +424,39 @@ function savePhoto_(b64) {
 
 /* ===== 03_取込.js ===== */
 /**
- * 生産管理Excel（アーム出荷明細 .xlsm）→ アーム台帳
- * INBOX フォルダの Excel を Googleスプレッドシートに変換して読み、台帳に上書きマージする。
- * 台帳はExcel由来のマスタ。タップ記録は別シートなので取込で消えることはない。
+ * 生産管理Excel（出荷予定 日程表変更A(26年10月7日).xlsm など）→ アーム台帳
+ * 元フォルダの一番新しいExcelを、まだ取り込んでいなければ取り込む（Excelは毎回3年分の累積なので最新1本で足りる）。
+ * 元ファイルは動かさない。台帳はExcel由来のマスタ。タップ記録は別シートなので取込で消えることはない。
  */
-function importLatest() {
-  const inbox = DriveApp.getFolderById(cfg_('INBOX_FOLDER_ID'));
-  const files = [];
-  const it = inbox.getFiles();
+function importLatest(force) {
+  const f = latestSourceFile_();
+  if (!f) { console.log('取込対象なし'); return null; }
+  const stamp = f.getId() + '@' + f.getLastUpdated().getTime();
+  const props = PropertiesService.getScriptProperties();
+  if (!force && props.getProperty('LAST_IMPORTED') === stamp) {
+    console.log('取込済み: %s', f.getName());
+    return {file: f.getName(), skipped: true};
+  }
+  const res = importFile_(f);
+  props.setProperty('LAST_IMPORTED', stamp);
+  return res;
+}
+
+// ファイル名の (26年10月7日) で一番新しいもの。日付が読めなければ作成日時
+function latestSourceFile_() {
+  const it = DriveApp.getFolderById(cfg_('INBOX_FOLDER_ID')).getFiles();
+  let best = null, bestKey = '';
   while (it.hasNext()) {
     const f = it.next();
-    if (/\.xls[xm]?$/i.test(f.getName())) files.push(f);
+    if (!CONFIG.SRC_FILE_RE.test(f.getName())) continue;
+    const key = fileDateKey_(f.getName()) + Utilities.formatDate(f.getDateCreated(), 'Asia/Tokyo', 'yyyyMMddHHmmss');
+    if (key > bestKey) { best = f; bestKey = key; }
   }
-  if (!files.length) { console.log('取込対象なし'); return null; }
-  files.sort((a, b) => a.getLastUpdated() - b.getLastUpdated());
-  let res = null;
-  files.forEach(f => { res = importFile_(f); }); // 古い順に取り込めば最後が最新
-  return res;
+  return best;
+}
+function fileDateKey_(name) {
+  const m = /(\d{2})年(\d{1,2})月(\d{1,2})日/.exec(name);
+  return m ? '20' + m[1] + m[2].padStart(2, '0') + m[3].padStart(2, '0') : '00000000';
 }
 
 function importFile_(file) {
@@ -459,7 +475,6 @@ function importFile_(file) {
     const dupRows = parsed.dups.map(d => [stamp, 'Excel内で図番+号機が重複', d.key, d.note]);
     if (dupRows.length) appendRows_(CONFIG.SHEETS.CHECK, dupRows);
     appendRows_(CONFIG.SHEETS.LOG, [[stamp, file.getName(), parsed.arms.length, stat.added, stat.updated, parsed.dups.length, parsed.skipped]]);
-    file.moveTo(DriveApp.getFolderById(cfg_('DONE_FOLDER_ID')));
     console.log('取込: %s 件 (新規 %s / 更新 %s / 重複 %s) %s', parsed.arms.length, stat.added, stat.updated, parsed.dups.length, file.getName());
     return {file: file.getName(), count: parsed.arms.length, added: stat.added, updated: stat.updated, dups: parsed.dups.length};
   } finally {
@@ -650,9 +665,10 @@ function notifyUnchecked() {
 /**
  * GASエディタから実行して確認する関数
  */
-// 取込フォルダの最新Excelを取り込む → ログに件数が出ればOK
+// 元フォルダの最新Excelを取り込む（取込済みでも強制）→ ログに件数が出ればOK
 function testImport() {
-  console.log(JSON.stringify(importLatest()));
+  console.log('対象: %s', (latestSourceFile_() || {getName: () => 'なし'}).getName());
+  console.log(JSON.stringify(importLatest(true)));
 }
 // 台帳を読めるか・検索できるか
 function testSearch() {

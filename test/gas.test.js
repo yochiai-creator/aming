@@ -45,6 +45,12 @@ t("parseShipValues 見出しで列を探す・重複・対象外", () => {
   assert.strictEqual(p.skipped, 2);
 });
 
+t("fileDateKey ファイル名の日付", () => {
+  assert.strictEqual(run("fileDateKey_")("出荷予定　日程表変更A(26年10月7日).xlsm"), "20261007");
+  assert.ok(run("fileDateKey_")("出荷予定　日程表変更A(26年10月7日).xlsm") > run("fileDateKey_")("出荷予定　日程表変更A(26年9月24日).xlsm"));
+  assert.strictEqual(run("fileDateKey_")("x.xlsm"), "00000000");
+});
+
 // 実データ（リポジトリに入れない）で解析だけ確認：test/fixtures/ship_values.json があれば
 const fx = path.join(__dirname, "fixtures", "ship_values.json");
 if (fs.existsSync(fx)) t("実データ解析", () => {

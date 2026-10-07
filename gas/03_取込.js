@@ -1,21 +1,37 @@
 /**
- * 生産管理Excel（アーム出荷明細 .xlsm）→ アーム台帳
- * INBOX フォルダの Excel を Googleスプレッドシートに変換して読み、台帳に上書きマージする。
- * 台帳はExcel由来のマスタ。タップ記録は別シートなので取込で消えることはない。
+ * 生産管理Excel（出荷予定 日程表変更A(26年10月7日).xlsm など）→ アーム台帳
+ * 元フォルダの一番新しいExcelを、まだ取り込んでいなければ取り込む（Excelは毎回3年分の累積なので最新1本で足りる）。
+ * 元ファイルは動かさない。台帳はExcel由来のマスタ。タップ記録は別シートなので取込で消えることはない。
  */
-function importLatest() {
-  const inbox = DriveApp.getFolderById(cfg_('INBOX_FOLDER_ID'));
-  const files = [];
-  const it = inbox.getFiles();
+function importLatest(force) {
+  const f = latestSourceFile_();
+  if (!f) { console.log('取込対象なし'); return null; }
+  const stamp = f.getId() + '@' + f.getLastUpdated().getTime();
+  const props = PropertiesService.getScriptProperties();
+  if (!force && props.getProperty('LAST_IMPORTED') === stamp) {
+    console.log('取込済み: %s', f.getName());
+    return {file: f.getName(), skipped: true};
+  }
+  const res = importFile_(f);
+  props.setProperty('LAST_IMPORTED', stamp);
+  return res;
+}
+
+// ファイル名の (26年10月7日) で一番新しいもの。日付が読めなければ作成日時
+function latestSourceFile_() {
+  const it = DriveApp.getFolderById(cfg_('INBOX_FOLDER_ID')).getFiles();
+  let best = null, bestKey = '';
   while (it.hasNext()) {
     const f = it.next();
-    if (/\.xls[xm]?$/i.test(f.getName())) files.push(f);
+    if (!CONFIG.SRC_FILE_RE.test(f.getName())) continue;
+    const key = fileDateKey_(f.getName()) + Utilities.formatDate(f.getDateCreated(), 'Asia/Tokyo', 'yyyyMMddHHmmss');
+    if (key > bestKey) { best = f; bestKey = key; }
   }
-  if (!files.length) { console.log('取込対象なし'); return null; }
-  files.sort((a, b) => a.getLastUpdated() - b.getLastUpdated());
-  let res = null;
-  files.forEach(f => { res = importFile_(f); }); // 古い順に取り込めば最後が最新
-  return res;
+  return best;
+}
+function fileDateKey_(name) {
+  const m = /(\d{2})年(\d{1,2})月(\d{1,2})日/.exec(name);
+  return m ? '20' + m[1] + m[2].padStart(2, '0') + m[3].padStart(2, '0') : '00000000';
 }
 
 function importFile_(file) {
@@ -34,7 +50,6 @@ function importFile_(file) {
     const dupRows = parsed.dups.map(d => [stamp, 'Excel内で図番+号機が重複', d.key, d.note]);
     if (dupRows.length) appendRows_(CONFIG.SHEETS.CHECK, dupRows);
     appendRows_(CONFIG.SHEETS.LOG, [[stamp, file.getName(), parsed.arms.length, stat.added, stat.updated, parsed.dups.length, parsed.skipped]]);
-    file.moveTo(DriveApp.getFolderById(cfg_('DONE_FOLDER_ID')));
     console.log('取込: %s 件 (新規 %s / 更新 %s / 重複 %s) %s', parsed.arms.length, stat.added, stat.updated, parsed.dups.length, file.getName());
     return {file: file.getName(), count: parsed.arms.length, added: stat.added, updated: stat.updated, dups: parsed.dups.length};
   } finally {
@@ -127,4 +142,4 @@ function appendRows_(name, rows) {
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 }
 
-if (typeof module !== 'undefined') module.exports = {parseShipValues_, fmtDate_, cleanCell_};
+if (typeof module !== 'undefined') module.exports = {parseShipValues_, fmtDate_, cleanCell_, fileDateKey_};

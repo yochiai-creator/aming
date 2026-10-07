@@ -1,9 +1,10 @@
 /**
  * GASエディタから実行して確認する関数
  */
-// 取込フォルダの最新Excelを取り込む → ログに件数が出ればOK
+// 元フォルダの最新Excelを取り込む（取込済みでも強制）→ ログに件数が出ればOK
 function testImport() {
-  console.log(JSON.stringify(importLatest()));
+  console.log('対象: %s', (latestSourceFile_() || {getName: () => 'なし'}).getName());
+  console.log(JSON.stringify(importLatest(true)));
 }
 // 台帳を読めるか・検索できるか
 function testSearch() {

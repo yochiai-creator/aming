@@ -24,7 +24,8 @@
 ### 作成済みのGoogle側（2026-10-07、Driveコネクタで作成。IDは `01_設定.js` に埋め込み済み → `setup()` 不要）
 - フォルダ「アームトレーサビリティ」 https://drive.google.com/drive/folders/1qEAxXRBG7y0edZhMCNvVLe4QjBjlIZw8
   - 台帳スプレッドシート `13Fj89c-17Ec0YsUUuKdIykSkZV2442SrA35UNoMHUd8`（6シート・見出し・書式TEXT済、穴数マスタに2件）
-  - アーム出荷明細_取込 `17Wno8F_OIiGc42WZXi1PGKRVQeQaS0Dm` ／ _取込済 `14XGF3BnMr2-fdt4wiqFMejk7UD5RxSuW` ／ アーム刻印写真 `1g82k8Y4gCAlBVXAWbeSTkvlHUvcNJ1_0`
+  - _取込済 `14XGF3BnMr2-fdt4wiqFMejk7UD5RxSuW`（変換一時置き場）／ アーム刻印写真 `1g82k8Y4gCAlBVXAWbeSTkvlHUvcNJ1_0` ／ アーム出荷明細_取込 `17Wno8F_...`（未使用）
+- 取込元：既存フォルダ「'001_アーム出荷明細」`1NS4WoClO0xlGWSxvFimFcqFGUT0jOKQL`（`出荷予定　日程表変更A(26年10月7日).xlsm` が随時たまる）。ファイル名の日付で最新1本だけ取込、取込済みは `LAST_IMPORTED`（スクリプトプロパティ）で判定。元ファイルは動かさない
 - Apps Scriptプロジェクト：scriptId `1Wm4YGpwWU-pTtsohOmXprg1ssC4NRJqUHo4RjqVP0qK6zm0X9zf_NttW`（`gas/.clasp.json`）。2026-10-07 にクラウド環境から clasp push 済み
 - ウェブアプリ @1：https://script.google.com/a/macros/nodagumi40.com/s/AKfycbxASmlgFgrQyYGJ1e5OtipzMPre5pfU6H_Lv_IfasA69LtgXnsZ4LPky-XXTH0S5buI3g/exec
   - 更新は `clasp push` → `clasp deploy -i AKfycbxASmlgFgrQyYGJ1e5OtipzMPre5pfU6H_Lv_IfasA69LtgXnsZ4LPky-XXTH0S5buI3g`（同じURLのまま新版）
@@ -35,7 +36,7 @@
 1. clasp：`git pull` → `cd gas && clasp create --type standalone --title "アームトレーサビリティ"` → `clasp push`
    貼り付け：`gas-paste/` の `コード.gs`・`index.html`・`appsscript.json`（エディタ設定で「マニフェストを表示」）を新規プロジェクトに貼る。`npm run gas-paste` で再生成
 2. スクリプトプロパティに `GEMINI_API_KEY`（エディタで `testAiKey` 実行で確認）
-3. 手元の .xlsm を「アーム出荷明細_取込」に入れて `testImport` 実行（初回は権限承認）
+3. `testImport` 実行（元フォルダの最新Excelを強制取込）
 4. デプロイ→ウェブアプリ（実行：自分／アクセス：組織内）
 5. トリガー（手動）：`importLatest` 毎朝、`notifyUnchecked` 毎朝
 
