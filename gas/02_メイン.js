@@ -35,7 +35,7 @@ function healthCheck() {
   const files = [];
   const it = DriveApp.getFolderById(cfg_('INBOX_FOLDER_ID')).getFiles();
   while (it.hasNext()) files.push(it.next().getName());
-  return {ss: ss.getName(), counts: counts, inbox: files, apiKey: !!PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY'), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
+  return {ss: ss.getName(), counts: counts, inbox: files, ai: CONFIG.AI_PROVIDER, apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
 }
 
 /** 初回だけ実行：台帳スプレッドシートとフォルダを作る */
@@ -71,7 +71,7 @@ function setup() {
   });
   console.log('台帳: %s', ss.getUrl());
   ['INBOX_FOLDER_ID', 'DONE_FOLDER_ID', 'PHOTO_FOLDER_ID'].forEach(k => console.log('%s: https://drive.google.com/drive/folders/%s', k, cfg_(k)));
-  if (!props.getProperty('ANTHROPIC_API_KEY')) console.log('※ スクリプトプロパティに ANTHROPIC_API_KEY を登録してください（AI読取に必要）');
+  if (!props.getProperty(aiKeyName_())) console.log('※ スクリプトプロパティに %s を登録してください（AI読取に必要）', aiKeyName_());
 }
 
 /* ---------------- データ読み出し ---------------- */
@@ -109,7 +109,7 @@ function apiBoot() {
     me: Session.getActiveUser().getEmail(),
     people: readTable_(sheet_(CONFIG.SHEETS.PEOPLE)).map(r => r['名前']),
     days: apiDays(),
-    hasKey: !!PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY')
+    hasKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_())
   };
 }
 

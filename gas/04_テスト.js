@@ -22,7 +22,12 @@ function testReadLatestPhoto() {
   while (it.hasNext()) { const x = it.next(); if (!f || x.getDateCreated() > f.getDateCreated()) f = x; }
   if (!f) { console.log('写真がありません'); return; }
   const b = Utilities.base64Encode(f.getBlob().getBytes());
-  console.log(JSON.stringify(callClaude_(P1, [b], P1_SCHEMA)));
+  console.log(JSON.stringify(callAI_(P1, [b], P1_SCHEMA)));
+}
+// AIキーが通るか（画像なしで短く1回呼ぶ）
+function testAiKey() {
+  const r = callAI_('「OK」とだけ答えて。', [], {type: 'object', required: ['answer'], properties: {answer: {type: 'string'}}});
+  console.log('%s %s → %s', CONFIG.AI_PROVIDER, CONFIG.AI_PROVIDER === 'claude' ? CONFIG.CLAUDE_MODEL : CONFIG.GEMINI_MODEL, JSON.stringify(r));
 }
 // 照合ロジック
 function testMatch() {

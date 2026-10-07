@@ -9,7 +9,7 @@
 | `gas/02_メイン.js` | `doGet`、`setup()`、画面API `api*`（検索・詳細・記録・取消・出荷日一覧・未チェック・CSV） |
 | `gas/03_取込.js` | Excel(.xlsm)→Googleシート変換→`parseShipValues_`→台帳へ上書きマージ。列は**見出し名で探す** |
 | `gas/03_照合.js` | `fitZuban_`/`fitGoki_`/`wdist_`/`rankArms_`（純粋関数・nodeでテスト可） |
-| `gas/03_AI読取.js` | `apiRead`：Claude API 2段階読取（structured outputs）＋刻印写真をDrive保存 |
+| `gas/03_AI読取.js` | `apiRead`：Gemini（既定）か Claude で2段階読取（JSONスキーマ指定）＋刻印写真をDrive保存 |
 | `gas/03_通知.js` | `notifyUnchecked`：出荷N日前までに「良」がないアームをメール |
 | `gas/04_テスト.js` | GASエディタで実行する確認用関数 |
 | `gas/index.html` | 画面（読取／一覧／記録／設定）。カメラ枠・切り抜き・凹凸強調は旧版から移植 |
@@ -19,7 +19,7 @@
 - タップ記録は**追記のみ**。訂正は取消フラグ→再記録。最新の有効記録がそのアームの状態
 - ねじ穴数は「穴数マスタ」に図番ごとに記憶し、次から自動入力。「全数OK」＝良＋処置数=ねじ穴数
 - 実データでのテスト：`test/fixtures/ship_values.json`（.gitignore済・コミットしない）があれば `npm test` で解析も確認
-- APIキーはスクリプトプロパティ `ANTHROPIC_API_KEY`。ID類は空なら `setup()` がスクリプトプロパティに保存
+- AI読取は `AI_PROVIDER`（既定 gemini / `gemini-3.8-flash`）。キーはスクリプトプロパティ `GEMINI_API_KEY`（claude なら `ANTHROPIC_API_KEY`）。ID類は空なら `setup()` がスクリプトプロパティに保存
 
 ### 作成済みのGoogle側（2026-10-07、Driveコネクタで作成。IDは `01_設定.js` に埋め込み済み → `setup()` 不要）
 - フォルダ「アームトレーサビリティ」 https://drive.google.com/drive/folders/1qEAxXRBG7y0edZhMCNvVLe4QjBjlIZw8
@@ -34,7 +34,7 @@
 ### デプロイ手順
 1. clasp：`git pull` → `cd gas && clasp create --type standalone --title "アームトレーサビリティ"` → `clasp push`
    貼り付け：`gas-paste/` の `コード.gs`・`index.html`・`appsscript.json`（エディタ設定で「マニフェストを表示」）を新規プロジェクトに貼る。`npm run gas-paste` で再生成
-2. スクリプトプロパティに `ANTHROPIC_API_KEY`
+2. スクリプトプロパティに `GEMINI_API_KEY`（エディタで `testAiKey` 実行で確認）
 3. 手元の .xlsm を「アーム出荷明細_取込」に入れて `testImport` 実行（初回は権限承認）
 4. デプロイ→ウェブアプリ（実行：自分／アクセス：組織内）
 5. トリガー（手動）：`importLatest` 毎朝、`notifyUnchecked` 毎朝

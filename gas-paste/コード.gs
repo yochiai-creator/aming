@@ -27,7 +27,9 @@ const CONFIG = {
     PEOPLE: '確認者', CHECK: '要確認', LOG: '取込ログ'
   },
 
-  // AI読取（APIキーはスクリプトプロパティ ANTHROPIC_API_KEY）
+  // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
+  AI_PROVIDER: 'gemini',
+  GEMINI_MODEL: 'gemini-3.8-flash',
   CLAUDE_MODEL: 'claude-opus-5-5',
   CLAUDE_EFFORT: 'medium',
 
@@ -49,6 +51,7 @@ function ss_() {
   if (!id) throw new Error('台帳がありません。先に setup() を実行してください');
   return SpreadsheetApp.openById(id);
 }
+function aiKeyName_() { return CONFIG.AI_PROVIDER === 'claude' ? 'ANTHROPIC_API_KEY' : 'GEMINI_API_KEY'; }
 function sheet_(name) { return ss_().getSheetByName(name); }
 function armKey_(z, g) { return z + '_' + g; }
 
@@ -90,7 +93,7 @@ function healthCheck() {
   const files = [];
   const it = DriveApp.getFolderById(cfg_('INBOX_FOLDER_ID')).getFiles();
   while (it.hasNext()) files.push(it.next().getName());
-  return {ss: ss.getName(), counts: counts, inbox: files, apiKey: !!PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY'), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
+  return {ss: ss.getName(), counts: counts, inbox: files, ai: CONFIG.AI_PROVIDER, apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
 }
 
 /** 初回だけ実行：台帳スプレッドシートとフォルダを作る */
@@ -126,7 +129,7 @@ function setup() {
   });
   console.log('台帳: %s', ss.getUrl());
   ['INBOX_FOLDER_ID', 'DONE_FOLDER_ID', 'PHOTO_FOLDER_ID'].forEach(k => console.log('%s: https://drive.google.com/drive/folders/%s', k, cfg_(k)));
-  if (!props.getProperty('ANTHROPIC_API_KEY')) console.log('※ スクリプトプロパティに ANTHROPIC_API_KEY を登録してください（AI読取に必要）');
+  if (!props.getProperty(aiKeyName_())) console.log('※ スクリプトプロパティに %s を登録してください（AI読取に必要）', aiKeyName_());
 }
 
 /* ---------------- データ読み出し ---------------- */
@@ -164,7 +167,7 @@ function apiBoot() {
     me: Session.getActiveUser().getEmail(),
     people: readTable_(sheet_(CONFIG.SHEETS.PEOPLE)).map(r => r['名前']),
     days: apiDays(),
-    hasKey: !!PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY')
+    hasKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_())
   };
 }
 
@@ -293,7 +296,7 @@ function apiCsv(from, to) {
 
 /* ===== 03_AI読取.js ===== */
 /**
- * 刻印のAI読取（Claude API）と台帳照合
+ * 刻印のAI読取（Gemini / Claude）と台帳照合
  * 1回目：自由読取 → 台帳から上位5候補 → 2回目：写真と候補を見比べて選択（1回目で確定なら省略）
  */
 const P1 = [
@@ -327,7 +330,7 @@ function p2Prompt_(top) {
 function apiRead(orig, enh, last) {
   const photoId = savePhoto_(orig);
   const imgs = [orig, enh];
-  const r1 = callClaude_(P1, imgs, P1_SCHEMA);
+  const r1 = callAI_(P1, imgs, P1_SCHEMA);
   const fz = fitZuban_(r1.zuban), g = fitGoki_(r1.goki);
 
   const taps = latestTaps_(loadTaps_());
@@ -337,7 +340,7 @@ function apiRead(orig, enh, last) {
   let pick = sure ? {index: 0, confidence: '高', reason: '1回目で一致'} : null;
   if (!sure && top.length) {
     try {
-      const r2 = callClaude_(p2Prompt_(top), imgs, P2_SCHEMA);
+      const r2 = callAI_(p2Prompt_(top), imgs, P2_SCHEMA);
       const i = 'ABCDE'.indexOf(r2.choice);
       pick = i >= 0 && i < top.length ? {index: i, confidence: r2.confidence, reason: r2.reason} : {index: -1, confidence: r2.confidence, reason: r2.reason};
     } catch (e) { console.warn('2回目失敗: ' + e); }
@@ -347,6 +350,44 @@ function apiRead(orig, enh, last) {
     cands: top.map(c => { const v = armView_(c.arm.src, taps[c.arm.src['キー']]); v.cost = Math.round(c.cost * 100) / 100; v.seq = c.seq; return v; }),
     pick: pick, sure: sure, photoId: photoId
   };
+}
+
+function callAI_(prompt, imgsB64, schema) {
+  return CONFIG.AI_PROVIDER === 'claude' ? callClaude_(prompt, imgsB64, schema) : callGemini_(prompt, imgsB64, schema);
+}
+
+function callGemini_(prompt, imgsB64, schema) {
+  const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!key) throw new Error('GEMINI_API_KEY が未設定です');
+  const parts = imgsB64.map(b => ({inline_data: {mime_type: 'image/jpeg', data: b}}));
+  parts.push({text: prompt});
+  const body = {
+    contents: [{role: 'user', parts: parts}],
+    generationConfig: {responseMimeType: 'application/json', responseSchema: geminiSchema_(schema)}
+  };
+  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + CONFIG.GEMINI_MODEL + ':generateContent', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: {'x-goog-api-key': key},
+    payload: JSON.stringify(body)
+  });
+  const code = res.getResponseCode(), json = JSON.parse(res.getContentText() || '{}');
+  if (code === 429 || code === 503) throw new Error('混み合っています。少し待って撮り直してください');
+  if (code !== 200) throw new Error('AI読取エラー ' + code + ': ' + (json.error && json.error.message || ''));
+  const cand = (json.candidates || [])[0];
+  if (!cand || !cand.content) throw new Error('AIが読取を返しませんでした（' + (cand && cand.finishReason || (json.promptFeedback && json.promptFeedback.blockReason) || '不明') + '）');
+  return JSON.parse(cand.content.parts.map(p => p.text || '').join(''));
+}
+// JSON Schema → Gemini の responseSchema（OpenAPI形式。additionalProperties は使えない）
+function geminiSchema_(s) {
+  const o = {type: String(s.type).toUpperCase()};
+  if (s.enum) o.enum = s.enum;
+  if (s.required) o.required = s.required;
+  if (s.properties) {
+    o.properties = {};
+    Object.keys(s.properties).forEach(k => { o.properties[k] = geminiSchema_(s.properties[k]); });
+    o.propertyOrdering = Object.keys(s.properties);
+  }
+  return o;
 }
 
 function callClaude_(prompt, imgsB64, schema) {
@@ -630,7 +671,12 @@ function testReadLatestPhoto() {
   while (it.hasNext()) { const x = it.next(); if (!f || x.getDateCreated() > f.getDateCreated()) f = x; }
   if (!f) { console.log('写真がありません'); return; }
   const b = Utilities.base64Encode(f.getBlob().getBytes());
-  console.log(JSON.stringify(callClaude_(P1, [b], P1_SCHEMA)));
+  console.log(JSON.stringify(callAI_(P1, [b], P1_SCHEMA)));
+}
+// AIキーが通るか（画像なしで短く1回呼ぶ）
+function testAiKey() {
+  const r = callAI_('「OK」とだけ答えて。', [], {type: 'object', required: ['answer'], properties: {answer: {type: 'string'}}});
+  console.log('%s %s → %s', CONFIG.AI_PROVIDER, CONFIG.AI_PROVIDER === 'claude' ? CONFIG.CLAUDE_MODEL : CONFIG.GEMINI_MODEL, JSON.stringify(r));
 }
 // 照合ロジック
 function testMatch() {

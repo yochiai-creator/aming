@@ -26,7 +26,9 @@ const CONFIG = {
     PEOPLE: '確認者', CHECK: '要確認', LOG: '取込ログ'
   },
 
-  // AI読取（APIキーはスクリプトプロパティ ANTHROPIC_API_KEY）
+  // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
+  AI_PROVIDER: 'gemini',
+  GEMINI_MODEL: 'gemini-3.8-flash',
   CLAUDE_MODEL: 'claude-opus-5-5',
   CLAUDE_EFFORT: 'medium',
 
@@ -48,5 +50,6 @@ function ss_() {
   if (!id) throw new Error('台帳がありません。先に setup() を実行してください');
   return SpreadsheetApp.openById(id);
 }
+function aiKeyName_() { return CONFIG.AI_PROVIDER === 'claude' ? 'ANTHROPIC_API_KEY' : 'GEMINI_API_KEY'; }
 function sheet_(name) { return ss_().getSheetByName(name); }
 function armKey_(z, g) { return z + '_' + g; }
