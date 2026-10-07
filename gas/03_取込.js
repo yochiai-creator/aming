@@ -47,12 +47,12 @@ function importFile_(file) {
     const sh = SpreadsheetApp.openById(tmp.id).getSheetByName(CONFIG.SRC_SHEET);
     if (!sh) throw new Error('シート「' + CONFIG.SRC_SHEET + '」がありません: ' + file.getName());
     const parsed = parseShipValues_(sh.getDataRange().getValues());
-    const stat = mergeArms_(parsed.arms, stamp);
+    const stat = mergeArms_(parsed.arms, stamp, file.getName());
     const dupRows = parsed.dups.map(d => [stamp, 'Excel内で図番+号機が重複', d.key, d.note]);
     if (dupRows.length) appendRows_(CONFIG.SHEETS.CHECK, dupRows);
     appendRows_(CONFIG.SHEETS.LOG, [[stamp, file.getName(), parsed.arms.length, stat.added, stat.updated, parsed.dups.length, parsed.skipped]]);
-    console.log('取込: %s 件 (新規 %s / 更新 %s / 重複 %s) %s', parsed.arms.length, stat.added, stat.updated, parsed.dups.length, file.getName());
-    return {file: file.getName(), count: parsed.arms.length, added: stat.added, updated: stat.updated, dups: parsed.dups.length};
+    console.log('取込: %s 件 (新規 %s / 更新 %s / 日付等の変更 %s / 重複 %s) %s', parsed.arms.length, stat.added, stat.updated, stat.changes, parsed.dups.length, file.getName());
+    return {file: file.getName(), count: parsed.arms.length, added: stat.added, updated: stat.updated, changes: stat.changes, dups: parsed.dups.length};
   } finally {
     DriveApp.getFileById(tmp.id).setTrashed(true);
   }
@@ -112,16 +112,20 @@ function fmtDate_(v) {
 }
 
 // 台帳に上書きマージ（Excelから消えたアームは残す）
-function mergeArms_(arms, at) {
+function mergeArms_(arms, at, fileName) {
   const sh = sheet_(CONFIG.SHEETS.ARMS);
   const cur = readTable_(sh);
   const byKey = {};
   cur.forEach(a => { byKey[a['キー']] = a; });
   let added = 0, updated = 0;
+  const changes = [];
   arms.forEach(a => {
     const old = byKey[a['キー']];
     if (!old) added++;
-    else if (ARM_COLS.some(c => c !== '更新日時' && String(old[c] || '') !== String(a[c] || ''))) updated++;
+    else if (ARM_COLS.some(c => c !== '更新日時' && String(old[c] || '') !== String(a[c] || ''))) {
+      updated++;
+      diffArm_(old, a).forEach(d => changes.push([at, a['キー'], d[0], d[1], d[2], fileName || '']));
+    }
     else return;
     a['更新日時'] = at;
     byKey[a['キー']] = a;
@@ -130,7 +134,13 @@ function mergeArms_(arms, at) {
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, ARM_COLS.length).clearContent();
   if (rows.length) sh.getRange(2, 1, rows.length, ARM_COLS.length).setNumberFormat('@').setValues(rows);
   ARMS_MEMO = null;
-  return {added: added, updated: updated};
+  if (changes.length) appendRows_(CONFIG.SHEETS.CHANGES, changes);
+  return {added: added, updated: updated, changes: changes.length};
+}
+
+// 追跡する列のうち値が変わったもの [[列, 前, 後]]（純粋関数）
+function diffArm_(old, a) {
+  return TRACK_CHANGE_COLS.filter(c => String(old[c] || '') !== String(a[c] || '')).map(c => [c, String(old[c] || ''), String(a[c] || '')]);
 }
 
 function readTable_(sh) {
@@ -143,4 +153,4 @@ function appendRows_(name, rows) {
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 }
 
-if (typeof module !== 'undefined') module.exports = {parseShipValues_, fmtDate_, cleanCell_, fileDateKey_};
+if (typeof module !== 'undefined') module.exports = {parseShipValues_, fmtDate_, cleanCell_, fileDateKey_, diffArm_};

@@ -45,6 +45,10 @@ t("parseShipValues 見出しで列を探す・重複・対象外", () => {
   assert.strictEqual(p.skipped, 2);
 });
 
+t("diffArm 日付と出荷先の変更だけ拾う", () => {
+  const d = run("diffArm_")({"塗装完了日": "2026/09/30", "出荷先": "正和", "仕様": "A"}, {"塗装完了日": "2026/10/02", "出荷先": "正和", "仕様": "B"});
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(d)), [["塗装完了日", "2026/09/30", "2026/10/02"]]);
+});
 t("fileDateKey ファイル名の日付", () => {
   assert.strictEqual(run("fileDateKey_")("出荷予定　日程表変更A(26年10月7日).xlsm"), "20261007");
   assert.ok(run("fileDateKey_")("出荷予定　日程表変更A(26年10月7日).xlsm") > run("fileDateKey_")("出荷予定　日程表変更A(26年9月24日).xlsm"));
@@ -68,7 +72,11 @@ const api = {
   apiBoot: () => ({today: "2026/10/07", me: "", people: ["落合", "田中"], hasKey: true, days: [{date: "2026/10/07", total: 3, todo: 2, ng: 0}, {date: "2026/10/08", total: 5, todo: 5, ng: 0}]}),
   apiDays: () => [{date: "2026/10/07", total: 3, todo: 1, ng: 0}],
   apiDay: () => [arm], apiUnchecked: () => [arm], apiSearch: () => [arm],
-  apiArm: () => Object.assign({}, arm, {steps: [["着工", "2026/09/24"], ["出荷", "2026/10/07"]], order: "A5", base: "YY", updated: "", taps: [], holes: 33}),
+  apiArm: () => Object.assign({}, arm, {steps: [
+    {name: "着工", date: "2026/09/24", step: "", changes: [], recs: []},
+    {name: "塗装完了", date: "2026/10/02", step: "塗装完了", changes: [{at: "2026/10/07 06:00", from: "2026/09/30", to: "2026/10/02"}], recs: []},
+    {name: "出荷", date: "2026/10/07", step: "出荷", changes: [], recs: []}], otherChanges: [], order: "A5", base: "YY", updated: "", taps: [], holes: 33}),
+  apiSaveStep: rec => { const v = api.apiArm(); v.steps[1].recs.push({id: "s1", at: "2026/10/07 10:00", by: rec.person, note: rec.note, canceled: false}); return v; },
   apiSaveTap: rec => Object.assign(api.apiArm(), {status: rec.result, taps: [{id: "x", at: "2026/10/07 10:00", result: rec.result, holes: rec.holes, treated: rec.treated, by: rec.person, note: "", photo: "", canceled: false}]})
 };
 const html = fs.readFileSync(path.join(G, "index.html"), "utf8").replace(/<link[^>]+>/g, "");
@@ -83,6 +91,7 @@ w.google = {script: {get run() {
 w.eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const click = sel => w.document.querySelector(sel).dispatchEvent(new w.MouseEvent("click", {bubbles: true}));
+process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('NG   unhandled', e); });
 (async () => {
   await wait(30);
   t("起動：未チェックバッジ", () => assert.strictEqual(w.document.getElementById("todoBadge").textContent, "7"));
@@ -100,6 +109,12 @@ const click = sel => w.document.querySelector(sel).dispatchEvent(new w.MouseEven
     assert.ok(calls.includes("apiSaveTap"));
     assert.ok(w.document.querySelector(".hist").textContent.includes("処置 33"));
   });
+  t("工程ログ：日程変更の表示", () => assert.ok(w.document.querySelector(".steps .chg").textContent.includes("2026/09/30")));
+  w.prompt = () => "メモ";
+  click('[data-act="nav"][data-v="settings"]'); await wait(10); click('[data-act="me"][data-n="田中"]'); await wait(10);
+  click('[data-act="nav"][data-v="list"]'); await wait(30); click('#dayList [data-act="arm"]'); await wait(30);
+  click('[data-act="step"][data-s="塗装完了"]'); await wait(30);
+  t("工程ログ：塗装完了を記録", () => { assert.ok(calls.includes("apiSaveStep")); assert.ok(w.document.querySelector(".steps .rec").textContent.includes("田中")); });
   console.log("errors", JSON.stringify(errors));
   process.exitCode = errors.length ? 1 : 0;
 })();

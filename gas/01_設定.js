@@ -24,7 +24,8 @@ const CONFIG = {
 
   SHEETS: {
     ARMS: 'アーム台帳', TAPS: 'タップ記録', HOLES: '穴数マスタ',
-    PEOPLE: '確認者', CHECK: '要確認', LOG: '取込ログ'
+    PEOPLE: '確認者', CHECK: '要確認', LOG: '取込ログ',
+    STEPS: '工程記録', CHANGES: '変更履歴'
   },
 
   // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
@@ -43,6 +44,12 @@ const ARM_COLS = ['キー', '図番', '号機', '機種', '仕様', '建機号�
   '塗装完了日', '塗装後修正完了日', '出荷日', '納入日', '注文番号', '製缶図番', '更新日時'];
 const TAP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '結果', 'ねじ穴数', '処置数', '確認者', '備考', '写真ID', '取消'];
 const DATE_COLS = ['着工', '検査完了日', '塗装完了日', '塗装後修正完了日', '出荷日', '納入日'];
+const STEP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '工程', '確認者', '備考', '写真ID', '取消'];
+const CHANGE_COLS = ['日時', 'キー', '項目', '前', '後', '元ファイル'];
+// 現場で記録する工程（名前 → 台帳の対応する日付列）
+const STEPS = [['塗装完了', '塗装完了日'], ['塗装後修正完了', '塗装後修正完了日'], ['出荷', '出荷日']];
+// 取込で値が変わったら変更履歴に残す列
+const TRACK_CHANGE_COLS = DATE_COLS.concat(['出荷先', '建機号機']);
 
 function cfg_(key) {
   return CONFIG[key] || PropertiesService.getScriptProperties().getProperty(key) || '';
@@ -53,5 +60,17 @@ function ss_() {
   return SpreadsheetApp.openById(id);
 }
 function aiKeyName_() { return CONFIG.AI_PROVIDER === 'claude' ? 'ANTHROPIC_API_KEY' : 'GEMINI_API_KEY'; }
-function sheet_(name) { return ss_().getSheetByName(name); }
+function sheet_(name) { return ss_().getSheetByName(name) || makeSheet_(name); }
+// 後から増えたシートは初回アクセス時に作る
+function makeSheet_(name) {
+  const cols = {};
+  cols[CONFIG.SHEETS.STEPS] = STEP_COLS;
+  cols[CONFIG.SHEETS.CHANGES] = CHANGE_COLS;
+  if (!cols[name]) return null;
+  const sh = ss_().insertSheet(name);
+  sh.getRange(1, 1, sh.getMaxRows(), cols[name].length).setNumberFormat('@');
+  sh.getRange(1, 1, 1, cols[name].length).setValues([cols[name]]).setFontWeight('bold');
+  sh.setFrozenRows(1);
+  return sh;
+}
 function armKey_(z, g) { return z + '_' + g; }

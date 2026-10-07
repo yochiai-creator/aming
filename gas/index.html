@@ -72,6 +72,13 @@ textarea{min-height:64px}
 .tl li{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding:6px 0;font-size:.9rem}
 .tl li:first-child{border-top:none}
 .tl li.empty span:last-child{color:var(--sub)}
+.steps li{display:block}
+.steps .sh{display:flex;justify-content:space-between}
+.steps .chg{font-size:.8rem;color:var(--warn)}
+.steps .chg small{margin-left:6px;color:var(--sub)}
+.steps .rec{font-size:.85rem;color:var(--ok)}
+.steps .rec.cx{color:var(--sub);text-decoration:line-through}
+.steps .btn.mini{margin-top:4px}
 .kv{display:grid;grid-template-columns:7em 1fr;gap:4px 10px;font-size:.9rem}
 .kv dt{color:var(--sub)}.kv dd{margin:0;word-break:break-all}
 .seg{display:inline-flex;border:2px solid var(--line);border-radius:10px;overflow:hidden}
@@ -260,8 +267,9 @@ function renderArm() {
     <div id="formMsg" class="muted"></div>
   </section>
   <section>
-    <h2>履歴</h2>
-    <ul class="tl">${a.steps.map(s => `<li class="${s[1] ? "" : "empty"}"><span>${esc(s[0])}</span><span class="mono">${esc(s[1] || "—")}</span></li>`).join("")}</ul>
+    <h2>工程ログ</h2>
+    <ul class="tl steps">${a.steps.map(stepHtml).join("")}</ul>
+    ${a.otherChanges.length ? `<p class="muted">${a.otherChanges.map(c => `${esc(c.col)}：${esc(c.from || "空")} → ${esc(c.to || "空")}（${esc(c.at)} 取込）`).join("<br>")}</p>` : ""}
     <h2 style="margin-top:14px">タップ記録</h2>
     ${a.taps.length ? `<ul class="hist">${a.taps.map(t => `<li class="${t.canceled ? "cx" : ""}">
       <b class="${t.result === "否" ? "" : ""}">${esc(t.result)}</b>　${esc(t.at)}　${esc(t.by)}<br>
@@ -272,6 +280,15 @@ function renderArm() {
     <p class="muted">台帳更新 ${esc(a.updated || "-")}</p>
   </section>`;
   syncForm();
+}
+function stepHtml(st) {
+  const live = st.recs.filter(r => !r.canceled);
+  return `<li class="${st.date || live.length ? "" : "empty"}">
+    <div class="sh"><span>${esc(st.name)}</span><span class="mono">${esc(st.date || "—")}</span></div>
+    ${st.changes.map(c => `<div class="chg">日程変更 ${esc(c.from || "空")} → ${esc(c.to || "空")}<small>${esc(c.at)} 取込</small></div>`).join("")}
+    ${st.recs.map(r => `<div class="rec ${r.canceled ? "cx" : ""}">✔ ${esc(r.at)} ${esc(r.by)}${r.note ? "　" + esc(r.note) : ""}${r.canceled ? "（取消）" : ` <button type="button" class="link" data-act="cancelStep" data-id="${esc(r.id)}">取消</button>`}</div>`).join("")}
+    ${st.step ? `<button type="button" class="btn sec mini" data-act="step" data-s="${esc(st.step)}">${esc(st.step)}を記録</button>` : ""}
+  </li>`;
 }
 function peopleBtns() {
   if (!boot.people.length) return '<span class="muted">設定タブで名前を登録してください</span>';
@@ -489,6 +506,18 @@ document.addEventListener("click", async e => {
     saveTap({result: "良", holes: form.holes, treated: form.holes, person: form.person, note: form.note});
   }
   else if (act === "save") { readForm(); saveTap({result: form.result, holes: form.holes, treated: form.treated, person: form.person, note: form.note}); }
+  else if (act === "step") {
+    if (!me) { toast("設定タブで自分の名前を選んでください"); return; }
+    const note = prompt(`${b.dataset.s}を記録します（${me}）。メモがあれば入力`, "");
+    if (note === null) return;
+    b.disabled = true;
+    try { armData = await run("apiSaveStep", {key: armData.key, step: b.dataset.s, person: me, note, photoId}); toast(b.dataset.s + "を記録しました"); renderArm(); }
+    catch (err) { toast(errMsg(err)); b.disabled = false; }
+  }
+  else if (act === "cancelStep") {
+    if (!confirm("この工程記録を取り消しますか？（記録は残り、取消線が付きます）")) return;
+    try { armData = await run("apiCancelStep", b.dataset.id, armData.key); renderArm(); } catch (err) { toast(errMsg(err)); }
+  }
   else if (act === "cancel") {
     if (!confirm("この記録を取り消しますか？（記録は残り、取消線が付きます）")) return;
     try { armData = await run("apiCancelTap", b.dataset.id, armData.key); renderArm(); refreshDays(); } catch (err) { toast(errMsg(err)); }

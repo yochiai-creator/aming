@@ -25,7 +25,8 @@ const CONFIG = {
 
   SHEETS: {
     ARMS: 'アーム台帳', TAPS: 'タップ記録', HOLES: '穴数マスタ',
-    PEOPLE: '確認者', CHECK: '要確認', LOG: '取込ログ'
+    PEOPLE: '確認者', CHECK: '要確認', LOG: '取込ログ',
+    STEPS: '工程記録', CHANGES: '変更履歴'
   },
 
   // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
@@ -44,6 +45,12 @@ const ARM_COLS = ['キー', '図番', '号機', '機種', '仕様', '建機号�
   '塗装完了日', '塗装後修正完了日', '出荷日', '納入日', '注文番号', '製缶図番', '更新日時'];
 const TAP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '結果', 'ねじ穴数', '処置数', '確認者', '備考', '写真ID', '取消'];
 const DATE_COLS = ['着工', '検査完了日', '塗装完了日', '塗装後修正完了日', '出荷日', '納入日'];
+const STEP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '工程', '確認者', '備考', '写真ID', '取消'];
+const CHANGE_COLS = ['日時', 'キー', '項目', '前', '後', '元ファイル'];
+// 現場で記録する工程（名前 → 台帳の対応する日付列）
+const STEPS = [['塗装完了', '塗装完了日'], ['塗装後修正完了', '塗装後修正完了日'], ['出荷', '出荷日']];
+// 取込で値が変わったら変更履歴に残す列
+const TRACK_CHANGE_COLS = DATE_COLS.concat(['出荷先', '建機号機']);
 
 function cfg_(key) {
   return CONFIG[key] || PropertiesService.getScriptProperties().getProperty(key) || '';
@@ -54,7 +61,19 @@ function ss_() {
   return SpreadsheetApp.openById(id);
 }
 function aiKeyName_() { return CONFIG.AI_PROVIDER === 'claude' ? 'ANTHROPIC_API_KEY' : 'GEMINI_API_KEY'; }
-function sheet_(name) { return ss_().getSheetByName(name); }
+function sheet_(name) { return ss_().getSheetByName(name) || makeSheet_(name); }
+// 後から増えたシートは初回アクセス時に作る
+function makeSheet_(name) {
+  const cols = {};
+  cols[CONFIG.SHEETS.STEPS] = STEP_COLS;
+  cols[CONFIG.SHEETS.CHANGES] = CHANGE_COLS;
+  if (!cols[name]) return null;
+  const sh = ss_().insertSheet(name);
+  sh.getRange(1, 1, sh.getMaxRows(), cols[name].length).setNumberFormat('@');
+  sh.getRange(1, 1, 1, cols[name].length).setValues([cols[name]]).setFontWeight('bold');
+  sh.setFrozenRows(1);
+  return sh;
+}
 function armKey_(z, g) { return z + '_' + g; }
 
 /* ===== 02_メイン.js ===== */
@@ -202,8 +221,18 @@ function apiArm(key) {
   const taps = loadTaps_().filter(t => t['キー'] === key);
   const live = taps.filter(t => t['取消'] !== '1');
   const view = armView_(a, live[live.length - 1]);
-  view.steps = [['着工', a['着工']], ['検査完了', a['検査完了日']], ['塗装完了', a['塗装完了日']],
-    ['塗装後修正', a['塗装後修正完了日']], ['出荷', a['出荷日']], ['納入', a['納入日']]];
+  const changes = readTable_(sheet_(CONFIG.SHEETS.CHANGES)).filter(c => c['キー'] === key);
+  const recs = readTable_(sheet_(CONFIG.SHEETS.STEPS)).filter(r => r['キー'] === key);
+  const fieldStep = {};
+  STEPS.forEach(s => { fieldStep[s[1]] = s[0]; });
+  // 工程ごと：Excelの日付・その変更履歴・現場の記録
+  view.steps = [['着工', '着工'], ['検査完了', '検査完了日'], ['塗装完了', '塗装完了日'],
+    ['塗装後修正', '塗装後修正完了日'], ['出荷', '出荷日'], ['納入', '納入日']].map(p => ({
+      name: p[0], date: a[p[1]], step: fieldStep[p[1]] || '',
+      changes: changes.filter(c => c['項目'] === p[1]).map(c => ({at: c['日時'], from: c['前'], to: c['後']})),
+      recs: recs.filter(r => r['工程'] === fieldStep[p[1]]).map(r => ({id: r['記録ID'], at: r['日時'], by: r['確認者'], note: r['備考'], canceled: r['取消'] === '1'}))
+    }));
+  view.otherChanges = changes.filter(c => DATE_COLS.indexOf(c['項目']) < 0).map(c => ({at: c['日時'], col: c['項目'], from: c['前'], to: c['後']}));
   view.order = a['注文番号']; view.base = a['製缶図番']; view.updated = a['更新日時'];
   view.taps = taps.map(t => ({id: t['記録ID'], at: t['日時'], result: t['結果'], holes: t['ねじ穴数'], treated: t['処置数'],
     by: t['確認者'], note: t['備考'], photo: t['写真ID'] ? 'https://drive.google.com/file/d/' + t['写真ID'] + '/view' : '', canceled: t['取消'] === '1'})).reverse();
@@ -230,12 +259,30 @@ function apiSaveTap(rec) {
   return apiArm(rec.key);
 }
 
-function apiCancelTap(id, key) {
-  const sh = sheet_(CONFIG.SHEETS.TAPS);
+/** 工程（塗装完了／塗装後修正完了／出荷）を現場で記録（追記のみ） */
+function apiSaveStep(rec) {
+  if (!STEPS.some(s => s[0] === rec.step)) throw new Error('工程が不明です: ' + rec.step);
+  if (!rec.person) throw new Error('確認者を選んでください');
+  const a = loadArms_().find(r => r['キー'] === rec.key);
+  if (!a) throw new Error('台帳にないアームです: ' + rec.key);
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+  appendRows_(CONFIG.SHEETS.STEPS, [[Utilities.getUuid().slice(0, 8), now, a['キー'], a['図番'], a['号機'], rec.step, rec.person, rec.note || '', rec.photoId || '', '']]);
+  return apiArm(rec.key);
+}
+function apiCancelStep(id, key) {
+  cancelRow_(CONFIG.SHEETS.STEPS, STEP_COLS, id);
+  return apiArm(key);
+}
+function cancelRow_(name, cols, id) {
+  const sh = sheet_(name);
   const ids = sh.getRange(2, 1, Math.max(1, sh.getLastRow() - 1), 1).getValues();
   const i = ids.findIndex(r => String(r[0]) === String(id));
   if (i < 0) throw new Error('記録が見つかりません');
-  sh.getRange(i + 2, TAP_COLS.indexOf('取消') + 1).setValue('1');
+  sh.getRange(i + 2, cols.indexOf('取消') + 1).setValue('1');
+}
+
+function apiCancelTap(id, key) {
+  cancelRow_(CONFIG.SHEETS.TAPS, TAP_COLS, id);
   return apiArm(key);
 }
 
@@ -506,12 +553,12 @@ function importFile_(file) {
     const sh = SpreadsheetApp.openById(tmp.id).getSheetByName(CONFIG.SRC_SHEET);
     if (!sh) throw new Error('シート「' + CONFIG.SRC_SHEET + '」がありません: ' + file.getName());
     const parsed = parseShipValues_(sh.getDataRange().getValues());
-    const stat = mergeArms_(parsed.arms, stamp);
+    const stat = mergeArms_(parsed.arms, stamp, file.getName());
     const dupRows = parsed.dups.map(d => [stamp, 'Excel内で図番+号機が重複', d.key, d.note]);
     if (dupRows.length) appendRows_(CONFIG.SHEETS.CHECK, dupRows);
     appendRows_(CONFIG.SHEETS.LOG, [[stamp, file.getName(), parsed.arms.length, stat.added, stat.updated, parsed.dups.length, parsed.skipped]]);
-    console.log('取込: %s 件 (新規 %s / 更新 %s / 重複 %s) %s', parsed.arms.length, stat.added, stat.updated, parsed.dups.length, file.getName());
-    return {file: file.getName(), count: parsed.arms.length, added: stat.added, updated: stat.updated, dups: parsed.dups.length};
+    console.log('取込: %s 件 (新規 %s / 更新 %s / 日付等の変更 %s / 重複 %s) %s', parsed.arms.length, stat.added, stat.updated, stat.changes, parsed.dups.length, file.getName());
+    return {file: file.getName(), count: parsed.arms.length, added: stat.added, updated: stat.updated, changes: stat.changes, dups: parsed.dups.length};
   } finally {
     DriveApp.getFileById(tmp.id).setTrashed(true);
   }
@@ -571,16 +618,20 @@ function fmtDate_(v) {
 }
 
 // 台帳に上書きマージ（Excelから消えたアームは残す）
-function mergeArms_(arms, at) {
+function mergeArms_(arms, at, fileName) {
   const sh = sheet_(CONFIG.SHEETS.ARMS);
   const cur = readTable_(sh);
   const byKey = {};
   cur.forEach(a => { byKey[a['キー']] = a; });
   let added = 0, updated = 0;
+  const changes = [];
   arms.forEach(a => {
     const old = byKey[a['キー']];
     if (!old) added++;
-    else if (ARM_COLS.some(c => c !== '更新日時' && String(old[c] || '') !== String(a[c] || ''))) updated++;
+    else if (ARM_COLS.some(c => c !== '更新日時' && String(old[c] || '') !== String(a[c] || ''))) {
+      updated++;
+      diffArm_(old, a).forEach(d => changes.push([at, a['キー'], d[0], d[1], d[2], fileName || '']));
+    }
     else return;
     a['更新日時'] = at;
     byKey[a['キー']] = a;
@@ -589,7 +640,13 @@ function mergeArms_(arms, at) {
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, ARM_COLS.length).clearContent();
   if (rows.length) sh.getRange(2, 1, rows.length, ARM_COLS.length).setNumberFormat('@').setValues(rows);
   ARMS_MEMO = null;
-  return {added: added, updated: updated};
+  if (changes.length) appendRows_(CONFIG.SHEETS.CHANGES, changes);
+  return {added: added, updated: updated, changes: changes.length};
+}
+
+// 追跡する列のうち値が変わったもの [[列, 前, 後]]（純粋関数）
+function diffArm_(old, a) {
+  return TRACK_CHANGE_COLS.filter(c => String(old[c] || '') !== String(a[c] || '')).map(c => [c, String(old[c] || ''), String(a[c] || '')]);
 }
 
 function readTable_(sh) {

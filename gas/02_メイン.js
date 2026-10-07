@@ -142,8 +142,18 @@ function apiArm(key) {
   const taps = loadTaps_().filter(t => t['キー'] === key);
   const live = taps.filter(t => t['取消'] !== '1');
   const view = armView_(a, live[live.length - 1]);
-  view.steps = [['着工', a['着工']], ['検査完了', a['検査完了日']], ['塗装完了', a['塗装完了日']],
-    ['塗装後修正', a['塗装後修正完了日']], ['出荷', a['出荷日']], ['納入', a['納入日']]];
+  const changes = readTable_(sheet_(CONFIG.SHEETS.CHANGES)).filter(c => c['キー'] === key);
+  const recs = readTable_(sheet_(CONFIG.SHEETS.STEPS)).filter(r => r['キー'] === key);
+  const fieldStep = {};
+  STEPS.forEach(s => { fieldStep[s[1]] = s[0]; });
+  // 工程ごと：Excelの日付・その変更履歴・現場の記録
+  view.steps = [['着工', '着工'], ['検査完了', '検査完了日'], ['塗装完了', '塗装完了日'],
+    ['塗装後修正', '塗装後修正完了日'], ['出荷', '出荷日'], ['納入', '納入日']].map(p => ({
+      name: p[0], date: a[p[1]], step: fieldStep[p[1]] || '',
+      changes: changes.filter(c => c['項目'] === p[1]).map(c => ({at: c['日時'], from: c['前'], to: c['後']})),
+      recs: recs.filter(r => r['工程'] === fieldStep[p[1]]).map(r => ({id: r['記録ID'], at: r['日時'], by: r['確認者'], note: r['備考'], canceled: r['取消'] === '1'}))
+    }));
+  view.otherChanges = changes.filter(c => DATE_COLS.indexOf(c['項目']) < 0).map(c => ({at: c['日時'], col: c['項目'], from: c['前'], to: c['後']}));
   view.order = a['注文番号']; view.base = a['製缶図番']; view.updated = a['更新日時'];
   view.taps = taps.map(t => ({id: t['記録ID'], at: t['日時'], result: t['結果'], holes: t['ねじ穴数'], treated: t['処置数'],
     by: t['確認者'], note: t['備考'], photo: t['写真ID'] ? 'https://drive.google.com/file/d/' + t['写真ID'] + '/view' : '', canceled: t['取消'] === '1'})).reverse();
@@ -170,12 +180,30 @@ function apiSaveTap(rec) {
   return apiArm(rec.key);
 }
 
-function apiCancelTap(id, key) {
-  const sh = sheet_(CONFIG.SHEETS.TAPS);
+/** 工程（塗装完了／塗装後修正完了／出荷）を現場で記録（追記のみ） */
+function apiSaveStep(rec) {
+  if (!STEPS.some(s => s[0] === rec.step)) throw new Error('工程が不明です: ' + rec.step);
+  if (!rec.person) throw new Error('確認者を選んでください');
+  const a = loadArms_().find(r => r['キー'] === rec.key);
+  if (!a) throw new Error('台帳にないアームです: ' + rec.key);
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+  appendRows_(CONFIG.SHEETS.STEPS, [[Utilities.getUuid().slice(0, 8), now, a['キー'], a['図番'], a['号機'], rec.step, rec.person, rec.note || '', rec.photoId || '', '']]);
+  return apiArm(rec.key);
+}
+function apiCancelStep(id, key) {
+  cancelRow_(CONFIG.SHEETS.STEPS, STEP_COLS, id);
+  return apiArm(key);
+}
+function cancelRow_(name, cols, id) {
+  const sh = sheet_(name);
   const ids = sh.getRange(2, 1, Math.max(1, sh.getLastRow() - 1), 1).getValues();
   const i = ids.findIndex(r => String(r[0]) === String(id));
   if (i < 0) throw new Error('記録が見つかりません');
-  sh.getRange(i + 2, TAP_COLS.indexOf('取消') + 1).setValue('1');
+  sh.getRange(i + 2, cols.indexOf('取消') + 1).setValue('1');
+}
+
+function apiCancelTap(id, key) {
+  cancelRow_(CONFIG.SHEETS.TAPS, TAP_COLS, id);
   return apiArm(key);
 }
 
