@@ -51,7 +51,7 @@ function setupTriggers() {
 function setup() {
   const props = PropertiesService.getScriptProperties();
   if (!cfg_('SS_ID')) {
-    const ss = SpreadsheetApp.create('アーム トレーサビリティ台帳');
+    const ss = SpreadsheetApp.create('aming 台帳');
     props.setProperty('SS_ID', ss.getId());
   }
   const ss = ss_();
