@@ -73,7 +73,7 @@ const SETTINGS = [
   ['PHOTO_FOLDER_ID', '刻印写真フォルダID', '撮った刻印写真の保存先'],
   ['DONE_FOLDER_ID', '作業用フォルダID', '取込時の一時ファイル置き場'],
   // 確認者は一番下。B列に1行1人で下に足していく（A列は空でOK）
-  ['PEOPLE', '確認者', '1行に1人。下の行のB列に続けて入れる（アプリの設定タブからも編集できる）']
+  ['PEOPLE', '確認者', '1行に1人。下の行のB列に続けて入れる']
 ];
 let SETTINGS_MEMO = null;
 function sheetSettings_() {
@@ -103,21 +103,6 @@ function cfg_(key) {
   const c = CONFIG[key];
   if (c !== undefined && c !== '') return Array.isArray(c) ? c.join(',') : c;
   return (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties().getProperty(key)) || '';
-}
-// 設定シートの値を書き換える。リスト（確認者）は項目の行から下へ1行1人で書く
-function setSetting_(key, value) {
-  const d = SETTINGS.find(x => x[0] === key);
-  const sh = ss_().getSheetByName(CONFIG.SHEETS.SETTINGS) || makeSheet_(CONFIG.SHEETS.SETTINGS);
-  const vals = Array.isArray(value) ? value : [value];
-  const labels = sh.getRange(1, 1, sh.getLastRow(), 1).getDisplayValues().map(r => String(r[0]).trim());
-  let i = labels.indexOf(d[1]);
-  if (i < 0) { sh.appendRow([d[1], '', d[2]]); i = sh.getLastRow() - 1; labels.push(d[1]); }
-  let n = 1; // 項目の行＋A列が空の続きの行
-  while (i + n < labels.length && !labels[i + n]) n++;
-  sh.getRange(i + 1, 2, n, 1).clearContent();
-  if (vals.length > n) sh.insertRowsAfter(i + n, vals.length - n);
-  if (vals.length) sh.getRange(i + 1, 2, vals.length, 1).setNumberFormat('@').setValues(vals.map(v => [v]));
-  SETTINGS_MEMO = null;
 }
 function cfgNum_(key) { return Number(cfg_(key)) || 0; }
 function cfgList_(key) { return String(cfg_(key)).split(/[,、，\n]/).map(x => x.trim()).filter(Boolean); }
@@ -411,14 +396,6 @@ function nextShipDate_() {
   return next;
 }
 
-function apiSavePeople(names) {
-  const list = names.map(n => String(n).trim()).filter(Boolean);
-  setSetting_('PEOPLE', list);
-  return list;
-}
-
-/** 画面から「今すぐ取込」 */
-function apiImportNow() { return importLatest(); }
 
 /** CSV（タップ記録＋台帳の主要項目）。出荷日の範囲指定 */
 function apiCsv(from, to) {

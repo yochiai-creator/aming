@@ -258,14 +258,6 @@ function nextShipDate_() {
   return next;
 }
 
-function apiSavePeople(names) {
-  const list = names.map(n => String(n).trim()).filter(Boolean);
-  setSetting_('PEOPLE', list);
-  return list;
-}
-
-/** 画面から「今すぐ取込」 */
-function apiImportNow() { return importLatest(); }
 
 /** CSV（タップ記録＋台帳の主要項目）。出荷日の範囲指定 */
 function apiCsv(from, to) {

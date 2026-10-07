@@ -291,7 +291,7 @@ function stepHtml(st) {
   </li>`;
 }
 function peopleBtns() {
-  if (!boot.people.length) return '<span class="muted">設定タブで名前を登録してください</span>';
+  if (!boot.people.length) return '<span class="muted">台帳の「設定」シートの確認者に名前を入れてください</span>';
   return boot.people.map(n => `<button type="button" data-act="person" data-n="${esc(n)}">${esc(n)}</button>`).join("");
 }
 function syncForm() {
@@ -325,17 +325,8 @@ async function refreshDays() { try { boot.days = await run("apiDays"); renderHea
 function renderSettings() {
   $("settingsView").innerHTML = `
   <section><h2>自分の名前（確認者）</h2>
-    <div class="names">${boot.people.map(n => `<button type="button" data-act="me" data-n="${esc(n)}" class="${n === me ? "on" : ""}">${esc(n)}</button>`).join("") || '<span class="muted">下で名前を登録してください</span>'}</div>
-    <p class="muted">この端末で選んだ名前が、記録画面の確認者に最初から入ります。</p>
-  </section>
-  <section><h2>確認者の一覧</h2><p class="muted">台帳の「設定」シートの「確認者」と同じものです。</p>
-    <textarea id="peopleIn" placeholder="1行に1人">${esc(boot.people.join("\n"))}</textarea>
-    <div class="row"><button type="button" class="btn" data-act="savePeople">保存</button></div>
-  </section>
-  <section><h2>生産管理Excelの取込</h2>
-    <p class="muted">Googleドライブ「'001_アーム出荷明細」の一番新しいExcelを取り込みます（取込済みなら何もしません。時間トリガーを設定していれば自動）。</p>
-    <div class="row"><button type="button" class="btn" data-act="import">今すぐ取り込む</button></div>
-    <div id="impMsg" class="muted"></div>
+    <div class="names">${boot.people.map(n => `<button type="button" data-act="me" data-n="${esc(n)}" class="${n === me ? "on" : ""}">${esc(n)}</button>`).join("") || '<span class="muted">台帳の「設定」シートの確認者に名前を入れてください</span>'}</div>
+    <p class="muted">この端末で選んだ名前が、記録画面の確認者に最初から入ります。名前の追加は台帳スプレッドシートの「設定」シート（確認者）で。</p>
   </section>
   <section><h2>CSV出力（タップ記録）</h2>
     <div class="row"><input type="text" id="csvFrom" placeholder="出荷日 から 例 2026/10/01"><input type="text" id="csvTo" placeholder="出荷日 まで"></div>
@@ -523,18 +514,6 @@ document.addEventListener("click", async e => {
     try { armData = await run("apiCancelTap", b.dataset.id, armData.key); renderArm(); refreshDays(); } catch (err) { toast(errMsg(err)); }
   }
   else if (act === "me") { me = b.dataset.n; ls.set("trace.me", me); renderHead(); renderSettings(); }
-  else if (act === "savePeople") {
-    try { boot.people = await run("apiSavePeople", $("peopleIn").value.split("\n")); toast("保存しました"); renderSettings(); } catch (err) { toast(errMsg(err)); }
-  }
-  else if (act === "import") {
-    b.disabled = true; $("impMsg").textContent = "取込中…（1〜3分かかります）";
-    try {
-      const r = await run("apiImportNow");
-      $("impMsg").textContent = !r ? "フォルダにExcelがありません" : r.skipped ? `${r.file} は取込済みです` : `${r.file}：${r.count}本（新規 ${r.added} / 更新 ${r.updated} / 重複 ${r.dups}）`;
-      refreshDays();
-    } catch (err) { $("impMsg").textContent = "取込失敗：" + errMsg(err); }
-    b.disabled = false;
-  }
   else if (act === "csv") {
     try {
       const csv = await run("apiCsv", $("csvFrom").value.trim(), $("csvTo").value.trim());
