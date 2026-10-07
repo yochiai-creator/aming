@@ -5,7 +5,7 @@ function doGet(e) {
   const fn = e && e.parameter && e.parameter.fn;
   if (fn) return runFn_(fn, e.parameter.arg);
   return HtmlService.createTemplateFromFile('index').evaluate()
-    .setTitle('アーム トレーサビリティ')
+    .setTitle('aming')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
 }
 

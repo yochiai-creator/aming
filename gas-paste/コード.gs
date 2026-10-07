@@ -1,6 +1,6 @@
 /* ===== 01_設定.js ===== */
 /**
- * アーム トレーサビリティ（野田組）設定
+ * aming（アーム トレーサビリティ・野田組）設定
  * ID類は空なら setup() が作ってスクリプトプロパティに保存する。直書きしたい場合はここに入れる。
  */
 const CONFIG = {
@@ -84,7 +84,7 @@ function doGet(e) {
   const fn = e && e.parameter && e.parameter.fn;
   if (fn) return runFn_(fn, e.parameter.arg);
   return HtmlService.createTemplateFromFile('index').evaluate()
-    .setTitle('アーム トレーサビリティ')
+    .setTitle('aming')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
 }
 
@@ -750,7 +750,7 @@ function notifyUnchecked() {
   const to = CONFIG.ALERT_TO || Session.getEffectiveUser().getEmail();
   const lines = list.map(a => a.z + ' ' + a.g + '号機  ' + (a.to || '') + (a.status === '否' ? '  ★否（処置待ち）' : ''));
   const url = ScriptApp.getService().getUrl() || '';
-  MailApp.sendEmail(to, '【アーム】' + day.slice(5) + ' 出荷分 タップ未チェック ' + list.length + '本',
+  MailApp.sendEmail(to, '【aming】' + day.slice(5) + ' 出荷分 タップ未チェック ' + list.length + '本',
     day + ' に出荷するアームで、ねじ穴タップ「良」の記録がないもの：\n\n' + lines.join('\n') + (url ? '\n\n記録はこちら: ' + url : ''));
   console.log('通知: %s 出荷分 %s 本 → %s', day, list.length, to);
   return list.length;
