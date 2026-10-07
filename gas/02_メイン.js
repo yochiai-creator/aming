@@ -260,7 +260,7 @@ function nextShipDate_() {
 
 function apiSavePeople(names) {
   const list = names.map(n => String(n).trim()).filter(Boolean);
-  setSetting_('PEOPLE', list.join(','));
+  setSetting_('PEOPLE', list);
   return list;
 }
 

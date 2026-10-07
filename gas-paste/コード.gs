@@ -59,7 +59,6 @@ const TRACK_CHANGE_COLS = DATE_COLS.concat(['出荷先', '建機号機']);
 
 // 「設定」シートに出す項目：[キー, 項目名, 説明]。値はシートが優先、空ならCONFIG
 const SETTINGS = [
-  ['PEOPLE', '確認者', 'タップ・工程記録の確認者。カンマ区切り（アプリの設定タブからも編集できる）'],
   ['AI_PROVIDER', 'AI読取', 'gemini か claude'],
   ['GEMINI_MODEL', 'Geminiモデル', '例 gemini-3.8-flash'],
   ['CLAUDE_MODEL', 'Claudeモデル', 'AI読取が claude のとき'],
@@ -72,7 +71,9 @@ const SETTINGS = [
   ['SRC_SHEET', 'Excelのシート名', '生産管理Excelで読むシート'],
   ['INBOX_FOLDER_ID', '取込元フォルダID', '生産管理Excelがたまるフォルダ'],
   ['PHOTO_FOLDER_ID', '刻印写真フォルダID', '撮った刻印写真の保存先'],
-  ['DONE_FOLDER_ID', '作業用フォルダID', '取込時の一時ファイル置き場']
+  ['DONE_FOLDER_ID', '作業用フォルダID', '取込時の一時ファイル置き場'],
+  // 確認者は一番下。B列に1行1人で下に足していく（A列は空でOK）
+  ['PEOPLE', '確認者', '1行に1人。下の行のB列に続けて入れる（アプリの設定タブからも編集できる）']
 ];
 let SETTINGS_MEMO = null;
 function sheetSettings_() {
@@ -80,10 +81,21 @@ function sheetSettings_() {
   SETTINGS_MEMO = {};
   if (typeof SpreadsheetApp === 'undefined') return SETTINGS_MEMO; // node テスト
   const sh = ss_().getSheetByName(CONFIG.SHEETS.SETTINGS) || makeSheet_(CONFIG.SHEETS.SETTINGS);
-  const byLabel = {};
-  sh.getDataRange().getDisplayValues().slice(1).forEach(r => { byLabel[String(r[0]).trim()] = String(r[1]).trim(); });
+  const byLabel = parseSettingRows_(sh.getDataRange().getDisplayValues().slice(1));
   SETTINGS.forEach(d => { if (byLabel[d[1]]) SETTINGS_MEMO[d[0]] = byLabel[d[1]]; });
   return SETTINGS_MEMO;
+}
+// [[項目, 値, 説明], ...] → {項目: 値}。A列が空の行は直前の項目の続き（確認者を1行1人で書ける）（純粋関数）
+function parseSettingRows_(rows) {
+  const out = {};
+  let label = '';
+  rows.forEach(r => {
+    const a = String(r[0] || '').trim(), b = String(r[1] || '').trim();
+    if (a) label = a;
+    if (!label || !b) return;
+    out[label] = out[label] ? out[label] + ',' + b : b;
+  });
+  return out;
 }
 // 設定値：設定シート → CONFIG → スクリプトプロパティ の順
 function cfg_(key) {
@@ -92,18 +104,23 @@ function cfg_(key) {
   if (c !== undefined && c !== '') return Array.isArray(c) ? c.join(',') : c;
   return (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties().getProperty(key)) || '';
 }
-// 設定シートの値を書き換える（項目が無ければ行を足す）
+// 設定シートの値を書き換える。リスト（確認者）は項目の行から下へ1行1人で書く
 function setSetting_(key, value) {
   const d = SETTINGS.find(x => x[0] === key);
   const sh = ss_().getSheetByName(CONFIG.SHEETS.SETTINGS) || makeSheet_(CONFIG.SHEETS.SETTINGS);
+  const vals = Array.isArray(value) ? value : [value];
   const labels = sh.getRange(1, 1, sh.getLastRow(), 1).getDisplayValues().map(r => String(r[0]).trim());
-  const i = labels.indexOf(d[1]);
-  if (i < 0) sh.appendRow([d[1], value, d[2]]);
-  else sh.getRange(i + 1, 2).setValue(value);
+  let i = labels.indexOf(d[1]);
+  if (i < 0) { sh.appendRow([d[1], '', d[2]]); i = sh.getLastRow() - 1; labels.push(d[1]); }
+  let n = 1; // 項目の行＋A列が空の続きの行
+  while (i + n < labels.length && !labels[i + n]) n++;
+  sh.getRange(i + 1, 2, n, 1).clearContent();
+  if (vals.length > n) sh.insertRowsAfter(i + n, vals.length - n);
+  if (vals.length) sh.getRange(i + 1, 2, vals.length, 1).setNumberFormat('@').setValues(vals.map(v => [v]));
   SETTINGS_MEMO = null;
 }
 function cfgNum_(key) { return Number(cfg_(key)) || 0; }
-function cfgList_(key) { return String(cfg_(key)).split(/[,、]/).map(x => x.trim()).filter(Boolean); }
+function cfgList_(key) { return String(cfg_(key)).split(/[,、，\n]/).map(x => x.trim()).filter(Boolean); }
 function ss_() {
   const id = cfg_('SS_ID');
   if (!id) throw new Error('台帳がありません。先に setup() を実行してください');
@@ -396,7 +413,7 @@ function nextShipDate_() {
 
 function apiSavePeople(names) {
   const list = names.map(n => String(n).trim()).filter(Boolean);
-  setSetting_('PEOPLE', list.join(','));
+  setSetting_('PEOPLE', list);
   return list;
 }
 

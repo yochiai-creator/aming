@@ -49,6 +49,10 @@ t("diffArm 日付と出荷先の変更だけ拾う", () => {
   const d = run("diffArm_")({"塗装完了日": "2026/09/30", "出荷先": "正和", "仕様": "A"}, {"塗装完了日": "2026/10/02", "出荷先": "正和", "仕様": "B"});
   assert.deepStrictEqual(JSON.parse(JSON.stringify(d)), [["塗装完了日", "2026/09/30", "2026/10/02"]]);
 });
+t("parseSettingRows 確認者を1行1人で", () => {
+  const o = run("parseSettingRows_")([["AI読取", "gemini", ""], ["確認者", "A.ましゃたか", "説明"], ["", "田中", ""], ["", "", ""], ["", "佐藤", ""]]);
+  assert.strictEqual(o["確認者"], "A.ましゃたか,田中,佐藤"); assert.strictEqual(o["AI読取"], "gemini");
+});
 t("fileDateKey ファイル名の日付", () => {
   assert.strictEqual(run("fileDateKey_")("出荷予定　日程表変更A(26年10月7日).xlsm"), "20261007");
   assert.ok(run("fileDateKey_")("出荷予定　日程表変更A(26年10月7日).xlsm") > run("fileDateKey_")("出荷予定　日程表変更A(26年9月24日).xlsm"));

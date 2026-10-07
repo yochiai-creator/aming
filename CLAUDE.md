@@ -26,7 +26,7 @@
 
 ### 作成済みのGoogle側（2026-10-07、Driveコネクタで作成。IDは `01_設定.js` に埋め込み済み → `setup()` 不要）
 - フォルダ「aming」 https://drive.google.com/drive/folders/1qEAxXRBG7y0edZhMCNvVLe4QjBjlIZw8（Apps Scriptプロジェクト「aming」もここ）
-  - 「aming 台帳」スプレッドシート `13Fj89c-17Ec0YsUUuKdIykSkZV2442SrA35UNoMHUd8`（設定・アーム台帳・タップ記録・穴数マスタ・要確認・取込ログ＋工程記録・変更履歴は自動作成。確認者は設定シートの「確認者」行）
+  - 「aming 台帳」スプレッドシート `13Fj89c-17Ec0YsUUuKdIykSkZV2442SrA35UNoMHUd8`（設定・アーム台帳・タップ記録・穴数マスタ・要確認・取込ログ＋工程記録・変更履歴は自動作成。確認者は設定シート最下部の「確認者」行から下へB列1行1人。A列が空の行は直前項目の続き＝`parseSettingRows_`）
   - 「aming 作業用（取込の一時ファイル）」`14XGF3BnMr2-fdt4wiqFMejk7UD5RxSuW` ／「aming 刻印写真」`1g82k8Y4gCAlBVXAWbeSTkvlHUvcNJ1_0`
 - 取込元：既存フォルダ「'001_アーム出荷明細」`1NS4WoClO0xlGWSxvFimFcqFGUT0jOKQL`（`出荷予定　日程表変更A(26年10月7日).xlsm` が随時たまる）。ファイル名の日付で最新1本だけ取込、取込済みは `LAST_IMPORTED`（スクリプトプロパティ）で判定。元ファイルは動かさない
 - Apps Scriptプロジェクト：scriptId `1Wm4YGpwWU-pTtsohOmXprg1ssC4NRJqUHo4RjqVP0qK6zm0X9zf_NttW`（`gas/.clasp.json`）。2026-10-07 にクラウド環境から clasp push 済み
