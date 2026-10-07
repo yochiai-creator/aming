@@ -28,7 +28,7 @@ const CONFIG = {
     SETTINGS: '設定',
     ARMS: 'アーム台帳', TAPS: 'タップ記録', HOLES: '穴数マスタ',
     CHECK: '要確認', LOG: '取込ログ',
-    STEPS: '工程記録', CHANGES: '変更履歴'
+    STEPS: '工程記録', CHANGES: '変更履歴', PHOTOS: '刻印写真'
   },
 
   // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
@@ -52,6 +52,7 @@ const TAP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '結果', 
 const DATE_COLS = ['着工', '検査完了日', '塗装完了日', '塗装後修正完了日', '出荷日', '納入日'];
 const STEP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '工程', '確認者', '備考', '写真ID', '取消'];
 const CHANGE_COLS = ['日時', 'キー', '項目', '前', '後', '元ファイル'];
+const PHOTO_COLS = ['日時', 'キー', '図番', '号機', '写真ID', 'ファイル名', 'AI読取'];
 // 現場で記録する工程（名前 → 台帳の対応する日付列）
 const STEPS = [['塗装完了', '塗装完了日'], ['塗装後修正完了', '塗装後修正完了日'], ['出荷', '出荷日']];
 // 取込で値が変わったら変更履歴に残す列
@@ -118,6 +119,7 @@ function makeSheet_(name) {
   const cols = {};
   cols[CONFIG.SHEETS.STEPS] = STEP_COLS;
   cols[CONFIG.SHEETS.CHANGES] = CHANGE_COLS;
+  cols[CONFIG.SHEETS.PHOTOS] = PHOTO_COLS;
   if (name === CONFIG.SHEETS.SETTINGS) {
     const sh = ss_().insertSheet(name, 0);
     const rows = [['項目', '値', '説明']].concat(SETTINGS.map(d => [d[1], String(Array.isArray(CONFIG[d[0]]) ? CONFIG[d[0]].join(',') : CONFIG[d[0]]), d[2]]));
@@ -295,6 +297,8 @@ function apiArm(key) {
   view.taps = taps.map(t => ({id: t['記録ID'], at: t['日時'], result: t['結果'], holes: t['ねじ穴数'], treated: t['処置数'],
     by: t['確認者'], note: t['備考'], photo: t['写真ID'] ? 'https://drive.google.com/file/d/' + t['写真ID'] + '/view' : '', canceled: t['取消'] === '1'})).reverse();
   view.holes = loadHoles_()[a['図番']] || '';
+  view.photos = readTable_(sheet_(CONFIG.SHEETS.PHOTOS)).filter(r => r['キー'] === key)
+    .map(r => ({id: r['写真ID'], at: r['日時'], name: r['ファイル名']})).reverse();
   return view;
 }
 
@@ -535,6 +539,34 @@ function callClaude_(prompt, imgsB64, schema) {
   if (json.stop_reason === 'refusal') throw new Error('AIが読取を断りました');
   const text = (json.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
   return JSON.parse(text);
+}
+
+/**
+ * 撮った刻印写真（枠で切り出した画像）をアームにひも付ける。
+ * ファイル名を 図番_号機_日時.jpg に付け直し、「刻印写真」シートに記録（同じ写真を別のアームに付け直したら上書き）
+ */
+function apiLinkPhoto(photoId, key, readText) {
+  if (!photoId) return null;
+  const a = loadArms_().find(r => r['キー'] === key);
+  if (!a) throw new Error('台帳にないアームです: ' + key);
+  const file = DriveApp.getFileById(photoId);
+  const stamp = Utilities.formatDate(file.getDateCreated(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
+  const name = a['図番'] + '_' + a['号機'] + '_' + stamp + '.jpg';
+  file.setName(name);
+  const sh = sheet_(CONFIG.SHEETS.PHOTOS);
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+  const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || ''];
+  const ids = sh.getLastRow() > 1 ? sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]) : [];
+  const i = ids.indexOf(photoId);
+  if (i < 0) appendRows_(CONFIG.SHEETS.PHOTOS, [row]);
+  else sh.getRange(i + 2, 1, 1, row.length).setValues([row]);
+  return name;
+}
+
+/** 写真を画面に出す用（data URL）。ドライブの共有設定に関係なく見られる */
+function apiPhoto(photoId) {
+  const blob = DriveApp.getFileById(photoId).getBlob();
+  return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
 }
 
 function savePhoto_(b64) {

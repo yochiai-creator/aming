@@ -157,6 +157,8 @@ function apiArm(key) {
   view.taps = taps.map(t => ({id: t['記録ID'], at: t['日時'], result: t['結果'], holes: t['ねじ穴数'], treated: t['処置数'],
     by: t['確認者'], note: t['備考'], photo: t['写真ID'] ? 'https://drive.google.com/file/d/' + t['写真ID'] + '/view' : '', canceled: t['取消'] === '1'})).reverse();
   view.holes = loadHoles_()[a['図番']] || '';
+  view.photos = readTable_(sheet_(CONFIG.SHEETS.PHOTOS)).filter(r => r['キー'] === key)
+    .map(r => ({id: r['写真ID'], at: r['日時'], name: r['ファイル名']})).reverse();
   return view;
 }
 

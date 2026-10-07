@@ -123,6 +123,34 @@ function callClaude_(prompt, imgsB64, schema) {
   return JSON.parse(text);
 }
 
+/**
+ * 撮った刻印写真（枠で切り出した画像）をアームにひも付ける。
+ * ファイル名を 図番_号機_日時.jpg に付け直し、「刻印写真」シートに記録（同じ写真を別のアームに付け直したら上書き）
+ */
+function apiLinkPhoto(photoId, key, readText) {
+  if (!photoId) return null;
+  const a = loadArms_().find(r => r['キー'] === key);
+  if (!a) throw new Error('台帳にないアームです: ' + key);
+  const file = DriveApp.getFileById(photoId);
+  const stamp = Utilities.formatDate(file.getDateCreated(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
+  const name = a['図番'] + '_' + a['号機'] + '_' + stamp + '.jpg';
+  file.setName(name);
+  const sh = sheet_(CONFIG.SHEETS.PHOTOS);
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+  const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || ''];
+  const ids = sh.getLastRow() > 1 ? sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]) : [];
+  const i = ids.indexOf(photoId);
+  if (i < 0) appendRows_(CONFIG.SHEETS.PHOTOS, [row]);
+  else sh.getRange(i + 2, 1, 1, row.length).setValues([row]);
+  return name;
+}
+
+/** 写真を画面に出す用（data URL）。ドライブの共有設定に関係なく見られる */
+function apiPhoto(photoId) {
+  const blob = DriveApp.getFileById(photoId).getBlob();
+  return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+}
+
 function savePhoto_(b64) {
   const id = cfg_('PHOTO_FOLDER_ID');
   if (!id) return '';

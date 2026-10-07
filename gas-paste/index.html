@@ -206,6 +206,10 @@ textarea{min-height:64px}
 h1{font-size:1.9rem}
 .shoot{min-height:104px;font-size:1.25rem}
 .shoot .bucket{display:inline-block;width:34px;height:26px;vertical-align:-5px;margin-right:8px}
+.photos{display:flex;gap:8px;overflow-x:auto;margin-bottom:14px}
+.photos figure{margin:0;flex:0 0 auto;width:240px;border:1px solid var(--edge);background:#060909}
+.photos img{display:block;width:100%;min-height:60px;filter:contrast(1.1)}
+.photos figcaption{font-family:"Share Tech Mono",monospace;font-size:.72rem;color:var(--sub);padding:2px 6px}
 </style>
 </head>
 <body>
@@ -278,7 +282,7 @@ const ls = {get: k => { try { return localStorage.getItem(k); } catch (e) { retu
 
 let boot = {people: [], days: [], today: ""};
 let me = ls.get("trace.me") || "";
-let view = "scan", day = "", armData = null, lastArm = null, photoId = "";
+let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastRead = "";
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
@@ -338,6 +342,9 @@ async function openArm(key, fromScan) {
   try { armData = await run("apiArm", key); } catch (e) { $("armView").innerHTML = `<section>読み込めませんでした：${esc(errMsg(e))}</section>`; return; }
   if (!armData) { $("armView").innerHTML = "<section>台帳にありません</section>"; return; }
   if (!fromScan) photoId = "";
+  else if (photoId) {
+    try { await run("apiLinkPhoto", photoId, key, lastRead); armData = await run("apiArm", key); } catch (e) { toast("写真のひも付けに失敗：" + errMsg(e)); }
+  }
   renderArm();
 }
 const form = {result: "", holes: "", treated: "", person: "", note: ""};
@@ -368,6 +375,7 @@ function renderArm() {
     <div id="formMsg" class="muted"></div>
   </section>
   <section>
+    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${esc(p.at)}</figcaption></figure>`).join("")}</div>` : ""}
     <h2>工程ログ</h2>
     <ul class="tl steps">${a.steps.map(stepHtml).join("")}</ul>
     ${a.otherChanges.length ? `<p class="muted">${a.otherChanges.map(c => `${esc(c.col)}：${esc(c.from || "空")} → ${esc(c.to || "空")}（${esc(c.at)} 取込）`).join("<br>")}</p>` : ""}
@@ -381,6 +389,12 @@ function renderArm() {
     <p class="muted">台帳更新 ${esc(a.updated || "-")}</p>
   </section>`;
   syncForm();
+  loadPhotos();
+}
+async function loadPhotos() {
+  for (const img of document.querySelectorAll("#armView img[data-photo]")) {
+    try { img.src = await run("apiPhoto", img.dataset.photo); } catch (e) { img.alt = "写真を読み込めませんでした"; }
+  }
 }
 function stepHtml(st) {
   const live = st.recs.filter(r => !r.canceled);
@@ -546,6 +560,7 @@ async function readCanvas(cv) {
   try {
     const r = await run("apiRead", await b64(imgs.orig), await b64(imgs.enh), lastArm);
     photoId = r.photoId || "";
+    lastRead = `${r.read.zuban} / ${r.read.seizo || "?"}-${r.read.goki || "?"} ${r.read.kensa || ""}`.trim();
     $("status").textContent = "";
     const z = r.read.zuban.split("").map((c, i) => r.read.fixed.includes(i) ? `<span class="fix">${esc(c)}</span>` : esc(c)).join("") || "????";
     $("readout").innerHTML = `<div class="plate">${z}<br>◇${esc(r.read.seizo || "????")}-${esc(r.read.goki || "?")} ${esc(r.read.kensa || "")}</div>`;
@@ -589,7 +604,7 @@ document.addEventListener("click", async e => {
   const act = b.dataset.act;
   if (act === "nav") show(b.dataset.v);
   else if (act === "day") { day = b.dataset.d; renderList(); }
-  else if (act === "arm") openArm(b.dataset.k);
+  else if (act === "arm") openArm(b.dataset.k, !!b.closest("#cands"));
   else if (act === "back") show(day ? "list" : "scan");
   else if (act === "res") { form.result = b.dataset.v; syncForm(); }
   else if (act === "person") { form.person = b.dataset.n; syncForm(); }

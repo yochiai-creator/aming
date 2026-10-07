@@ -79,7 +79,8 @@ const api = {
   apiArm: () => Object.assign({}, arm, {steps: [
     {name: "着工", date: "2026/09/24", step: "", changes: [], recs: []},
     {name: "塗装完了", date: "2026/10/02", step: "塗装完了", changes: [{at: "2026/10/07 06:00", from: "2026/09/30", to: "2026/10/02"}], recs: []},
-    {name: "出荷", date: "2026/10/07", step: "出荷", changes: [], recs: []}], otherChanges: [], order: "A5", base: "YY", updated: "", taps: [], holes: 33}),
+    {name: "出荷", date: "2026/10/07", step: "出荷", changes: [], recs: []}], otherChanges: [], photos: [{id: "p1", at: "2026/10/07 10:00", name: "x.jpg"}], order: "A5", base: "YY", updated: "", taps: [], holes: 33}),
+  apiPhoto: () => "data:image/jpeg;base64,AAAA",
   apiSaveStep: rec => { const v = api.apiArm(); v.steps[1].recs.push({id: "s1", at: "2026/10/07 10:00", by: rec.person, note: rec.note, canceled: false}); return v; },
   apiSaveTap: rec => Object.assign(api.apiArm(), {status: rec.result, taps: [{id: "x", at: "2026/10/07 10:00", result: rec.result, holes: rec.holes, treated: rec.treated, by: rec.person, note: "", photo: "", canceled: false}]})
 };
@@ -113,6 +114,7 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
     assert.ok(calls.includes("apiSaveTap"));
     assert.ok(w.document.querySelector(".hist").textContent.includes("処置 33"));
   });
+  t("刻印写真：詳細に表示", () => assert.strictEqual(w.document.querySelector(".photos img").getAttribute("src"), "data:image/jpeg;base64,AAAA"));
   t("工程ログ：日程変更の表示", () => assert.ok(w.document.querySelector(".steps .chg").textContent.includes("2026/09/30")));
   w.prompt = () => "メモ";
   click('[data-act="nav"][data-v="settings"]'); await wait(10); click('[data-act="me"][data-n="田中"]'); await wait(10);
