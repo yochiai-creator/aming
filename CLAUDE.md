@@ -21,13 +21,19 @@
 - 実データでのテスト：`test/fixtures/ship_values.json`（.gitignore済・コミットしない）があれば `npm test` で解析も確認
 - APIキーはスクリプトプロパティ `ANTHROPIC_API_KEY`。ID類は空なら `setup()` がスクリプトプロパティに保存
 
+### 作成済みのGoogle側（2026-10-07、Driveコネクタで作成。IDは `01_設定.js` に埋め込み済み → `setup()` 不要）
+- フォルダ「アームトレーサビリティ」 https://drive.google.com/drive/folders/1qEAxXRBG7y0edZhMCNvVLe4QjBjlIZw8
+  - 台帳スプレッドシート `13Fj89c-17Ec0YsUUuKdIykSkZV2442SrA35UNoMHUd8`（6シート・見出し・書式TEXT済、穴数マスタに2件）
+  - アーム出荷明細_取込 `17Wno8F_OIiGc42WZXi1PGKRVQeQaS0Dm` ／ _取込済 `14XGF3BnMr2-fdt4wiqFMejk7UD5RxSuW` ／ アーム刻印写真 `1g82k8Y4gCAlBVXAWbeSTkvlHUvcNJ1_0`
+- Apps Scriptプロジェクト本体はコネクタで作れない（`script+json` 取込不可）。ユーザーが clasp か貼り付けで作る
+
 ### デプロイ手順
-1. `cd gas && clasp create --type standalone --title "アームトレーサビリティ"` → `clasp push`
-2. エディタで `setup()` 実行（台帳・取込/取込済/写真フォルダができる。URLはログ）
-3. スクリプトプロパティに `ANTHROPIC_API_KEY`
-4. Excelを「アーム出荷明細_取込」に入れて `testImport` 実行
-5. デプロイ→ウェブアプリ（実行：自分／アクセス：組織内）
-6. トリガー（手動）：`importLatest` 毎時 or 毎朝、`notifyUnchecked` 毎朝
+1. clasp：`git pull` → `cd gas && clasp create --type standalone --title "アームトレーサビリティ"` → `clasp push`
+   貼り付け：`gas-paste/` の `コード.gs`・`index.html`・`appsscript.json`（エディタ設定で「マニフェストを表示」）を新規プロジェクトに貼る。`npm run gas-paste` で再生成
+2. スクリプトプロパティに `ANTHROPIC_API_KEY`
+3. 手元の .xlsm を「アーム出荷明細_取込」に入れて `testImport` 実行（初回は権限承認）
+4. デプロイ→ウェブアプリ（実行：自分／アクセス：組織内）
+5. トリガー（手動）：`importLatest` 毎朝、`notifyUnchecked` 毎朝
 
 ---
 以下は claude.ai アーティファクト版（旧）の引き継ぎメモ。
