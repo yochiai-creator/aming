@@ -1,5 +1,38 @@
 # アーム ねじ穴タップチェックアプリ（野田組）— 引き継ぎメモ
 
+## 現行：GAS版トレーサビリティ（`gas/`）— 2026-10-07〜
+ユーザー確定：**GAS＋スプレッドシート**で作る。目的は4つ全部（刻印→全履歴／建機号機から逆引き／野田組のタップ記録／出荷前の未チェック検出）。撮影して号機が特定できたら**記録画面を開く**。生産管理Excelは毎日/毎週もらう。
+
+| ファイル | 内容 |
+|---|---|
+| `gas/01_設定.js` | CONFIG（ID類・Excel列名→台帳列名・シート名・モデル） |
+| `gas/02_メイン.js` | `doGet`、`setup()`、画面API `api*`（検索・詳細・記録・取消・出荷日一覧・未チェック・CSV） |
+| `gas/03_取込.js` | Excel(.xlsm)→Googleシート変換→`parseShipValues_`→台帳へ上書きマージ。列は**見出し名で探す** |
+| `gas/03_照合.js` | `fitZuban_`/`fitGoki_`/`wdist_`/`rankArms_`（純粋関数・nodeでテスト可） |
+| `gas/03_AI読取.js` | `apiRead`：Claude API 2段階読取（structured outputs）＋刻印写真をDrive保存 |
+| `gas/03_通知.js` | `notifyUnchecked`：出荷N日前までに「良」がないアームをメール |
+| `gas/04_テスト.js` | GASエディタで実行する確認用関数 |
+| `gas/index.html` | 画面（読取／一覧／記録／設定）。カメラ枠・切り抜き・凹凸強調は旧版から移植 |
+| `test/gas.test.js` | 照合・Excel解析・画面(jsdom＋google.script.runモック)のテスト |
+
+- 台帳キー＝`図番_号機`。元Excel「出荷明細」シート（ヘッダー5行目、A列「注文番号（写し）」）。3年分約8,400行→アーム7,918本（ブームブラケット等は `EXCLUDE_KISHU` で除外、図番+号機の重複63件は出荷日が新しい方を採用し「要確認」シートへ）
+- タップ記録は**追記のみ**。訂正は取消フラグ→再記録。最新の有効記録がそのアームの状態
+- ねじ穴数は「穴数マスタ」に図番ごとに記憶し、次から自動入力。「全数OK」＝良＋処置数=ねじ穴数
+- 実データでのテスト：`test/fixtures/ship_values.json`（.gitignore済・コミットしない）があれば `npm test` で解析も確認
+- APIキーはスクリプトプロパティ `ANTHROPIC_API_KEY`。ID類は空なら `setup()` がスクリプトプロパティに保存
+
+### デプロイ手順
+1. `cd gas && clasp create --type standalone --title "アームトレーサビリティ"` → `clasp push`
+2. エディタで `setup()` 実行（台帳・取込/取込済/写真フォルダができる。URLはログ）
+3. スクリプトプロパティに `ANTHROPIC_API_KEY`
+4. Excelを「アーム出荷明細_取込」に入れて `testImport` 実行
+5. デプロイ→ウェブアプリ（実行：自分／アクセス：組織内）
+6. トリガー（手動）：`importLatest` 毎時 or 毎朝、`notifyUnchecked` 毎朝
+
+---
+以下は claude.ai アーティファクト版（旧）の引き継ぎメモ。
+
+
 claude.ai チャットから Claude Code への引き継ぎ。2026-10-07 時点。
 
 ## 目的

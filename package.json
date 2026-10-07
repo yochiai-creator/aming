@@ -1,2 +1,9 @@
-{ "scripts": { "build": "python3 scripts/build_demo.py", "test": "node test/smoke.js && node test/smoke2.js" },
-  "devDependencies": { "jsdom": "^24.1.3" } }
+{
+ "scripts": {
+  "build": "python3 scripts/build_demo.py",
+  "test": "node test/smoke.js && node test/smoke2.js && node test/gas.test.js"
+ },
+ "devDependencies": {
+  "jsdom": "^24.1.3"
+ }
+}

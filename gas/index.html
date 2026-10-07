@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E9ECEA; --panel:#F7F8F6; --ink:#1C272B; --sub:#5B676B; --line:#C9CFCC;
+  --steel:#2F4650; --yellow:#F2B705; --ok:#2E7D4F; --warn:#B8860B; --ng:#B3362B; --stamp:#3A4A50;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151B1D; --panel:#1E2629; --ink:#E6EBEA; --sub:#9AA6A9; --line:#34403F;
+    --steel:#8FB3C2; --ok:#5DBB86; --warn:#E0B84A; --ng:#E36B5F; --stamp:#C9D4D6;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151B1D; --panel:#1E2629; --ink:#E6EBEA; --sub:#9AA6A9; --line:#34403F;
+  --steel:#8FB3C2; --ok:#5DBB86; --warn:#E0B84A; --ng:#E36B5F; --stamp:#C9D4D6;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",sans-serif;font-size:16px;line-height:1.6;padding-bottom:env(safe-area-inset-bottom,0px)}
+main{max-width:720px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:4px 0 12px}
+h1{font-size:1.2rem;margin:0}
+h2{font-size:1rem;margin:0 0 10px}
+button{font:inherit;cursor:pointer;border:none;border-radius:10px}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+#meBtn{background:transparent;color:var(--sub);font-size:.82rem;text-decoration:underline;padding:2px 0}
+#nav{display:flex;gap:6px;margin:0 0 14px}
+#nav button{flex:1;padding:10px 0;font-weight:700;background:var(--panel);color:var(--ink);border:2px solid var(--line)}
+#nav button.on{background:var(--steel);color:var(--panel);border-color:var(--steel)}
+#nav .badge{display:inline-block;min-width:1.4em;margin-left:4px;padding:0 5px;border-radius:999px;background:var(--ng);color:#fff;font-size:.75rem}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+.shoot{display:block;width:100%;min-height:84px;background:var(--steel);color:var(--panel);font-size:1.15rem;font-weight:700;border-left:10px solid var(--yellow)}
+.shoot small{display:block;font-weight:400;font-size:.8rem;opacity:.85}
+.shoot.alt{margin-top:10px;min-height:56px;font-size:1rem;background:transparent;color:var(--ink);border:2px solid var(--steel);border-left:10px solid var(--yellow)}
+.tip,.muted{font-size:.82rem;color:var(--sub)}
+.tip{margin:8px 2px 16px}
+.btn{flex:1;padding:12px;font-weight:700;background:var(--ink);color:var(--panel)}
+.btn.sec{background:transparent;color:var(--ink);border:2px solid var(--line)}
+.btn.go{background:var(--yellow);color:#1C272B}
+.btn.ok{background:var(--ok);color:#fff}
+.btn.mini{flex:0 0 auto;padding:6px 10px;font-size:.82rem}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+input[type=text],input[type=number],input[type=search],textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+textarea{min-height:64px}
+.mono{font-family:"Share Tech Mono",ui-monospace,monospace;letter-spacing:.05em}
+.plate{font-family:"Share Tech Mono",ui-monospace,monospace;color:var(--stamp);border:1px dashed var(--line);border-radius:8px;padding:8px 12px;letter-spacing:.12em;font-size:1.3rem;overflow-x:auto}
+.plate .fix{color:var(--warn);text-decoration:underline}
+#preview{display:none;gap:6px;margin-bottom:10px}
+#preview img{width:50%;border-radius:8px;border:1px solid var(--line)}
+#status{font-size:.9rem;color:var(--sub);min-height:1.4em}
+.arm{display:block;width:100%;text-align:left;background:transparent;border:none;border-top:1px solid var(--line);padding:10px 2px;color:var(--ink)}
+.arm:first-child{border-top:none}
+.arm.best{border:2px solid var(--ok);border-radius:10px;padding:10px}
+.az{font-family:"Share Tech Mono",ui-monospace,monospace;font-size:1.05rem;letter-spacing:.04em}
+.az b{margin-left:8px;font-size:1.15rem}
+.am{display:block;font-size:.8rem;color:var(--sub)}
+.st{display:inline-block;font-size:.75rem;font-weight:700;padding:0 8px;border-radius:999px;margin-left:8px;vertical-align:middle;font-family:"BIZ UDPGothic",sans-serif;letter-spacing:0}
+.st.good{background:var(--ok);color:#fff}.st.bad{background:var(--ng);color:#fff}.st.todo{border:1px solid var(--warn);color:var(--warn)}
+.chip{font-size:.72rem;padding:0 6px;border-radius:5px;border:1px solid currentColor;color:var(--ok);margin-left:6px;font-family:"BIZ UDPGothic",sans-serif;letter-spacing:0}
+.days{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px}
+.days button{flex:0 0 auto;padding:6px 10px;background:var(--panel);border:2px solid var(--line);color:var(--ink);font-weight:700;line-height:1.25;text-align:center}
+.days button small{display:block;font-weight:400;font-size:.72rem;color:var(--sub)}
+.days button.on{border-color:var(--yellow);background:var(--yellow);color:#1C272B}
+.days button.on small{color:#1C272B}
+.days button.has-todo small{color:var(--ng);font-weight:700}
+.tl{list-style:none;margin:0;padding:0}
+.tl li{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding:6px 0;font-size:.9rem}
+.tl li:first-child{border-top:none}
+.tl li.empty span:last-child{color:var(--sub)}
+.kv{display:grid;grid-template-columns:7em 1fr;gap:4px 10px;font-size:.9rem}
+.kv dt{color:var(--sub)}.kv dd{margin:0;word-break:break-all}
+.seg{display:inline-flex;border:2px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{min-width:72px;padding:10px 14px;border-radius:0;background:var(--panel);color:var(--ink);font-weight:700}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on.good{background:var(--ok);color:#fff}.seg button.on.bad{background:var(--ng);color:#fff}
+.field{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.field>label{flex:0 0 6.5em;font-size:.88rem;color:var(--sub)}
+.field input[type=number]{width:6em;flex:0 0 auto;text-align:right}
+.names{display:flex;flex-wrap:wrap;gap:8px}
+.names button{padding:8px 12px;border:2px solid var(--line);background:transparent;color:var(--ink)}
+.names button.on{border-color:var(--ok);background:var(--ok);color:#fff}
+.hist{list-style:none;margin:0;padding:0;font-size:.88rem}
+.hist li{border-top:1px solid var(--line);padding:8px 0}
+.hist li.cx{color:var(--sub);text-decoration:line-through}
+.link{background:transparent;color:var(--steel);text-decoration:underline;padding:2px 4px;font-size:.82rem}
+.warnbox{border-color:var(--ng)}
+.warnbox h2{color:var(--ng)}
+.hidden{display:none!important}
+.full{position:fixed;inset:0;z-index:10;background:#0B0F10;color:#fff;display:flex;flex-direction:column}
+.full .bar{display:flex;gap:8px;padding:12px}
+.full .bar .btn{background:#2A3438;color:#fff}
+.full .bar .btn.go{background:var(--yellow);color:#1C272B}
+.full .hint{text-align:center;font-size:.9rem;padding:10px 12px 0;color:#D7DEDF}
+#vfBox{position:relative;flex:1;overflow:hidden}
+#vfBox video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#guide{position:absolute;left:7%;width:86%;top:50%;transform:translateY(-50%);aspect-ratio:3.2/1;border:3px solid var(--yellow);border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.55)}
+#guide::after{content:"1行目：図番　2行目：◇ 年月-号機";position:absolute;left:0;right:0;top:calc(100% + 10px);text-align:center;font-size:.85rem;color:#fff}
+#cropStage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:8px}
+#cropWrap{position:relative;touch-action:none;line-height:0;overflow:hidden}
+#cropImg{max-width:100%;max-height:calc(100vh - 220px);display:block;user-select:none;-webkit-user-drag:none}
+#cropBox{position:absolute;border:3px solid var(--yellow);box-shadow:0 0 0 9999px rgba(0,0,0,.55);cursor:move;touch-action:none}
+.h{position:absolute;width:30px;height:30px;background:var(--yellow);border-radius:50%;touch-action:none}
+.h.tl{left:-15px;top:-15px}.h.tr{right:-15px;top:-15px}.h.bl{left:-15px;bottom:-15px}.h.br{right:-15px;bottom:-15px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(90px);background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:10px;transition:transform .25s;z-index:30;font-size:.9rem;max-width:90vw}
+#toast.show{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>アーム トレーサビリティ</h1><button type="button" id="meBtn" data-act="nav" data-v="settings">確認者：未設定</button></div>
+    <div class="muted" id="today"></div>
+  </header>
+  <nav id="nav">
+    <button type="button" data-act="nav" data-v="scan" class="on">読取</button>
+    <button type="button" data-act="nav" data-v="list">一覧<span id="todoBadge" class="badge hidden"></span></button>
+    <button type="button" data-act="nav" data-v="settings">設定</button>
+  </nav>
+
+  <div id="scanView">
+    <button class="shoot" id="shootBtn" type="button">刻印を撮影する<small>黄色い枠に図番と号機の2行を合わせる</small></button>
+    <button class="shoot alt" id="pickBtn" type="button">写真を選んで枠で切り抜く</button>
+    <input id="cam" type="file" accept="image/*" capture="environment" class="hidden">
+    <input id="pick" type="file" accept="image/*" class="hidden">
+    <p class="tip" id="tip">ライトを真横から当てて、打刻の影がはっきり出る角度で撮ると読み取りが安定します。</p>
+    <section id="resultSec" class="hidden">
+      <h2>読み取り結果</h2>
+      <div id="preview"><img id="pv1" alt="切り抜いた刻印"><img id="pv2" alt="凹凸強調"></div>
+      <div id="status"></div>
+      <div id="readout"></div>
+      <div id="cands"></div>
+    </section>
+    <section>
+      <h2>探す</h2>
+      <input type="search" id="q" placeholder="図番・号機・建機号機　例: 20269 1152 / YY09066073" autocomplete="off">
+      <div id="qres"></div>
+    </section>
+  </div>
+
+  <div id="listView" class="hidden"></div>
+  <div id="armView" class="hidden"></div>
+  <div id="settingsView" class="hidden"></div>
+</main>
+
+<div class="full hidden" id="vf">
+  <div class="hint">枠いっぱいに刻印を合わせて「撮る」</div>
+  <div id="vfBox"><video id="video" playsinline muted autoplay></video><div id="guide"></div></div>
+  <div class="bar"><button class="btn" id="vfCancel" type="button">やめる</button><button class="btn go" id="vfShot" type="button">撮る</button></div>
+</div>
+<div class="full hidden" id="crop">
+  <div class="hint">黄色い枠を刻印の2行に合わせる（ドラッグで移動、角で大きさ）</div>
+  <div id="cropStage"><div id="cropWrap"><img id="cropImg" alt="切り抜く写真"><div id="cropBox"><div class="h tl" data-h="tl"></div><div class="h tr" data-h="tr"></div><div class="h bl" data-h="bl"></div><div class="h br" data-h="br"></div></div></div></div>
+  <div class="bar"><button class="btn" id="cropCancel" type="button">やめる</button><button class="btn go" id="cropOk" type="button">この範囲で読む</button></div>
+</div>
+<div id="toast"></div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const run = (fn, ...args) => new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const errMsg = e => (e && e.message || String(e)).replace(/^Error:\s*/, "");
+function toast(m) { const t = $("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2600); }
+const ls = {get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }};
+
+let boot = {people: [], days: [], today: ""};
+let me = ls.get("trace.me") || "";
+let view = "scan", day = "", armData = null, lastArm = null, photoId = "";
+try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
+
+/* ================= 表示部品 ================= */
+function stBadge(a) {
+  if (a.status === "良") return '<span class="st good">良</span>';
+  if (a.status === "否") return '<span class="st bad">否</span>';
+  return '<span class="st todo">未</span>';
+}
+function armBtn(a, extra, cls) {
+  return `<button type="button" class="arm ${cls || ""}" data-act="arm" data-k="${esc(a.key)}">
+    <span class="az">${esc(a.z)}<b>${esc(a.g)}</b>号機${stBadge(a)}${extra || ""}</span>
+    <span class="am">出荷 ${esc(a.ship || "-")}　${esc(a.to || "")}　${esc(a.kishu || "")}${a.kenki ? "　建機 " + esc(a.kenki) : ""}</span>
+  </button>`;
+}
+function md(d) { const p = String(d).split("/"); return p.length === 3 ? `${+p[1]}/${+p[2]}` : d; }
+function wd(d) { const p = String(d).split("/").map(Number); return "日月火水木金土"[new Date(p[0], p[1] - 1, p[2]).getDay()]; }
+
+function show(v) {
+  view = v;
+  ["scan", "list", "arm", "settings"].forEach(x => $(x + "View").classList.toggle("hidden", x !== v));
+  document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+  window.scrollTo(0, 0);
+  if (v === "list") renderList();
+  if (v === "settings") renderSettings();
+}
+function renderHead() {
+  $("meBtn").textContent = "確認者：" + (me || "未設定（タップして設定）");
+  $("today").textContent = boot.today ? md(boot.today) + "(" + wd(boot.today) + ")" : "";
+  const todo = boot.days.filter(d => d.date >= boot.today).slice(0, 4).reduce((s, d) => s + d.todo, 0);
+  $("todoBadge").textContent = todo; $("todoBadge").classList.toggle("hidden", !todo);
+}
+
+/* ================= 一覧 ================= */
+async function renderList() {
+  const el = $("listView");
+  if (!day) day = (boot.days.find(d => d.date >= boot.today) || boot.days[boot.days.length - 1] || {}).date || boot.today;
+  el.innerHTML = `<div class="days">${boot.days.map(d => `<button type="button" data-act="day" data-d="${d.date}" class="${d.date === day ? "on" : ""} ${d.todo ? "has-todo" : ""}">${md(d.date)}(${wd(d.date)})<small>${d.todo ? "未" + d.todo + " / " : ""}${d.total}本</small></button>`).join("")}</div>
+    <section id="uncheckedSec" class="warnbox hidden"></section>
+    <section><h2>${esc(md(day))} 出荷分</h2><div id="dayList" class="muted">読み込み中…</div></section>`;
+  const on = el.querySelector(".days .on"); if (on) on.scrollIntoView({inline: "center", block: "nearest"});
+  try {
+    const [rows, un] = await Promise.all([run("apiDay", day), run("apiUnchecked")]);
+    if (un.length) {
+      $("uncheckedSec").classList.remove("hidden");
+      $("uncheckedSec").innerHTML = `<h2>出荷前で未チェック ${un.length}本</h2>${un.slice(0, 30).map(a => armBtn(a)).join("")}${un.length > 30 ? `<p class="muted">ほか ${un.length - 30}本</p>` : ""}`;
+    }
+    const done = rows.filter(a => a.status === "良").length;
+    $("dayList").classList.remove("muted");
+    $("dayList").innerHTML = rows.length ? `<p class="muted">済 ${done} / ${rows.length}本</p>` + rows.map(a => armBtn(a, a.by ? `<span class="chip">${esc(a.by)}</span>` : "")).join("") : '<p class="muted">この日の出荷はありません</p>';
+  } catch (e) { $("dayList").textContent = "読み込めませんでした：" + errMsg(e); }
+}
+
+/* ================= アーム詳細＋記録 ================= */
+async function openArm(key, fromScan) {
+  show("arm");
+  $("armView").innerHTML = '<section class="muted">読み込み中…</section>';
+  try { armData = await run("apiArm", key); } catch (e) { $("armView").innerHTML = `<section>読み込めませんでした：${esc(errMsg(e))}</section>`; return; }
+  if (!armData) { $("armView").innerHTML = "<section>台帳にありません</section>"; return; }
+  if (!fromScan) photoId = "";
+  renderArm();
+}
+const form = {result: "", holes: "", treated: "", person: "", note: ""};
+function renderArm() {
+  const a = armData;
+  Object.assign(form, {result: "", holes: a.holes || "", treated: "", person: me, note: ""});
+  $("armView").innerHTML = `
+  <div class="row" style="margin:0 0 10px"><button type="button" class="btn sec mini" data-act="back">← 戻る</button></div>
+  <section>
+    <div class="az" style="font-size:1.3rem">${esc(a.z)}<b>${esc(a.g)}</b>号機${stBadge(a)}</div>
+    <dl class="kv" style="margin-top:8px">
+      <dt>機種</dt><dd>${esc(a.kishu)}　${esc(a.spec)}</dd>
+      <dt>出荷先</dt><dd>${esc(a.to || "-")}</dd>
+      <dt>建機号機</dt><dd class="mono">${esc(a.kenki || "-")}</dd>
+      <dt>注文番号</dt><dd class="mono">${esc(a.order || "-")}</dd>
+      <dt>製缶図番</dt><dd class="mono">${esc(a.base || "-")}</dd>
+    </dl>
+  </section>
+  <section id="tapForm">
+    <h2>ねじ穴タップ チェック${photoId ? '<span class="chip">刻印写真つき</span>' : ""}</h2>
+    <button type="button" class="btn ok" style="width:100%;min-height:56px;font-size:1.05rem" data-act="allok">全数OKで記録${a.holes ? `（${a.holes}穴）` : ""}</button>
+    <div class="field"><label>結果</label><div class="seg"><button type="button" data-act="res" data-v="良" class="good">良</button><button type="button" data-act="res" data-v="否" class="bad">否</button></div></div>
+    <div class="field"><label>ねじ穴数</label><input type="number" inputmode="numeric" min="0" id="fHoles" value="${esc(form.holes)}"><span class="muted">${a.holes ? "図番の記憶値" : "初回は入力（次から自動）"}</span></div>
+    <div class="field"><label>処置数</label><input type="number" inputmode="numeric" min="0" id="fTreated"></div>
+    <div class="field"><label>確認者</label><div class="names" id="fPeople">${peopleBtns()}</div></div>
+    <div class="field"><label>備考</label><textarea id="fNote" placeholder="否のとき：どの穴・どう処置したか"></textarea></div>
+    <div class="row"><button type="button" class="btn go" data-act="save">この内容で記録</button></div>
+    <div id="formMsg" class="muted"></div>
+  </section>
+  <section>
+    <h2>履歴</h2>
+    <ul class="tl">${a.steps.map(s => `<li class="${s[1] ? "" : "empty"}"><span>${esc(s[0])}</span><span class="mono">${esc(s[1] || "—")}</span></li>`).join("")}</ul>
+    <h2 style="margin-top:14px">タップ記録</h2>
+    ${a.taps.length ? `<ul class="hist">${a.taps.map(t => `<li class="${t.canceled ? "cx" : ""}">
+      <b class="${t.result === "否" ? "" : ""}">${esc(t.result)}</b>　${esc(t.at)}　${esc(t.by)}<br>
+      <span class="muted">ねじ穴 ${esc(t.holes || "-")} / 処置 ${esc(t.treated || 0)}${t.note ? "　" + esc(t.note) : ""}</span>
+      ${t.photo ? `<a class="link" href="${esc(t.photo)}" target="_blank" rel="noopener">写真</a>` : ""}
+      ${t.canceled ? "（取消）" : `<button type="button" class="link" data-act="cancel" data-id="${esc(t.id)}">取消</button>`}
+    </li>`).join("")}</ul>` : '<p class="muted">まだ記録はありません</p>'}
+    <p class="muted">台帳更新 ${esc(a.updated || "-")}</p>
+  </section>`;
+  syncForm();
+}
+function peopleBtns() {
+  if (!boot.people.length) return '<span class="muted">設定タブで名前を登録してください</span>';
+  return boot.people.map(n => `<button type="button" data-act="person" data-n="${esc(n)}">${esc(n)}</button>`).join("");
+}
+function syncForm() {
+  document.querySelectorAll('#tapForm [data-act="res"]').forEach(b => b.classList.toggle("on", b.dataset.v === form.result));
+  document.querySelectorAll('#tapForm [data-act="person"]').forEach(b => b.classList.toggle("on", b.dataset.n === form.person));
+}
+function readForm() {
+  form.holes = $("fHoles").value; form.treated = $("fTreated").value; form.note = $("fNote").value;
+}
+async function saveTap(rec) {
+  if (!rec.person) { $("formMsg").textContent = "確認者を選んでください"; return; }
+  if (!rec.result) { $("formMsg").textContent = "良 / 否 を選んでください"; return; }
+  if (rec.holes && +rec.treated > +rec.holes) { $("formMsg").textContent = "処置数がねじ穴数より多いです"; return; }
+  document.querySelectorAll("#tapForm button").forEach(b => b.disabled = true);
+  $("formMsg").textContent = "記録中…";
+  try {
+    armData = await run("apiSaveTap", Object.assign({key: armData.key, photoId}, rec));
+    lastArm = {z: armData.z, g: armData.g}; ls.set("trace.last", JSON.stringify(lastArm));
+    photoId = "";
+    toast(`${armData.z} ${armData.g}号機：${rec.result} を記録しました`);
+    renderArm();
+    refreshDays();
+  } catch (e) {
+    $("formMsg").textContent = "記録できませんでした：" + errMsg(e);
+    document.querySelectorAll("#tapForm button").forEach(b => b.disabled = false);
+  }
+}
+async function refreshDays() { try { boot.days = await run("apiDays"); renderHead(); } catch (e) {} }
+
+/* ================= 設定 ================= */
+function renderSettings() {
+  $("settingsView").innerHTML = `
+  <section><h2>自分の名前（確認者）</h2>
+    <div class="names">${boot.people.map(n => `<button type="button" data-act="me" data-n="${esc(n)}" class="${n === me ? "on" : ""}">${esc(n)}</button>`).join("") || '<span class="muted">下で名前を登録してください</span>'}</div>
+    <p class="muted">この端末で選んだ名前が、記録画面の確認者に最初から入ります。</p>
+  </section>
+  <section><h2>確認者の一覧</h2>
+    <textarea id="peopleIn" placeholder="1行に1人">${esc(boot.people.join("\n"))}</textarea>
+    <div class="row"><button type="button" class="btn" data-act="savePeople">保存</button></div>
+  </section>
+  <section><h2>生産管理Excelの取込</h2>
+    <p class="muted">Googleドライブの「アーム出荷明細_取込」フォルダに .xlsm を入れて、下のボタンを押してください（時間トリガーを設定していれば自動で取り込みます）。</p>
+    <div class="row"><button type="button" class="btn" data-act="import">今すぐ取り込む</button></div>
+    <div id="impMsg" class="muted"></div>
+  </section>
+  <section><h2>CSV出力（タップ記録）</h2>
+    <div class="row"><input type="text" id="csvFrom" placeholder="出荷日 から 例 2026/10/01"><input type="text" id="csvTo" placeholder="出荷日 まで"></div>
+    <div class="row"><button type="button" class="btn sec" data-act="csv">ダウンロード</button></div>
+  </section>`;
+}
+
+/* ================= 画像 ================= */
+function toBlob(c, q) { return new Promise(r => c.toBlob(r, "image/jpeg", q || 0.9)); }
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+function b64(blob) { return new Promise(r => { const f = new FileReader(); f.onload = () => r(String(f.result).split(",")[1]); f.readAsDataURL(blob); }); }
+// 切り抜いた canvas → 送信用2枚（元・凹凸強調）
+async function prepare(cv) {
+  const target = 1400, sc = Math.min(2.5, target / cv.width);
+  const w = Math.round(cv.width * sc), h = Math.round(cv.height * sc);
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(cv, 0, 0, w, h);
+  const orig = await toBlob(c);
+  const src = x.getImageData(0, 0, w, h);
+  const b = document.createElement("canvas"); b.width = w; b.height = h;
+  const bx = b.getContext("2d"); bx.filter = `blur(${Math.max(8, Math.round(h / 25))}px) grayscale(1)`; bx.drawImage(c, 0, 0);
+  const bl = bx.getImageData(0, 0, w, h).data, s = src.data, diff = new Float32Array(w * h), vals = [];
+  for (let i = 0, p = 0; i < s.length; i += 4, p++) { const v = (0.299 * s[i] + 0.587 * s[i+1] + 0.114 * s[i+2]) - bl[i]; diff[p] = v; if (p % 7 === 0) vals.push(v); }
+  vals.sort((a, b) => a - b);
+  const lo = vals[Math.floor(vals.length * 0.01)], hi = vals[Math.floor(vals.length * 0.99)], k = 255 / ((hi - lo) || 1);
+  for (let i = 0, p = 0; i < s.length; i += 4, p++) { const v = Math.max(0, Math.min(255, (diff[p] - lo) * k)); s[i] = s[i+1] = s[i+2] = v; }
+  x.putImageData(src, 0, 0);
+  return {orig, enh: await toBlob(c)};
+}
+
+/* ---------- ファインダー（枠つきカメラ） ---------- */
+let stream = null;
+async function openViewfinder() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camNote("このブラウザはカメラの直接起動に対応していません"); return false; }
+  try { stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: "environment"}, width: {ideal: 3840}, height: {ideal: 2160}}, audio: false}); }
+  catch (e) { camNote(e && e.name === "NotAllowedError" ? "カメラの使用が許可されていません" : "カメラを起動できませんでした"); return false; }
+  const v = $("video"); v.srcObject = stream; $("vf").classList.remove("hidden");
+  try { await v.play(); } catch (e) {}
+  return true;
+}
+function camNote(m) { $("tip").textContent = "⚠ " + m + "。普通に撮ってから枠で切り抜きます。"; }
+function closeViewfinder() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; $("vf").classList.add("hidden"); }
+function shotFromViewfinder() {
+  const v = $("video"), box = $("vfBox").getBoundingClientRect(), g = $("guide").getBoundingClientRect();
+  const vw = v.videoWidth, vh = v.videoHeight; if (!vw) return null;
+  const scale = Math.max(box.width / vw, box.height / vh);
+  const ox = (box.width - vw * scale) / 2, oy = (box.height - vh * scale) / 2;
+  const mx = g.width * 0.06, my = g.height * 0.12;
+  let sx = (g.left - box.left - mx - ox) / scale, sy = (g.top - box.top - my - oy) / scale;
+  let sw = (g.width + mx * 2) / scale, sh = (g.height + my * 2) / scale;
+  sx = Math.max(0, sx); sy = Math.max(0, sy); sw = Math.min(vw - sx, sw); sh = Math.min(vh - sy, sh);
+  const c = document.createElement("canvas"); c.width = Math.round(sw); c.height = Math.round(sh);
+  c.getContext("2d").drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c;
+}
+
+/* ---------- 切り抜き枠 ---------- */
+let cropNat = null, cropResolve = null, rect = null, drag = null;
+function openCrop(img) {
+  return new Promise(res => {
+    cropResolve = res; cropNat = img;
+    const ci = $("cropImg");
+    $("cropBox").style.width = "0px";
+    $("crop").classList.remove("hidden");
+    const place = () => {
+      const W = ci.clientWidth, H = ci.clientHeight;
+      if (!W || !H) { setTimeout(place, 50); return; }
+      const w = W * 0.8, h = Math.max(60, Math.min(H * 0.6, w / 3.2));
+      rect = {x: (W - w) / 2, y: Math.max(0, (H - h) / 2), w, h}; drawRect();
+    };
+    ci.onload = () => requestAnimationFrame(place);
+    ci.src = img.src;
+    if (ci.complete && ci.naturalWidth) requestAnimationFrame(place);
+  });
+}
+function drawRect() { const b = $("cropBox").style; b.left = rect.x + "px"; b.top = rect.y + "px"; b.width = rect.w + "px"; b.height = rect.h + "px"; }
+$("cropBox").addEventListener("pointerdown", e => { e.preventDefault(); $("cropBox").setPointerCapture(e.pointerId); drag = {mode: e.target.dataset.h || "move", sx: e.clientX, sy: e.clientY, r: {...rect}}; });
+$("cropBox").addEventListener("pointermove", e => {
+  if (!drag) return;
+  const W = $("cropImg").clientWidth, H = $("cropImg").clientHeight, dx = e.clientX - drag.sx, dy = e.clientY - drag.sy, r = {...drag.r}, MIN = 40;
+  if (drag.mode === "move") { r.x = Math.min(Math.max(0, r.x + dx), W - r.w); r.y = Math.min(Math.max(0, r.y + dy), H - r.h); }
+  else {
+    if (drag.mode.includes("l")) { const nx = Math.min(Math.max(0, r.x + dx), r.x + r.w - MIN); r.w += r.x - nx; r.x = nx; }
+    if (drag.mode.includes("r")) r.w = Math.min(Math.max(MIN, r.w + dx), W - r.x);
+    if (drag.mode.includes("t")) { const ny = Math.min(Math.max(0, r.y + dy), r.y + r.h - MIN); r.h += r.y - ny; r.y = ny; }
+    if (drag.mode.includes("b")) r.h = Math.min(Math.max(MIN, r.h + dy), H - r.y);
+  }
+  rect = r; drawRect();
+});
+["pointerup", "pointercancel"].forEach(ev => $("cropBox").addEventListener(ev, () => drag = null));
+$("cropCancel").onclick = () => { $("crop").classList.add("hidden"); cropResolve && cropResolve(null); };
+$("cropOk").onclick = () => {
+  const k = cropNat.naturalWidth / $("cropImg").clientWidth;
+  const c = document.createElement("canvas"); c.width = Math.round(rect.w * k); c.height = Math.round(rect.h * k);
+  c.getContext("2d").drawImage(cropNat, rect.x * k, rect.y * k, rect.w * k, rect.h * k, 0, 0, c.width, c.height);
+  $("crop").classList.add("hidden"); cropResolve && cropResolve(c);
+};
+async function cropFromFile(file) {
+  try { return await openCrop(await loadImg(URL.createObjectURL(file))); }
+  catch (e) { toast("写真を開けませんでした"); return null; }
+}
+
+/* ================= 読み取り ================= */
+function setBusy(b) { ["shootBtn", "pickBtn"].forEach(id => $(id).disabled = b); }
+async function readCanvas(cv) {
+  $("resultSec").classList.remove("hidden");
+  $("cands").innerHTML = ""; $("readout").innerHTML = "";
+  $("status").textContent = "画像を準備中…";
+  const imgs = await prepare(cv);
+  $("pv1").src = URL.createObjectURL(imgs.orig); $("pv2").src = URL.createObjectURL(imgs.enh);
+  $("preview").style.display = "flex";
+  $("resultSec").scrollIntoView({behavior: "smooth", block: "start"});
+  setBusy(true);
+  $("status").textContent = "刻印を読み取り中…（10〜30秒）";
+  try {
+    const r = await run("apiRead", await b64(imgs.orig), await b64(imgs.enh), lastArm);
+    photoId = r.photoId || "";
+    $("status").textContent = "";
+    const z = r.read.zuban.split("").map((c, i) => r.read.fixed.includes(i) ? `<span class="fix">${esc(c)}</span>` : esc(c)).join("") || "????";
+    $("readout").innerHTML = `<div class="plate">${z}<br>◇${esc(r.read.seizo || "????")}-${esc(r.read.goki || "?")} ${esc(r.read.kensa || "")}</div>`;
+    const p = r.pick;
+    if (p && p.index >= 0 && r.sure) { toast("一致：" + r.cands[0].z + " " + r.cands[0].g + "号機"); openArm(r.cands[0].key, true); return; }
+    let head = "";
+    if (p && p.index >= 0) head = `<p>AIの判定：<b>${"ABCDE"[p.index]}</b>（確信度 ${esc(p.confidence)}）${esc(p.reason || "")}</p>`;
+    else if (p) head = `<p>候補に一致するものがない、とAIは判定しました。${esc(p.reason || "")}</p>`;
+    $("cands").innerHTML = head + '<p class="muted">タップして記録画面を開く</p>' + r.cands.map((a, i) =>
+      armBtn(a, (a.seq ? '<span class="chip">前回の続き番号</span>' : ""), p && p.index === i ? "best" : "").replace('class="az">', `class="az">${"ABCDE"[i]}: `)).join("");
+  } catch (e) {
+    $("status").textContent = "読み取れませんでした：" + errMsg(e) + "　下の「探す」で手入力もできます。";
+  } finally { setBusy(false); }
+}
+
+/* ================= 検索 ================= */
+let qTimer = null;
+$("q").addEventListener("input", () => {
+  clearTimeout(qTimer);
+  const q = $("q").value.trim();
+  if (!q) { $("qres").innerHTML = ""; return; }
+  qTimer = setTimeout(async () => {
+    $("qres").innerHTML = '<p class="muted">検索中…</p>';
+    try {
+      const rows = await run("apiSearch", q);
+      if ($("q").value.trim() !== q) return;
+      $("qres").innerHTML = rows.length ? rows.map(a => armBtn(a)).join("") : '<p class="muted">見つかりません</p>';
+    } catch (e) { $("qres").innerHTML = `<p class="muted">${esc(errMsg(e))}</p>`; }
+  }, 400);
+});
+
+/* ================= イベント ================= */
+$("shootBtn").onclick = async () => { if (!(await openViewfinder())) $("cam").click(); };
+$("pickBtn").onclick = () => $("pick").click();
+$("vfCancel").onclick = closeViewfinder;
+$("vfShot").onclick = () => { const c = shotFromViewfinder(); closeViewfinder(); if (c) readCanvas(c); };
+["cam", "pick"].forEach(id => $(id).onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; const c = await cropFromFile(f); if (c) readCanvas(c); });
+
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const act = b.dataset.act;
+  if (act === "nav") show(b.dataset.v);
+  else if (act === "day") { day = b.dataset.d; renderList(); }
+  else if (act === "arm") openArm(b.dataset.k);
+  else if (act === "back") show(day ? "list" : "scan");
+  else if (act === "res") { form.result = b.dataset.v; syncForm(); }
+  else if (act === "person") { form.person = b.dataset.n; syncForm(); }
+  else if (act === "allok") {
+    readForm();
+    if (!form.holes) { $("formMsg").textContent = "ねじ穴数を入れてください（次からは自動で入ります）"; $("fHoles").focus(); return; }
+    saveTap({result: "良", holes: form.holes, treated: form.holes, person: form.person, note: form.note});
+  }
+  else if (act === "save") { readForm(); saveTap({result: form.result, holes: form.holes, treated: form.treated, person: form.person, note: form.note}); }
+  else if (act === "cancel") {
+    if (!confirm("この記録を取り消しますか？（記録は残り、取消線が付きます）")) return;
+    try { armData = await run("apiCancelTap", b.dataset.id, armData.key); renderArm(); refreshDays(); } catch (err) { toast(errMsg(err)); }
+  }
+  else if (act === "me") { me = b.dataset.n; ls.set("trace.me", me); renderHead(); renderSettings(); }
+  else if (act === "savePeople") {
+    try { boot.people = await run("apiSavePeople", $("peopleIn").value.split("\n")); toast("保存しました"); renderSettings(); } catch (err) { toast(errMsg(err)); }
+  }
+  else if (act === "import") {
+    b.disabled = true; $("impMsg").textContent = "取込中…（1〜3分かかります）";
+    try {
+      const r = await run("apiImportNow");
+      $("impMsg").textContent = r ? `${r.file}：${r.count}本（新規 ${r.added} / 更新 ${r.updated} / 重複 ${r.dups}）` : "取込フォルダにExcelがありません";
+      refreshDays();
+    } catch (err) { $("impMsg").textContent = "取込失敗：" + errMsg(err); }
+    b.disabled = false;
+  }
+  else if (act === "csv") {
+    try {
+      const csv = await run("apiCsv", $("csvFrom").value.trim(), $("csvTo").value.trim());
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([csv], {type: "text/csv"}));
+      a.download = "タップ記録_" + boot.today.replace(/\//g, "") + ".csv"; a.click();
+    } catch (err) { toast(errMsg(err)); }
+  }
+});
+
+run("apiBoot").then(b => { boot = b; renderHead(); }).catch(e => toast("起動エラー：" + errMsg(e)));
+renderHead();
+})();
+</script>
+</body>
+</html>
