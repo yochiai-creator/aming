@@ -328,7 +328,7 @@ function renderSettings() {
     <div class="names">${boot.people.map(n => `<button type="button" data-act="me" data-n="${esc(n)}" class="${n === me ? "on" : ""}">${esc(n)}</button>`).join("") || '<span class="muted">下で名前を登録してください</span>'}</div>
     <p class="muted">この端末で選んだ名前が、記録画面の確認者に最初から入ります。</p>
   </section>
-  <section><h2>確認者の一覧</h2>
+  <section><h2>確認者の一覧</h2><p class="muted">台帳の「設定」シートの「確認者」と同じものです。</p>
     <textarea id="peopleIn" placeholder="1行に1人">${esc(boot.people.join("\n"))}</textarea>
     <div class="row"><button type="button" class="btn" data-act="savePeople">保存</button></div>
   </section>

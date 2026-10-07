@@ -27,7 +27,7 @@ const CONFIG = {
   SHEETS: {
     SETTINGS: '設定',
     ARMS: 'アーム台帳', TAPS: 'タップ記録', HOLES: '穴数マスタ',
-    PEOPLE: '確認者', CHECK: '要確認', LOG: '取込ログ',
+    CHECK: '要確認', LOG: '取込ログ',
     STEPS: '工程記録', CHANGES: '変更履歴'
   },
 
@@ -42,6 +42,7 @@ const CONFIG = {
   ALERT_DAYS_AHEAD: 3,   // 画面の「出荷前で未チェック」：今日〜N日後に出荷するアーム
   IMPORT_HOUR: 6,        // 毎朝の取込トリガーの時（setupTriggers）
   NOTIFY_HOUR: 7,        // 毎朝の通知トリガーの時（setupTriggers）
+  PEOPLE: '',            // 確認者（カンマ区切り）
   TRACK_FROM: '2026/10/08' // 運用開始日。これより前に出荷したアームは未チェック扱いにしない
 };
 
@@ -58,6 +59,7 @@ const TRACK_CHANGE_COLS = DATE_COLS.concat(['出荷先', '建機号機']);
 
 // 「設定」シートに出す項目：[キー, 項目名, 説明]。値はシートが優先、空ならCONFIG
 const SETTINGS = [
+  ['PEOPLE', '確認者', 'タップ・工程記録の確認者。カンマ区切り（アプリの設定タブからも編集できる）'],
   ['AI_PROVIDER', 'AI読取', 'gemini か claude'],
   ['GEMINI_MODEL', 'Geminiモデル', '例 gemini-3.8-flash'],
   ['CLAUDE_MODEL', 'Claudeモデル', 'AI読取が claude のとき'],
@@ -89,6 +91,16 @@ function cfg_(key) {
   const c = CONFIG[key];
   if (c !== undefined && c !== '') return Array.isArray(c) ? c.join(',') : c;
   return (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties().getProperty(key)) || '';
+}
+// 設定シートの値を書き換える（項目が無ければ行を足す）
+function setSetting_(key, value) {
+  const d = SETTINGS.find(x => x[0] === key);
+  const sh = ss_().getSheetByName(CONFIG.SHEETS.SETTINGS) || makeSheet_(CONFIG.SHEETS.SETTINGS);
+  const labels = sh.getRange(1, 1, sh.getLastRow(), 1).getDisplayValues().map(r => String(r[0]).trim());
+  const i = labels.indexOf(d[1]);
+  if (i < 0) sh.appendRow([d[1], value, d[2]]);
+  else sh.getRange(i + 1, 2).setValue(value);
+  SETTINGS_MEMO = null;
 }
 function cfgNum_(key) { return Number(cfg_(key)) || 0; }
 function cfgList_(key) { return String(cfg_(key)).split(/[,、]/).map(x => x.trim()).filter(Boolean); }
@@ -183,7 +195,6 @@ function setup() {
   heads[CONFIG.SHEETS.ARMS] = ARM_COLS;
   heads[CONFIG.SHEETS.TAPS] = TAP_COLS;
   heads[CONFIG.SHEETS.HOLES] = ['図番', 'ねじ穴数', '更新日時'];
-  heads[CONFIG.SHEETS.PEOPLE] = ['名前'];
   heads[CONFIG.SHEETS.CHECK] = ['日時', '種別', 'キー', '内容'];
   heads[CONFIG.SHEETS.LOG] = ['日時', 'ファイル名', '件数', '新規', '更新', '重複', '対象外'];
   Object.keys(heads).forEach(name => {
@@ -240,7 +251,7 @@ function apiBoot() {
   return {
     today: today_(),
     me: Session.getActiveUser().getEmail(),
-    people: readTable_(sheet_(CONFIG.SHEETS.PEOPLE)).map(r => r['名前']),
+    people: cfgList_('PEOPLE'),
     days: apiDays(),
     hasKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_())
   };
@@ -384,11 +395,9 @@ function nextShipDate_() {
 }
 
 function apiSavePeople(names) {
-  const sh = sheet_(CONFIG.SHEETS.PEOPLE);
-  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 1).clearContent();
-  const rows = names.map(n => String(n).trim()).filter(Boolean).map(n => [n]);
-  if (rows.length) sh.getRange(2, 1, rows.length, 1).setValues(rows);
-  return rows.map(r => r[0]);
+  const list = names.map(n => String(n).trim()).filter(Boolean);
+  setSetting_('PEOPLE', list.join(','));
+  return list;
 }
 
 /** 画面から「今すぐ取込」 */

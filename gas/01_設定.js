@@ -26,7 +26,7 @@ const CONFIG = {
   SHEETS: {
     SETTINGS: '設定',
     ARMS: 'アーム台帳', TAPS: 'タップ記録', HOLES: '穴数マスタ',
-    PEOPLE: '確認者', CHECK: '要確認', LOG: '取込ログ',
+    CHECK: '要確認', LOG: '取込ログ',
     STEPS: '工程記録', CHANGES: '変更履歴'
   },
 
@@ -41,6 +41,7 @@ const CONFIG = {
   ALERT_DAYS_AHEAD: 3,   // 画面の「出荷前で未チェック」：今日〜N日後に出荷するアーム
   IMPORT_HOUR: 6,        // 毎朝の取込トリガーの時（setupTriggers）
   NOTIFY_HOUR: 7,        // 毎朝の通知トリガーの時（setupTriggers）
+  PEOPLE: '',            // 確認者（カンマ区切り）
   TRACK_FROM: '2026/10/08' // 運用開始日。これより前に出荷したアームは未チェック扱いにしない
 };
 
@@ -57,6 +58,7 @@ const TRACK_CHANGE_COLS = DATE_COLS.concat(['出荷先', '建機号機']);
 
 // 「設定」シートに出す項目：[キー, 項目名, 説明]。値はシートが優先、空ならCONFIG
 const SETTINGS = [
+  ['PEOPLE', '確認者', 'タップ・工程記録の確認者。カンマ区切り（アプリの設定タブからも編集できる）'],
   ['AI_PROVIDER', 'AI読取', 'gemini か claude'],
   ['GEMINI_MODEL', 'Geminiモデル', '例 gemini-3.8-flash'],
   ['CLAUDE_MODEL', 'Claudeモデル', 'AI読取が claude のとき'],
@@ -88,6 +90,16 @@ function cfg_(key) {
   const c = CONFIG[key];
   if (c !== undefined && c !== '') return Array.isArray(c) ? c.join(',') : c;
   return (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties().getProperty(key)) || '';
+}
+// 設定シートの値を書き換える（項目が無ければ行を足す）
+function setSetting_(key, value) {
+  const d = SETTINGS.find(x => x[0] === key);
+  const sh = ss_().getSheetByName(CONFIG.SHEETS.SETTINGS) || makeSheet_(CONFIG.SHEETS.SETTINGS);
+  const labels = sh.getRange(1, 1, sh.getLastRow(), 1).getDisplayValues().map(r => String(r[0]).trim());
+  const i = labels.indexOf(d[1]);
+  if (i < 0) sh.appendRow([d[1], value, d[2]]);
+  else sh.getRange(i + 1, 2).setValue(value);
+  SETTINGS_MEMO = null;
 }
 function cfgNum_(key) { return Number(cfg_(key)) || 0; }
 function cfgList_(key) { return String(cfg_(key)).split(/[,、]/).map(x => x.trim()).filter(Boolean); }

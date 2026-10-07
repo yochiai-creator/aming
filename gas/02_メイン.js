@@ -59,7 +59,6 @@ function setup() {
   heads[CONFIG.SHEETS.ARMS] = ARM_COLS;
   heads[CONFIG.SHEETS.TAPS] = TAP_COLS;
   heads[CONFIG.SHEETS.HOLES] = ['図番', 'ねじ穴数', '更新日時'];
-  heads[CONFIG.SHEETS.PEOPLE] = ['名前'];
   heads[CONFIG.SHEETS.CHECK] = ['日時', '種別', 'キー', '内容'];
   heads[CONFIG.SHEETS.LOG] = ['日時', 'ファイル名', '件数', '新規', '更新', '重複', '対象外'];
   Object.keys(heads).forEach(name => {
@@ -116,7 +115,7 @@ function apiBoot() {
   return {
     today: today_(),
     me: Session.getActiveUser().getEmail(),
-    people: readTable_(sheet_(CONFIG.SHEETS.PEOPLE)).map(r => r['名前']),
+    people: cfgList_('PEOPLE'),
     days: apiDays(),
     hasKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_())
   };
@@ -260,11 +259,9 @@ function nextShipDate_() {
 }
 
 function apiSavePeople(names) {
-  const sh = sheet_(CONFIG.SHEETS.PEOPLE);
-  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 1).clearContent();
-  const rows = names.map(n => String(n).trim()).filter(Boolean).map(n => [n]);
-  if (rows.length) sh.getRange(2, 1, rows.length, 1).setValues(rows);
-  return rows.map(r => r[0]);
+  const list = names.map(n => String(n).trim()).filter(Boolean);
+  setSetting_('PEOPLE', list.join(','));
+  return list;
 }
 
 /** 画面から「今すぐ取込」 */
