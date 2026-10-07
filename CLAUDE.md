@@ -39,7 +39,7 @@
 2. スクリプトプロパティに `GEMINI_API_KEY`（エディタで `testAiKey` 実行で確認）
 3. `testImport` 実行（元フォルダの最新Excelを強制取込）
 4. デプロイ→ウェブアプリ（実行：自分／アクセス：組織内）
-5. トリガー（手動）：`importLatest` 毎朝、`notifyUnchecked` 毎朝
+5. トリガー：エディタで `setupTriggers` を1回実行（`importLatest` 6時台・`notifyUnchecked` 7時台、何度実行しても2本だけ）
 
 ---
 以下は claude.ai アーティファクト版（旧）の引き継ぎメモ。

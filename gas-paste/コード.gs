@@ -97,6 +97,16 @@ function healthCheck() {
   return {ss: ss.getName(), counts: counts, latest: latest ? latest.getName() : null, lastImported: PropertiesService.getScriptProperties().getProperty('LAST_IMPORTED'), ai: CONFIG.AI_PROVIDER, apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
 }
 
+/** 毎朝のトリガーを入れる（何度実行しても同じ2本だけになる） */
+function setupTriggers() {
+  const plan = [['importLatest', 6], ['notifyUnchecked', 7]];
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (plan.some(p => p[0] === t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
+  });
+  plan.forEach(p => ScriptApp.newTrigger(p[0]).timeBased().everyDays(1).atHour(p[1]).inTimezone('Asia/Tokyo').create());
+  ScriptApp.getProjectTriggers().forEach(t => console.log('トリガー: %s', t.getHandlerFunction()));
+}
+
 /** 初回だけ実行：台帳スプレッドシートとフォルダを作る */
 function setup() {
   const props = PropertiesService.getScriptProperties();
@@ -457,7 +467,8 @@ function importLatest(force) {
   if (!f) { console.log('取込対象なし'); return null; }
   const stamp = f.getId() + '@' + f.getLastUpdated().getTime();
   const props = PropertiesService.getScriptProperties();
-  if (!force && props.getProperty('LAST_IMPORTED') === stamp) {
+  // トリガーから呼ばれると force にイベントが入るので true のときだけ強制
+  if (force !== true && props.getProperty('LAST_IMPORTED') === stamp) {
     console.log('取込済み: %s', f.getName());
     return {file: f.getName(), skipped: true};
   }

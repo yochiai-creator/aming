@@ -8,7 +8,8 @@ function importLatest(force) {
   if (!f) { console.log('取込対象なし'); return null; }
   const stamp = f.getId() + '@' + f.getLastUpdated().getTime();
   const props = PropertiesService.getScriptProperties();
-  if (!force && props.getProperty('LAST_IMPORTED') === stamp) {
+  // トリガーから呼ばれると force にイベントが入るので true のときだけ強制
+  if (force !== true && props.getProperty('LAST_IMPORTED') === stamp) {
     console.log('取込済み: %s', f.getName());
     return {file: f.getName(), skipped: true};
   }
