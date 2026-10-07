@@ -11,7 +11,7 @@
 | `gas/03_照合.js` | `fitZuban_`/`fitGoki_`/`wdist_`/`rankArms_`（純粋関数・nodeでテスト可） |
 | `gas/03_AI読取.js` | `apiRead`：Gemini（既定）か Claude で2段階読取（JSONスキーマ指定）＋刻印写真をDrive保存 |
 | `gas/03_フォント見本.js` | 刻印機 Telesis TMC470 の11x16ドットフォント見本（PNG base64）。AI読取の1枚目に添える。元画像 `data/telesis_font_11x16.png` |
-| `gas/03_通知.js` | `notifyUnchecked`：出荷N日前までに「良」がないアームをメール |
+| `gas/03_通知.js` | `notifyUnchecked`：次の出荷日（台帳上の翌出荷日）分で「良」がないアームをメール。`TRACK_FROM`（運用開始日 2026/10/08）より前の出荷は対象外 |
 | `gas/04_テスト.js` | GASエディタで実行する確認用関数 |
 | `gas/index.html` | 画面（読取／一覧／記録／設定）。カメラ枠・切り抜き・凹凸強調は旧版から移植 |
 | `test/gas.test.js` | 照合・Excel解析・画面(jsdom＋google.script.runモック)のテスト |

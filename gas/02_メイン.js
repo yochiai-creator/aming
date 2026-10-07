@@ -188,7 +188,7 @@ function apiDays() {
     const s = m[d] || (m[d] = {date: d, total: 0, todo: 0, ng: 0});
     s.total++;
     const t = last[a['キー']];
-    if (!t) s.todo++; else if (t['結果'] === '否') s.ng++;
+    if (!t) { if (d >= CONFIG.TRACK_FROM) s.todo++; } else if (t['結果'] === '否') s.ng++;
   });
   return Object.keys(m).sort().map(k => m[k]);
 }
@@ -201,13 +201,24 @@ function apiDay(date) {
     .sort((x, y) => (x.to + x.z + x.g.padStart(5, '0')).localeCompare(y.to + y.z + y.g.padStart(5, '0')));
 }
 
-/** 今日〜N日後に出荷するのに、良の記録がないアーム */
+/** 今日〜N日後に出荷するのに、良の記録がないアーム（運用開始日より前の出荷は除く） */
 function apiUnchecked(daysAhead) {
   const today = today_(), to = shiftDate_(today, daysAhead || CONFIG.ALERT_DAYS_AHEAD);
+  return uncheckedBetween_(today, to);
+}
+function uncheckedBetween_(from, to) {
+  if (from < CONFIG.TRACK_FROM) from = CONFIG.TRACK_FROM;
   const last = latestTaps_(loadTaps_());
-  return loadArms_().filter(a => a['出荷日'] >= today && a['出荷日'] <= to && !(last[a['キー']] && last[a['キー']]['結果'] === '良'))
+  return loadArms_().filter(a => a['出荷日'] >= from && a['出荷日'] <= to && !(last[a['キー']] && last[a['キー']]['結果'] === '良'))
     .map(a => armView_(a, last[a['キー']]))
     .sort((x, y) => (x.ship + x.z).localeCompare(y.ship + y.z));
+}
+/** 今日より後で一番近い出荷日（台帳の出荷日から。土日祝や休みは自然に飛ぶ） */
+function nextShipDate_() {
+  const today = today_();
+  let next = '';
+  loadArms_().forEach(a => { const d = a['出荷日']; if (d > today && (!next || d < next)) next = d; });
+  return next;
 }
 
 function apiSavePeople(names) {

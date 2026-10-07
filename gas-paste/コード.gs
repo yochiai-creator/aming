@@ -36,7 +36,8 @@ const CONFIG = {
 
   // 未チェック通知（notifyUnchecked）
   ALERT_TO: '',          // カンマ区切り。空なら実行者に送る
-  ALERT_DAYS_AHEAD: 3    // 今日〜N日後に出荷するアームを対象
+  ALERT_DAYS_AHEAD: 3,   // 画面の「出荷前で未チェック」：今日〜N日後に出荷するアーム
+  TRACK_FROM: '2026/10/08' // 運用開始日。これより前に出荷したアームは未チェック扱いにしない
 };
 
 const ARM_COLS = ['キー', '図番', '号機', '機種', '仕様', '建機号機', '出荷先', '着工', '検査完了日',
@@ -247,7 +248,7 @@ function apiDays() {
     const s = m[d] || (m[d] = {date: d, total: 0, todo: 0, ng: 0});
     s.total++;
     const t = last[a['キー']];
-    if (!t) s.todo++; else if (t['結果'] === '否') s.ng++;
+    if (!t) { if (d >= CONFIG.TRACK_FROM) s.todo++; } else if (t['結果'] === '否') s.ng++;
   });
   return Object.keys(m).sort().map(k => m[k]);
 }
@@ -260,13 +261,24 @@ function apiDay(date) {
     .sort((x, y) => (x.to + x.z + x.g.padStart(5, '0')).localeCompare(y.to + y.z + y.g.padStart(5, '0')));
 }
 
-/** 今日〜N日後に出荷するのに、良の記録がないアーム */
+/** 今日〜N日後に出荷するのに、良の記録がないアーム（運用開始日より前の出荷は除く） */
 function apiUnchecked(daysAhead) {
   const today = today_(), to = shiftDate_(today, daysAhead || CONFIG.ALERT_DAYS_AHEAD);
+  return uncheckedBetween_(today, to);
+}
+function uncheckedBetween_(from, to) {
+  if (from < CONFIG.TRACK_FROM) from = CONFIG.TRACK_FROM;
   const last = latestTaps_(loadTaps_());
-  return loadArms_().filter(a => a['出荷日'] >= today && a['出荷日'] <= to && !(last[a['キー']] && last[a['キー']]['結果'] === '良'))
+  return loadArms_().filter(a => a['出荷日'] >= from && a['出荷日'] <= to && !(last[a['キー']] && last[a['キー']]['結果'] === '良'))
     .map(a => armView_(a, last[a['キー']]))
     .sort((x, y) => (x.ship + x.z).localeCompare(y.ship + y.z));
+}
+/** 今日より後で一番近い出荷日（台帳の出荷日から。土日祝や休みは自然に飛ぶ） */
+function nextShipDate_() {
+  const today = today_();
+  let next = '';
+  loadArms_().forEach(a => { const d = a['出荷日']; if (d > today && (!next || d < next)) next = d; });
+  return next;
 }
 
 function apiSavePeople(names) {
@@ -660,16 +672,19 @@ function shiftDate_(ymd, days) {
 /* ===== 03_通知.js ===== */
 /**
  * 出荷前の未チェック通知（時間主導トリガーで毎朝実行する想定。トリガーは手動で設定）
+ * 次の出荷日（翌営業日）に出荷するアームのうち、ねじ穴タップ「良」の記録がないものだけを送る
  */
 function notifyUnchecked() {
-  const list = apiUnchecked(CONFIG.ALERT_DAYS_AHEAD);
-  if (!list.length) { console.log('未チェックなし'); return 0; }
+  const day = nextShipDate_();
+  if (!day) { console.log('次の出荷日なし'); return 0; }
+  const list = uncheckedBetween_(day, day);
+  if (!list.length) { console.log('%s 出荷分は全部チェック済み', day); return 0; }
   const to = CONFIG.ALERT_TO || Session.getEffectiveUser().getEmail();
-  const lines = list.map(a => a.ship + '  ' + a.z + ' ' + a.g + '号機  ' + (a.to || '') + (a.status === '否' ? '  ★否（処置待ち）' : ''));
+  const lines = list.map(a => a.z + ' ' + a.g + '号機  ' + (a.to || '') + (a.status === '否' ? '  ★否（処置待ち）' : ''));
   const url = ScriptApp.getService().getUrl() || '';
-  MailApp.sendEmail(to, '【アーム】出荷前タップ未チェック ' + list.length + '本',
-    '今日〜' + CONFIG.ALERT_DAYS_AHEAD + '日後に出荷するアームで、ねじ穴タップ「良」の記録がないもの：\n\n' + lines.join('\n') + (url ? '\n\n記録はこちら: ' + url : ''));
-  console.log('通知: %s 本 → %s', list.length, to);
+  MailApp.sendEmail(to, '【アーム】' + day.slice(5) + ' 出荷分 タップ未チェック ' + list.length + '本',
+    day + ' に出荷するアームで、ねじ穴タップ「良」の記録がないもの：\n\n' + lines.join('\n') + (url ? '\n\n記録はこちら: ' + url : ''));
+  console.log('通知: %s 出荷分 %s 本 → %s', day, list.length, to);
   return list.length;
 }
 
