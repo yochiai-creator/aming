@@ -209,7 +209,8 @@ h1{font-size:1.9rem}
 .photos{display:flex;gap:8px;overflow-x:auto;margin-bottom:14px}
 .photos figure{margin:0;flex:0 0 auto;width:240px;border:1px solid var(--edge);background:#060909}
 .photos img{display:block;width:100%;min-height:60px;filter:contrast(1.1)}
-.photos figcaption{font-family:"Share Tech Mono",monospace;font-size:.72rem;color:var(--sub);padding:2px 6px}
+.photos figcaption{display:flex;justify-content:space-between;align-items:center;font-family:"Share Tech Mono",monospace;font-size:.72rem;color:var(--sub);padding:2px 6px}
+.photos .del{color:var(--ng);font-size:.78rem}
 </style>
 </head>
 <body>
@@ -375,7 +376,7 @@ function renderArm() {
     <div id="formMsg" class="muted"></div>
   </section>
   <section>
-    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${esc(p.at)}</figcaption></figure>`).join("")}</div>` : ""}
+    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${esc(p.at)}<button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
     <h2>工程ログ</h2>
     <ul class="tl steps">${a.steps.map(stepHtml).join("")}</ul>
     ${a.otherChanges.length ? `<p class="muted">${a.otherChanges.map(c => `${esc(c.col)}：${esc(c.from || "空")} → ${esc(c.to || "空")}（${esc(c.at)} 取込）`).join("<br>")}</p>` : ""}
@@ -620,6 +621,12 @@ document.addEventListener("click", async e => {
     if (note === null) return;
     b.disabled = true;
     try { armData = await run("apiSaveStep", {key: armData.key, step: b.dataset.s, person: me, note, photoId}); toast(b.dataset.s + "を記録しました"); renderArm(); }
+    catch (err) { toast(errMsg(err)); b.disabled = false; }
+  }
+  else if (act === "delPhoto") {
+    if (!confirm("この写真を消しますか？（ドライブのゴミ箱に移します。30日間は戻せます）")) return;
+    b.disabled = true;
+    try { armData = await run("apiDeletePhoto", b.dataset.id, armData.key); toast("写真を消しました"); renderArm(); }
     catch (err) { toast(errMsg(err)); b.disabled = false; }
   }
   else if (act === "cancelStep") {

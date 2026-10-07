@@ -145,6 +145,17 @@ function apiLinkPhoto(photoId, key, readText) {
   return name;
 }
 
+/** 刻印写真を消す（ドライブのゴミ箱へ。30日は戻せる）＋「刻印写真」シートの行を削除 */
+function apiDeletePhoto(photoId, key) {
+  const sh = sheet_(CONFIG.SHEETS.PHOTOS);
+  if (sh.getLastRow() > 1) {
+    const ids = sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]);
+    for (let i = ids.length - 1; i >= 0; i--) if (ids[i] === photoId) sh.deleteRow(i + 2);
+  }
+  try { DriveApp.getFileById(photoId).setTrashed(true); } catch (e) { console.warn('写真ファイルなし: ' + photoId); }
+  return apiArm(key);
+}
+
 /** 写真を画面に出す用（data URL）。ドライブの共有設定に関係なく見られる */
 function apiPhoto(photoId) {
   const blob = DriveApp.getFileById(photoId).getBlob();
