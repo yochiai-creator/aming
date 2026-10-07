@@ -28,7 +28,7 @@ function testReadLatestPhoto() {
 // AIキーが通るか（画像なしで短く1回呼ぶ）
 function testAiKey() {
   const r = callAI_('「OK」とだけ答えて。', [], {type: 'object', required: ['answer'], properties: {answer: {type: 'string'}}});
-  console.log('%s %s → %s', CONFIG.AI_PROVIDER, CONFIG.AI_PROVIDER === 'claude' ? CONFIG.CLAUDE_MODEL : CONFIG.GEMINI_MODEL, JSON.stringify(r));
+  console.log('%s %s → %s', cfg_('AI_PROVIDER'), cfg_('AI_PROVIDER') === 'claude' ? cfg_('CLAUDE_MODEL') : cfg_('GEMINI_MODEL'), JSON.stringify(r));
 }
 // 照合ロジック
 function testMatch() {

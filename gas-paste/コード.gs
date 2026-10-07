@@ -1,7 +1,8 @@
 /* ===== 01_設定.js ===== */
 /**
  * aming（アーム トレーサビリティ・野田組）設定
- * ID類は空なら setup() が作ってスクリプトプロパティに保存する。直書きしたい場合はここに入れる。
+ * 運用で変える値は台帳スプレッドシートの「設定」シートが優先（SETTINGS 参照）。ここはその初期値。
+ * SS_ID だけはコードで持つ（設定シートの場所なので）。APIキーはスクリプトプロパティ。
  */
 const CONFIG = {
   SS_ID: '13Fj89c-17Ec0YsUUuKdIykSkZV2442SrA35UNoMHUd8',        // aming 台帳（ドライブ「aming」フォルダ）
@@ -24,6 +25,7 @@ const CONFIG = {
   EXCLUDE_KISHU: ['ブームブラケット', 'オプションブロック取り付け図'], // アーム以外
 
   SHEETS: {
+    SETTINGS: '設定',
     ARMS: 'アーム台帳', TAPS: 'タップ記録', HOLES: '穴数マスタ',
     PEOPLE: '確認者', CHECK: '要確認', LOG: '取込ログ',
     STEPS: '工程記録', CHANGES: '変更履歴'
@@ -38,6 +40,8 @@ const CONFIG = {
   // 未チェック通知（notifyUnchecked）
   ALERT_TO: '',          // カンマ区切り。空なら実行者に送る
   ALERT_DAYS_AHEAD: 3,   // 画面の「出荷前で未チェック」：今日〜N日後に出荷するアーム
+  IMPORT_HOUR: 6,        // 毎朝の取込トリガーの時（setupTriggers）
+  NOTIFY_HOUR: 7,        // 毎朝の通知トリガーの時（setupTriggers）
   TRACK_FROM: '2026/10/08' // 運用開始日。これより前に出荷したアームは未チェック扱いにしない
 };
 
@@ -52,21 +56,62 @@ const STEPS = [['塗装完了', '塗装完了日'], ['塗装後修正完了', '�
 // 取込で値が変わったら変更履歴に残す列
 const TRACK_CHANGE_COLS = DATE_COLS.concat(['出荷先', '建機号機']);
 
-function cfg_(key) {
-  return CONFIG[key] || PropertiesService.getScriptProperties().getProperty(key) || '';
+// 「設定」シートに出す項目：[キー, 項目名, 説明]。値はシートが優先、空ならCONFIG
+const SETTINGS = [
+  ['AI_PROVIDER', 'AI読取', 'gemini か claude'],
+  ['GEMINI_MODEL', 'Geminiモデル', '例 gemini-3.8-flash'],
+  ['CLAUDE_MODEL', 'Claudeモデル', 'AI読取が claude のとき'],
+  ['TRACK_FROM', '運用開始日', 'これより前に出荷したアームは未チェック扱いにしない（yyyy/MM/dd）'],
+  ['ALERT_TO', '通知メール宛先', 'カンマ区切りで複数可。空なら自分'],
+  ['ALERT_DAYS_AHEAD', '未チェック表示日数', '一覧の「出荷前で未チェック」に今日から何日後まで出すか'],
+  ['IMPORT_HOUR', '取込の時刻', '毎朝何時台にExcelを取り込むか（変えたら setupTriggers を再実行）'],
+  ['NOTIFY_HOUR', '通知の時刻', '毎朝何時台に未チェック通知を送るか（変えたら setupTriggers を再実行）'],
+  ['EXCLUDE_KISHU', '除外する機種', 'アーム以外として取り込まない機種。カンマ区切り'],
+  ['SRC_SHEET', 'Excelのシート名', '生産管理Excelで読むシート'],
+  ['INBOX_FOLDER_ID', '取込元フォルダID', '生産管理Excelがたまるフォルダ'],
+  ['PHOTO_FOLDER_ID', '刻印写真フォルダID', '撮った刻印写真の保存先'],
+  ['DONE_FOLDER_ID', '作業用フォルダID', '取込時の一時ファイル置き場']
+];
+let SETTINGS_MEMO = null;
+function sheetSettings_() {
+  if (SETTINGS_MEMO) return SETTINGS_MEMO;
+  SETTINGS_MEMO = {};
+  if (typeof SpreadsheetApp === 'undefined') return SETTINGS_MEMO; // node テスト
+  const sh = ss_().getSheetByName(CONFIG.SHEETS.SETTINGS) || makeSheet_(CONFIG.SHEETS.SETTINGS);
+  const byLabel = {};
+  sh.getDataRange().getDisplayValues().slice(1).forEach(r => { byLabel[String(r[0]).trim()] = String(r[1]).trim(); });
+  SETTINGS.forEach(d => { if (byLabel[d[1]]) SETTINGS_MEMO[d[0]] = byLabel[d[1]]; });
+  return SETTINGS_MEMO;
 }
+// 設定値：設定シート → CONFIG → スクリプトプロパティ の順
+function cfg_(key) {
+  if (key !== 'SS_ID') { const v = sheetSettings_()[key]; if (v) return v; }
+  const c = CONFIG[key];
+  if (c !== undefined && c !== '') return Array.isArray(c) ? c.join(',') : c;
+  return (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties().getProperty(key)) || '';
+}
+function cfgNum_(key) { return Number(cfg_(key)) || 0; }
+function cfgList_(key) { return String(cfg_(key)).split(/[,、]/).map(x => x.trim()).filter(Boolean); }
 function ss_() {
   const id = cfg_('SS_ID');
   if (!id) throw new Error('台帳がありません。先に setup() を実行してください');
   return SpreadsheetApp.openById(id);
 }
-function aiKeyName_() { return CONFIG.AI_PROVIDER === 'claude' ? 'ANTHROPIC_API_KEY' : 'GEMINI_API_KEY'; }
+function aiKeyName_() { return cfg_('AI_PROVIDER') === 'claude' ? 'ANTHROPIC_API_KEY' : 'GEMINI_API_KEY'; }
 function sheet_(name) { return ss_().getSheetByName(name) || makeSheet_(name); }
 // 後から増えたシートは初回アクセス時に作る
 function makeSheet_(name) {
   const cols = {};
   cols[CONFIG.SHEETS.STEPS] = STEP_COLS;
   cols[CONFIG.SHEETS.CHANGES] = CHANGE_COLS;
+  if (name === CONFIG.SHEETS.SETTINGS) {
+    const sh = ss_().insertSheet(name, 0);
+    const rows = [['項目', '値', '説明']].concat(SETTINGS.map(d => [d[1], String(Array.isArray(CONFIG[d[0]]) ? CONFIG[d[0]].join(',') : CONFIG[d[0]]), d[2]]));
+    sh.getRange(1, 1, rows.length, 3).setNumberFormat('@').setValues(rows);
+    sh.getRange(1, 1, 1, 3).setFontWeight('bold');
+    sh.setFrozenRows(1);
+    return sh;
+  }
   if (!cols[name]) return null;
   const sh = ss_().insertSheet(name);
   sh.getRange(1, 1, sh.getMaxRows(), cols[name].length).setNumberFormat('@');
@@ -113,17 +158,17 @@ function healthCheck() {
   const counts = {};
   Object.keys(CONFIG.SHEETS).forEach(k => { const sh = ss.getSheetByName(CONFIG.SHEETS[k]); counts[CONFIG.SHEETS[k]] = sh ? sh.getLastRow() - 1 : 'なし'; });
   const latest = latestSourceFile_();
-  return {ss: ss.getName(), counts: counts, latest: latest ? latest.getName() : null, lastImported: PropertiesService.getScriptProperties().getProperty('LAST_IMPORTED'), ai: CONFIG.AI_PROVIDER, apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
+  return {ss: ss.getName(), counts: counts, latest: latest ? latest.getName() : null, lastImported: PropertiesService.getScriptProperties().getProperty('LAST_IMPORTED'), ai: cfg_('AI_PROVIDER'), apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
 }
 
 /** 毎朝のトリガーを入れる（何度実行しても同じ2本だけになる） */
 function setupTriggers() {
-  const plan = [['importLatest', 6], ['notifyUnchecked', 7]];
+  const plan = [['importLatest', cfgNum_('IMPORT_HOUR') || 6], ['notifyUnchecked', cfgNum_('NOTIFY_HOUR') || 7]];
   ScriptApp.getProjectTriggers().forEach(t => {
     if (plan.some(p => p[0] === t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
   });
   plan.forEach(p => ScriptApp.newTrigger(p[0]).timeBased().everyDays(1).atHour(p[1]).inTimezone('Asia/Tokyo').create());
-  ScriptApp.getProjectTriggers().forEach(t => console.log('トリガー: %s', t.getHandlerFunction()));
+  plan.forEach(p => console.log('トリガー: %s 毎朝%s時台', p[0], p[1]));
 }
 
 /** 初回だけ実行：台帳スプレッドシートとフォルダを作る */
@@ -305,7 +350,7 @@ function apiDays() {
     const s = m[d] || (m[d] = {date: d, total: 0, todo: 0, ng: 0});
     s.total++;
     const t = last[a['キー']];
-    if (!t) { if (d >= CONFIG.TRACK_FROM) s.todo++; } else if (t['結果'] === '否') s.ng++;
+    if (!t) { if (d >= cfg_('TRACK_FROM')) s.todo++; } else if (t['結果'] === '否') s.ng++;
   });
   return Object.keys(m).sort().map(k => m[k]);
 }
@@ -320,11 +365,11 @@ function apiDay(date) {
 
 /** 今日〜N日後に出荷するのに、良の記録がないアーム（運用開始日より前の出荷は除く） */
 function apiUnchecked(daysAhead) {
-  const today = today_(), to = shiftDate_(today, daysAhead || CONFIG.ALERT_DAYS_AHEAD);
+  const today = today_(), to = shiftDate_(today, daysAhead || cfgNum_('ALERT_DAYS_AHEAD'));
   return uncheckedBetween_(today, to);
 }
 function uncheckedBetween_(from, to) {
-  if (from < CONFIG.TRACK_FROM) from = CONFIG.TRACK_FROM;
+  if (from < cfg_('TRACK_FROM')) from = cfg_('TRACK_FROM');
   const last = latestTaps_(loadTaps_());
   return loadArms_().filter(a => a['出荷日'] >= from && a['出荷日'] <= to && !(last[a['キー']] && last[a['キー']]['結果'] === '良'))
     .map(a => armView_(a, last[a['キー']]))
@@ -427,7 +472,7 @@ function apiRead(orig, enh, last) {
 // 画像は base64文字列（JPEG）か {data, mime}
 function img_(x) { return typeof x === 'string' ? {data: x, mime: 'image/jpeg'} : x; }
 function callAI_(prompt, imgsB64, schema) {
-  return CONFIG.AI_PROVIDER === 'claude' ? callClaude_(prompt, imgsB64, schema) : callGemini_(prompt, imgsB64, schema);
+  return cfg_('AI_PROVIDER') === 'claude' ? callClaude_(prompt, imgsB64, schema) : callGemini_(prompt, imgsB64, schema);
 }
 
 function callGemini_(prompt, imgsB64, schema) {
@@ -439,7 +484,7 @@ function callGemini_(prompt, imgsB64, schema) {
     contents: [{role: 'user', parts: parts}],
     generationConfig: {responseMimeType: 'application/json', responseSchema: geminiSchema_(schema)}
   };
-  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + CONFIG.GEMINI_MODEL + ':generateContent', {
+  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + cfg_('GEMINI_MODEL') + ':generateContent', {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
     headers: {'x-goog-api-key': key},
     payload: JSON.stringify(body)
@@ -470,7 +515,7 @@ function callClaude_(prompt, imgsB64, schema) {
   const content = imgsB64.map(img_).map(i => ({type: 'image', source: {type: 'base64', media_type: i.mime, data: i.data}}));
   content.push({type: 'text', text: prompt});
   const body = {
-    model: CONFIG.CLAUDE_MODEL,
+    model: cfg_('CLAUDE_MODEL'),
     max_tokens: 16000,
     output_config: {effort: CONFIG.CLAUDE_EFFORT, format: {type: 'json_schema', schema: schema}},
     fallbacks: 'default', // 安全判定で断られたとき別モデルで再実行（サーバー側）
@@ -550,8 +595,8 @@ function importFile_(file) {
     file.getBlob()
   );
   try {
-    const sh = SpreadsheetApp.openById(tmp.id).getSheetByName(CONFIG.SRC_SHEET);
-    if (!sh) throw new Error('シート「' + CONFIG.SRC_SHEET + '」がありません: ' + file.getName());
+    const sh = SpreadsheetApp.openById(tmp.id).getSheetByName(cfg_('SRC_SHEET'));
+    if (!sh) throw new Error('シート「' + cfg_('SRC_SHEET') + '」がありません: ' + file.getName());
     const parsed = parseShipValues_(sh.getDataRange().getValues());
     const stat = mergeArms_(parsed.arms, stamp, file.getName());
     const dupRows = parsed.dups.map(d => [stamp, 'Excel内で図番+号機が重複', d.key, d.note]);
@@ -579,13 +624,14 @@ function parseShipValues_(values) {
     col[CONFIG.SRC_COLS[src]] = i;
   });
   const byKey = {}, dups = [];
+  const exclude = cfgList_('EXCLUDE_KISHU');
   let skipped = 0;
   for (let r = hi + 1; r < values.length; r++) {
     const row = values[r];
     const z = String(row[col['図番']] || '').trim().toUpperCase();
     const g = row[col['号機']];
     const kishu = String(row[col['機種']] || '').trim();
-    if (!CONFIG.ZUBAN_RE.test(z) || !/^\d+$/.test(String(g).trim()) || CONFIG.EXCLUDE_KISHU.indexOf(kishu) >= 0) { if (z) skipped++; continue; }
+    if (!CONFIG.ZUBAN_RE.test(z) || !/^\d+$/.test(String(g).trim()) || exclude.indexOf(kishu) >= 0) { if (z) skipped++; continue; }
     const arm = {'キー': armKey_(z, String(+g)), '図番': z, '号機': String(+g)};
     Object.keys(col).forEach(name => {
       if (name === '図番' || name === '号機') return;
@@ -747,7 +793,7 @@ function notifyUnchecked() {
   if (!day) { console.log('次の出荷日なし'); return 0; }
   const list = uncheckedBetween_(day, day);
   if (!list.length) { console.log('%s 出荷分は全部チェック済み', day); return 0; }
-  const to = CONFIG.ALERT_TO || Session.getEffectiveUser().getEmail();
+  const to = cfg_('ALERT_TO') || Session.getEffectiveUser().getEmail();
   const lines = list.map(a => a.z + ' ' + a.g + '号機  ' + (a.to || '') + (a.status === '否' ? '  ★否（処置待ち）' : ''));
   const url = ScriptApp.getService().getUrl() || '';
   MailApp.sendEmail(to, '【aming】' + day.slice(5) + ' 出荷分 タップ未チェック ' + list.length + '本',
@@ -787,7 +833,7 @@ function testReadLatestPhoto() {
 // AIキーが通るか（画像なしで短く1回呼ぶ）
 function testAiKey() {
   const r = callAI_('「OK」とだけ答えて。', [], {type: 'object', required: ['answer'], properties: {answer: {type: 'string'}}});
-  console.log('%s %s → %s', CONFIG.AI_PROVIDER, CONFIG.AI_PROVIDER === 'claude' ? CONFIG.CLAUDE_MODEL : CONFIG.GEMINI_MODEL, JSON.stringify(r));
+  console.log('%s %s → %s', cfg_('AI_PROVIDER'), cfg_('AI_PROVIDER') === 'claude' ? cfg_('CLAUDE_MODEL') : cfg_('GEMINI_MODEL'), JSON.stringify(r));
 }
 // 照合ロジック
 function testMatch() {

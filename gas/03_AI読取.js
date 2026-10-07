@@ -61,7 +61,7 @@ function apiRead(orig, enh, last) {
 // 画像は base64文字列（JPEG）か {data, mime}
 function img_(x) { return typeof x === 'string' ? {data: x, mime: 'image/jpeg'} : x; }
 function callAI_(prompt, imgsB64, schema) {
-  return CONFIG.AI_PROVIDER === 'claude' ? callClaude_(prompt, imgsB64, schema) : callGemini_(prompt, imgsB64, schema);
+  return cfg_('AI_PROVIDER') === 'claude' ? callClaude_(prompt, imgsB64, schema) : callGemini_(prompt, imgsB64, schema);
 }
 
 function callGemini_(prompt, imgsB64, schema) {
@@ -73,7 +73,7 @@ function callGemini_(prompt, imgsB64, schema) {
     contents: [{role: 'user', parts: parts}],
     generationConfig: {responseMimeType: 'application/json', responseSchema: geminiSchema_(schema)}
   };
-  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + CONFIG.GEMINI_MODEL + ':generateContent', {
+  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + cfg_('GEMINI_MODEL') + ':generateContent', {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
     headers: {'x-goog-api-key': key},
     payload: JSON.stringify(body)
@@ -104,7 +104,7 @@ function callClaude_(prompt, imgsB64, schema) {
   const content = imgsB64.map(img_).map(i => ({type: 'image', source: {type: 'base64', media_type: i.mime, data: i.data}}));
   content.push({type: 'text', text: prompt});
   const body = {
-    model: CONFIG.CLAUDE_MODEL,
+    model: cfg_('CLAUDE_MODEL'),
     max_tokens: 16000,
     output_config: {effort: CONFIG.CLAUDE_EFFORT, format: {type: 'json_schema', schema: schema}},
     fallbacks: 'default', // 安全判定で断られたとき別モデルで再実行（サーバー側）

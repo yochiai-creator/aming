@@ -44,8 +44,8 @@ function importFile_(file) {
     file.getBlob()
   );
   try {
-    const sh = SpreadsheetApp.openById(tmp.id).getSheetByName(CONFIG.SRC_SHEET);
-    if (!sh) throw new Error('シート「' + CONFIG.SRC_SHEET + '」がありません: ' + file.getName());
+    const sh = SpreadsheetApp.openById(tmp.id).getSheetByName(cfg_('SRC_SHEET'));
+    if (!sh) throw new Error('シート「' + cfg_('SRC_SHEET') + '」がありません: ' + file.getName());
     const parsed = parseShipValues_(sh.getDataRange().getValues());
     const stat = mergeArms_(parsed.arms, stamp, file.getName());
     const dupRows = parsed.dups.map(d => [stamp, 'Excel内で図番+号機が重複', d.key, d.note]);
@@ -73,13 +73,14 @@ function parseShipValues_(values) {
     col[CONFIG.SRC_COLS[src]] = i;
   });
   const byKey = {}, dups = [];
+  const exclude = cfgList_('EXCLUDE_KISHU');
   let skipped = 0;
   for (let r = hi + 1; r < values.length; r++) {
     const row = values[r];
     const z = String(row[col['図番']] || '').trim().toUpperCase();
     const g = row[col['号機']];
     const kishu = String(row[col['機種']] || '').trim();
-    if (!CONFIG.ZUBAN_RE.test(z) || !/^\d+$/.test(String(g).trim()) || CONFIG.EXCLUDE_KISHU.indexOf(kishu) >= 0) { if (z) skipped++; continue; }
+    if (!CONFIG.ZUBAN_RE.test(z) || !/^\d+$/.test(String(g).trim()) || exclude.indexOf(kishu) >= 0) { if (z) skipped++; continue; }
     const arm = {'キー': armKey_(z, String(+g)), '図番': z, '号機': String(+g)};
     Object.keys(col).forEach(name => {
       if (name === '図番' || name === '号機') return;

@@ -6,7 +6,7 @@
 
 | ファイル | 内容 |
 |---|---|
-| `gas/01_設定.js` | CONFIG（ID類・Excel列名→台帳列名・シート名・モデル） |
+| `gas/01_設定.js` | CONFIG（初期値）と `SETTINGS`。**運用値は台帳の「設定」シートが優先**（項目名で照合、`cfg_`/`cfgNum_`/`cfgList_` で読む）。SS_IDだけコード、APIキーはスクリプトプロパティ |
 | `gas/02_メイン.js` | `doGet`、`setup()`、画面API `api*`（検索・詳細・記録・取消・出荷日一覧・未チェック・CSV） |
 | `gas/03_取込.js` | Excel(.xlsm)→Googleシート変換→`parseShipValues_`→台帳へ上書きマージ。列は**見出し名で探す** |
 | `gas/03_照合.js` | `fitZuban_`/`fitGoki_`/`wdist_`/`rankArms_`（純粋関数・nodeでテスト可） |

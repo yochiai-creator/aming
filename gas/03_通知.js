@@ -7,7 +7,7 @@ function notifyUnchecked() {
   if (!day) { console.log('次の出荷日なし'); return 0; }
   const list = uncheckedBetween_(day, day);
   if (!list.length) { console.log('%s 出荷分は全部チェック済み', day); return 0; }
-  const to = CONFIG.ALERT_TO || Session.getEffectiveUser().getEmail();
+  const to = cfg_('ALERT_TO') || Session.getEffectiveUser().getEmail();
   const lines = list.map(a => a.z + ' ' + a.g + '号機  ' + (a.to || '') + (a.status === '否' ? '  ★否（処置待ち）' : ''));
   const url = ScriptApp.getService().getUrl() || '';
   MailApp.sendEmail(to, '【aming】' + day.slice(5) + ' 出荷分 タップ未チェック ' + list.length + '本',

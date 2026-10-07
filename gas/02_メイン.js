@@ -34,17 +34,17 @@ function healthCheck() {
   const counts = {};
   Object.keys(CONFIG.SHEETS).forEach(k => { const sh = ss.getSheetByName(CONFIG.SHEETS[k]); counts[CONFIG.SHEETS[k]] = sh ? sh.getLastRow() - 1 : 'なし'; });
   const latest = latestSourceFile_();
-  return {ss: ss.getName(), counts: counts, latest: latest ? latest.getName() : null, lastImported: PropertiesService.getScriptProperties().getProperty('LAST_IMPORTED'), ai: CONFIG.AI_PROVIDER, apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
+  return {ss: ss.getName(), counts: counts, latest: latest ? latest.getName() : null, lastImported: PropertiesService.getScriptProperties().getProperty('LAST_IMPORTED'), ai: cfg_('AI_PROVIDER'), apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
 }
 
 /** 毎朝のトリガーを入れる（何度実行しても同じ2本だけになる） */
 function setupTriggers() {
-  const plan = [['importLatest', 6], ['notifyUnchecked', 7]];
+  const plan = [['importLatest', cfgNum_('IMPORT_HOUR') || 6], ['notifyUnchecked', cfgNum_('NOTIFY_HOUR') || 7]];
   ScriptApp.getProjectTriggers().forEach(t => {
     if (plan.some(p => p[0] === t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
   });
   plan.forEach(p => ScriptApp.newTrigger(p[0]).timeBased().everyDays(1).atHour(p[1]).inTimezone('Asia/Tokyo').create());
-  ScriptApp.getProjectTriggers().forEach(t => console.log('トリガー: %s', t.getHandlerFunction()));
+  plan.forEach(p => console.log('トリガー: %s 毎朝%s時台', p[0], p[1]));
 }
 
 /** 初回だけ実行：台帳スプレッドシートとフォルダを作る */
@@ -226,7 +226,7 @@ function apiDays() {
     const s = m[d] || (m[d] = {date: d, total: 0, todo: 0, ng: 0});
     s.total++;
     const t = last[a['キー']];
-    if (!t) { if (d >= CONFIG.TRACK_FROM) s.todo++; } else if (t['結果'] === '否') s.ng++;
+    if (!t) { if (d >= cfg_('TRACK_FROM')) s.todo++; } else if (t['結果'] === '否') s.ng++;
   });
   return Object.keys(m).sort().map(k => m[k]);
 }
@@ -241,11 +241,11 @@ function apiDay(date) {
 
 /** 今日〜N日後に出荷するのに、良の記録がないアーム（運用開始日より前の出荷は除く） */
 function apiUnchecked(daysAhead) {
-  const today = today_(), to = shiftDate_(today, daysAhead || CONFIG.ALERT_DAYS_AHEAD);
+  const today = today_(), to = shiftDate_(today, daysAhead || cfgNum_('ALERT_DAYS_AHEAD'));
   return uncheckedBetween_(today, to);
 }
 function uncheckedBetween_(from, to) {
-  if (from < CONFIG.TRACK_FROM) from = CONFIG.TRACK_FROM;
+  if (from < cfg_('TRACK_FROM')) from = cfg_('TRACK_FROM');
   const last = latestTaps_(loadTaps_());
   return loadArms_().filter(a => a['出荷日'] >= from && a['出荷日'] <= to && !(last[a['キー']] && last[a['キー']]['結果'] === '良'))
     .map(a => armView_(a, last[a['キー']]))
