@@ -1,10 +1,41 @@
 /**
  * Webアプリ本体と、画面から呼ぶAPI（google.script.run）
  */
-function doGet() {
+function doGet(e) {
+  const fn = e && e.parameter && e.parameter.fn;
+  if (fn) return runFn_(fn, e.parameter.arg);
   return HtmlService.createTemplateFromFile('index').evaluate()
     .setTitle('アーム トレーサビリティ')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
+}
+
+// CLI（gas-run.sh）から ?fn=名前 で実行できる関数。ここに無いものは動かさない
+const CLI_FUNCTIONS = {
+  healthCheck: () => healthCheck(),
+  importLatest: () => importLatest(),
+  apiDays: () => apiDays(),
+  apiUnchecked: () => apiUnchecked().length,
+  apiSearch: q => apiSearch(q)
+};
+function runFn_(fn, arg) {
+  let body;
+  if (!Object.prototype.hasOwnProperty.call(CLI_FUNCTIONS, fn)) body = {ok: false, error: 'Unknown function: ' + fn, allowed: Object.keys(CLI_FUNCTIONS)};
+  else {
+    try { body = {ok: true, function: fn, result: CLI_FUNCTIONS[fn](arg) || null}; }
+    catch (err) { body = {ok: false, function: fn, error: String(err && err.message || err), stack: err && err.stack}; }
+  }
+  return ContentService.createTextOutput(JSON.stringify(body)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** 設定とデータの状態確認 */
+function healthCheck() {
+  const ss = ss_();
+  const counts = {};
+  Object.keys(CONFIG.SHEETS).forEach(k => { const sh = ss.getSheetByName(CONFIG.SHEETS[k]); counts[CONFIG.SHEETS[k]] = sh ? sh.getLastRow() - 1 : 'なし'; });
+  const files = [];
+  const it = DriveApp.getFolderById(cfg_('INBOX_FOLDER_ID')).getFiles();
+  while (it.hasNext()) files.push(it.next().getName());
+  return {ss: ss.getName(), counts: counts, inbox: files, apiKey: !!PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY'), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
 }
 
 /** 初回だけ実行：台帳スプレッドシートとフォルダを作る */
