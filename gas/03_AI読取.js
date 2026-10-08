@@ -50,7 +50,7 @@ function apiRead(orig, enh, last) {
   const sure = isSure_(top);
   let pick = sure ? {index: 0, confidence: '高', reason: '1回目で一致'} : null;
   // 2回目は時間に余裕があるときだけ（無ければ候補一覧から選んでもらう）
-  if (!sure && top.length && timeLeft_() > 22000) {
+  if (!sure && top.length && cfg_('AI_SECOND_PASS') === 'する' && timeLeft_() > 22000) {
     try {
       const r2 = callAI_(p2Prompt_(top), imgs, P2_SCHEMA);
       const i = 'ABCDE'.indexOf(r2.choice);

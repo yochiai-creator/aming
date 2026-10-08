@@ -34,6 +34,7 @@ const CONFIG = {
   // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
   AI_PROVIDER: 'gemini',
   GEMINI_MODEL: 'gemini-3.8-flash',
+  AI_SECOND_PASS: 'しない',
   GEMINI_FALLBACK: 'gemini-3.6-flash,gemini-3.5-flash-lite',
   CLAUDE_MODEL: 'claude-opus-5-5',
   CLAUDE_EFFORT: 'medium',
@@ -63,6 +64,7 @@ const TRACK_CHANGE_COLS = DATE_COLS.concat(['出荷先', '建機号機']);
 const SETTINGS = [
   ['AI_PROVIDER', 'AI読取', 'gemini か claude'],
   ['GEMINI_MODEL', 'Geminiモデル', '例 gemini-3.8-flash'],
+  ['AI_SECOND_PASS', 'AI読取2回目', 'する／しない。「する」だと候補と写真を見比べて精度は上がるが、待ち時間が倍になる'],
   ['GEMINI_FALLBACK', 'Gemini予備モデル', '本命が混雑・回数制限のとき順に試す。カンマ区切り'],
   ['CLAUDE_MODEL', 'Claudeモデル', 'AI読取が claude のとき'],
   ['TRACK_FROM', '運用開始日', 'これより前に出荷したアームは未チェック扱いにしない（yyyy/MM/dd）'],
@@ -486,7 +488,7 @@ function apiRead(orig, enh, last) {
   const sure = isSure_(top);
   let pick = sure ? {index: 0, confidence: '高', reason: '1回目で一致'} : null;
   // 2回目は時間に余裕があるときだけ（無ければ候補一覧から選んでもらう）
-  if (!sure && top.length && timeLeft_() > 22000) {
+  if (!sure && top.length && cfg_('AI_SECOND_PASS') === 'する' && timeLeft_() > 22000) {
     try {
       const r2 = callAI_(p2Prompt_(top), imgs, P2_SCHEMA);
       const i = 'ABCDE'.indexOf(r2.choice);

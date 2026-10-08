@@ -284,7 +284,16 @@ h1{font-size:1.9rem}
 const $ = id => document.getElementById(id);
 const EXC_SVG = '<svg class="exc bp" viewBox="0 0 360 170" aria-hidden="true">\n  <defs>\n    <pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0 V4" stroke="#3FE0EA" stroke-width=".6" opacity=".55"/></pattern>\n    <pattern id="ghatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0 V5" stroke="#3FE0EA" stroke-width=".5" opacity=".35"/></pattern>\n    <marker id="ar" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L6 3 L0 6 z" fill="#3FE0EA"/></marker>\n  </defs>\n  <g class="ln">\n    <!-- 地面 -->\n    <path d="M14 150 H346"/>\n    <rect x="14" y="150" width="332" height="6" fill="url(#ghatch)" stroke="none"/>\n    <!-- 足回り -->\n    <path d="M70 130 H150 A10 10 0 0 1 150 150 H70 A10 10 0 0 1 70 130 Z"/>\n    <path d="M72 134 H148 A6 6 0 0 1 148 146 H72 A6 6 0 0 1 72 134 Z" class="thin trk-tread" stroke-dasharray="3 2"/>\n    <circle cx="70" cy="140" r="7"/><circle cx="150" cy="140" r="6"/>\n    <circle cx="92" cy="146" r="2.5" class="thin"/><circle cx="110" cy="146" r="2.5" class="thin"/><circle cx="128" cy="146" r="2.5" class="thin"/>\n    <path d="M100 130 V124 H124 V130" class="thin"/>\n    <!-- 上部旋回体 -->\n    <path d="M44 104 Q44 96 52 96 H80 V124 H52 Q44 124 44 116 Z" fill="url(#hatch)"/>\n    <path d="M80 96 H150 L156 102 V124 H80 Z"/>\n    <path d="M86 102 H112 M86 106 H112 M86 110 H112" class="thin"/>\n    <path d="M80 118 H156" class="thin"/>\n    <!-- キャブ -->\n    <path d="M118 96 V64 H138 Q144 64 146 70 L152 96"/>\n    <path d="M122 92 V68 H137 Q141 68 142 72 L147 92 Z" class="thin"/>\n    <path d="M120 80 H149" class="thin"/>\n    <!-- 全高の寸法線 -->\n    <path d="M30 150 V64" class="dim" marker-start="url(#ar)" marker-end="url(#ar)"/>\n    <path d="M26 64 H116" class="ext"/>\n    <text x="22" y="110" class="tx" transform="rotate(-90 22 110)">2,950</text>\n    <!-- 全長（足回り）の寸法線 -->\n    <path d="M60 162 H160" class="dim" marker-start="url(#ar)" marker-end="url(#ar)"/>\n    <text x="96" y="168" class="tx">4,450</text>\n    <text x="60" y="90" class="tx">UPPER</text>\n  </g>\n  <!-- 作業機（実機比率：ブーム5.7m・アーム2.9m） -->\n  <g class="boom">\n    <g class="ln">\n      <path d="M136 108 Q168 60 222 46 L232 58 Q184 74 148 114 Z"/>\n      <path d="M144 106 Q174 68 226 52" class="thin" stroke-dasharray="6 3"/>\n      <!-- ブームシリンダー -->\n      <path d="M122 118 L166 82" class="cyl"/>\n      <path d="M156 90 L176 74" class="thin"/>\n    </g>\n    <g class="cmark"><circle cx="142" cy="110" r="3.5"/><path d="M136 110 H148 M142 104 V116"/></g>\n    <g class="arm">\n      <g class="ln">\n        <!-- アームシリンダー -->\n        <path d="M194 62 L220 44" class="cyl"/>\n        <path d="M212 50 L226 40" class="thin"/>\n      </g>\n      <g class="ln armln"><path class="armpart" d="M220 42 L234 46 L247 104 L236 110 Z"/></g>\n      <g class="cmark"><circle cx="228" cy="54" r="3.5"/><path d="M222 54 H234 M228 48 V60"/></g>\n      <g class="bkt">\n        <g class="ln">\n          <path d="M235 103 Q259 104 263 126 Q251 137 229 131 L235 118 Z"/>\n          <path d="M229 131 L225 136 M237 134 L234 139 M245 135 L243 140 M253 133 L252 138" class="thin"/>\n        </g>\n        <g class="cmark"><circle cx="241" cy="107" r="3"/><path d="M236 107 H246 M241 102 V112"/></g>\n      </g>\n    </g>\n  </g>\n  <g class="ln"><path d="M290 80 H346" class="leader"/><text x="318" y="76" class="tx hot">ARM</text><text x="168" y="58" class="tx">BOOM</text><text x="300" y="146" class="tx">BUCKET</text></g>\n  <text x="14" y="12" class="tx ttl">SIDE ELEVATION  /  20t CLASS</text>\n</svg>';
 document.querySelectorAll("[data-exc]").forEach(el => { el.outerHTML = EXC_SVG; });
-function busy(on, title, sub) { $("busy").classList.toggle("hidden", !on); if (on) { $("busyT").textContent = title || "WORKING"; $("busyS").textContent = sub || ""; } }
+let busyTimer = null;
+function busy(on, title, sub) {
+  $("busy").classList.toggle("hidden", !on);
+  clearInterval(busyTimer);
+  if (!on) return;
+  $("busyT").textContent = title || "WORKING";
+  const t0 = Date.now(), base = sub || "";
+  const tick = () => { const sec = Math.floor((Date.now() - t0) / 1000); $("busyS").textContent = `${base}　経過 ${sec}秒`; };
+  tick(); busyTimer = setInterval(tick, 1000);
+}
 const run = (fn, ...args) => new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const errMsg = e => (e && e.message || String(e)).replace(/^Error:\s*/, "");
@@ -497,7 +506,7 @@ async function prepare(cv) {
   const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(cv, 0, 0, w, h);
   const orig = await toBlob(c, 0.85);
   // 凹凸強調：小さいぼかし（ノイズ除去）− 大きいぼかし（背景）＝打刻の影 → 伸ばす
-  const f = blurred(c, w, h, Math.max(2, h / 120)), bl = blurred(c, w, h, Math.max(12, h / 12));
+  const f = blurred(c, w, h, Math.max(2.5, h / 70)), bl = blurred(c, w, h, Math.max(14, h / 8));
   const out = x.createImageData(w, h), o = out.data, diff = new Float32Array(w * h), vals = [];
   for (let i = 0, p = 0; i < f.length; i += 4, p++) { const v = gray(f, i) - gray(bl, i); diff[p] = v; if (p % 5 === 0) vals.push(v); }
   vals.sort((a, b) => a - b);
@@ -596,7 +605,7 @@ async function readCanvas(cv) {
   $("resultSec").scrollIntoView({behavior: "smooth", block: "start"});
   setBusy(true);
   $("status").textContent = "刻印を読み取り中…（10〜30秒）";
-  busy(true, "READING", "刻印を読み取り中…（10〜30秒）");
+  busy(true, "READING", "AIが刻印を読み取り中（20〜40秒かかることがあります）");
   try {
     const token = ++readToken;
     const r = await Promise.race([
