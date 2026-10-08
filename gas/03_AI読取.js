@@ -34,12 +34,28 @@ function p2Prompt_(top) {
  * 戻り値 {read:{zuban,goki,seizo,kensa,fixed}, cands:[armView+cost+seq], pick:{index,confidence,reason}|null, sure, photoId}
  */
 // 読取全体の締め切り（google.script.run が長く固まらないように）
-let READ_DEADLINE = 0;
+let READ_DEADLINE = 0, READ_LOG = [];
+function rlog_(m) { READ_LOG.push(Utilities.formatDate(new Date(), 'Asia/Tokyo', 'HH:mm:ss') + ' ' + m); console.log(m); }
 function timeLeft_() { return READ_DEADLINE ? READ_DEADLINE - Date.now() : 1e9; }
 
 function apiRead(orig, enh, last) {
-  READ_DEADLINE = Date.now() + 50000;
+  READ_DEADLINE = Date.now() + 50000; READ_LOG = [];
+  const t0 = Date.now();
+  let res = null, err = null;
+  try { res = readCore_(orig, enh, last); return res; }
+  catch (e) { err = e; throw e; }
+  finally {
+    try {
+      appendRows_(CONFIG.SHEETS.READLOG, [[Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss'), ((Date.now() - t0) / 1000).toFixed(1),
+        err ? 'エラー: ' + String(err.message || err).slice(0, 200) : (res.sure ? '確定' : '候補'), res ? res.read.zuban + ' / ' + res.read.goki : '',
+        res && res.cands[0] ? res.cands[0].z + ' ' + res.cands[0].g : '', READ_LOG.join('\n').slice(0, 3000)]]);
+    } catch (e2) { console.warn(e2); }
+  }
+}
+
+function readCore_(orig, enh, last) {
   const photoId = savePhoto_(orig);
+  rlog_('写真保存 ' + photoId);
   const imgs = [{data: FONT_REF_PNG, mime: 'image/png'}, orig, enh];
   const r1 = callAI_(P1, imgs, P1_SCHEMA);
   const fz = fitZuban_(r1.zuban), g = fitGoki_(r1.goki);
@@ -91,7 +107,7 @@ function callGemini_(prompt, imgsB64, schema) {
         headers: {'x-goog-api-key': key}, payload: payload
       });
       const code = res.getResponseCode();
-      console.log('Gemini %s → %s（%s秒）', model, code, ((Date.now() - t0) / 1000).toFixed(1));
+      rlog_('Gemini ' + model + ' → ' + code + '（' + ((Date.now() - t0) / 1000).toFixed(1) + '秒）');
       let json = {};
       try { json = JSON.parse(res.getContentText() || '{}'); } catch (e) {}
       const msg = (json.error && (json.error.status || '') + ' ' + (json.error.message || '')) || '';
@@ -102,7 +118,7 @@ function callGemini_(prompt, imgsB64, schema) {
         return JSON.parse(cand.content.parts.map(p => p.text || '').join(''));
       }
       last = model + ' → ' + code + ' ' + msg.slice(0, 160);
-      console.warn('Gemini %s', last);
+      rlog_('NG ' + last);
       // thinkingLevel を受け付けないモデルなら外してやり直す
       if (code === 400 && /thinking/i.test(msg) && gen.thinkingConfig) { delete gen.thinkingConfig; payload = JSON.stringify(body); attempt--; continue; }
       if (code === 400 || code === 401 || code === 403) throw new Error('AI読取エラー（' + last + '）');
