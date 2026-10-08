@@ -453,7 +453,12 @@ function p2Prompt_(top) {
  * 画面から呼ぶ。orig/enh は base64(JPEG)。last は直前に記録したアーム {z,g}
  * 戻り値 {read:{zuban,goki,seizo,kensa,fixed}, cands:[armView+cost+seq], pick:{index,confidence,reason}|null, sure, photoId}
  */
+// 読取全体の締め切り（google.script.run が長く固まらないように）
+let READ_DEADLINE = 0;
+function timeLeft_() { return READ_DEADLINE ? READ_DEADLINE - Date.now() : 1e9; }
+
 function apiRead(orig, enh, last) {
+  READ_DEADLINE = Date.now() + 75000;
   const photoId = savePhoto_(orig);
   const imgs = [{data: FONT_REF_PNG, mime: 'image/png'}, orig, enh];
   const r1 = callAI_(P1, imgs, P1_SCHEMA);
@@ -464,7 +469,8 @@ function apiRead(orig, enh, last) {
   const top = rankArms_(fz.z, g, arms, {today: today_(), last: last}).slice(0, 5);
   const sure = isSure_(top);
   let pick = sure ? {index: 0, confidence: '高', reason: '1回目で一致'} : null;
-  if (!sure && top.length) {
+  // 2回目は時間に余裕があるときだけ（無ければ候補一覧から選んでもらう）
+  if (!sure && top.length && timeLeft_() > 30000) {
     try {
       const r2 = callAI_(p2Prompt_(top), imgs, P2_SCHEMA);
       const i = 'ABCDE'.indexOf(r2.choice);
@@ -498,12 +504,15 @@ function callGemini_(prompt, imgsB64, schema) {
   let last = '';
   for (const model of models) {
     for (let attempt = 0; attempt < 3; attempt++) {
+      if (timeLeft_() < 12000) throw new Error('時間切れです。撮り直すか、下の「探す」で手入力してください（' + (last || model) + '）');
       if (attempt) Utilities.sleep(1500 * attempt);
+      const t0 = Date.now();
       const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
         method: 'post', contentType: 'application/json', muteHttpExceptions: true,
         headers: {'x-goog-api-key': key}, payload: payload
       });
       const code = res.getResponseCode();
+      console.log('Gemini %s → %s（%s秒）', model, code, ((Date.now() - t0) / 1000).toFixed(1));
       let json = {};
       try { json = JSON.parse(res.getContentText() || '{}'); } catch (e) {}
       const msg = (json.error && (json.error.status || '') + ' ' + (json.error.message || '')) || '';

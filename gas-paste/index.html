@@ -201,6 +201,7 @@ ul.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--edge);margi
 #busy .exc .boom,#busy .exc .arm,#busy .exc .bkt{animation-duration:2.6s}
 #busy{background:linear-gradient(rgba(63,224,234,.06) 1px,transparent 1px) 0 0/16px 16px,linear-gradient(90deg,rgba(63,224,234,.06) 1px,transparent 1px) 0 0/16px 16px,radial-gradient(ellipse at center,#0E2A31 0%,#05090B 75%)!important}
 #busy p{margin:0;font-family:"Orbitron","Share Tech Mono",monospace;letter-spacing:.3em;color:var(--accent-hi);text-shadow:0 0 10px rgba(0,200,215,.6);font-size:1rem}
+#busy #busyCancel{margin-top:18px;min-width:140px}
 #busy small{font-family:"Share Tech Mono","BIZ UDPGothic",monospace;color:var(--sub);letter-spacing:.06em}
 #busy .ground{width:min(86vw,420px);height:8px;margin-top:-18px;background:repeating-linear-gradient(-45deg,#F5B800 0 10px,#111 10px 20px)}
 h1{font-size:1.9rem}
@@ -266,7 +267,7 @@ h1{font-size:1.9rem}
   <div id="cropStage"><div id="cropWrap"><img id="cropImg" alt="切り抜く写真"><div id="cropBox"><div class="h tl" data-h="tl"></div><div class="h tr" data-h="tr"></div><div class="h bl" data-h="bl"></div><div class="h br" data-h="br"></div></div></div></div>
   <div class="bar"><button class="btn" id="cropCancel" type="button">やめる</button><button class="btn go" id="cropOk" type="button">この範囲で読む</button></div>
 </div>
-<div id="busy" class="hidden"><div data-exc></div><p id="busyT">READING</p><small id="busyS"></small></div>
+<div id="busy" class="hidden"><div data-exc></div><p id="busyT">READING</p><small id="busyS"></small><button type="button" class="btn sec mini" id="busyCancel">やめる</button></div>
 <div id="toast"></div>
 
 <script>
@@ -283,6 +284,7 @@ const ls = {get: k => { try { return localStorage.getItem(k); } catch (e) { retu
 
 let boot = {people: [], days: [], today: ""};
 let me = ls.get("trace.me") || "";
+let readToken = 0, cancelRead = () => {};
 let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastRead = "";
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
@@ -566,7 +568,12 @@ async function readCanvas(cv) {
   $("status").textContent = "刻印を読み取り中…（10〜30秒）";
   busy(true, "READING", "刻印を読み取り中…（10〜30秒）");
   try {
-    const r = await run("apiRead", await b64(imgs.orig), await b64(imgs.enh), lastArm);
+    const token = ++readToken;
+    const r = await Promise.race([
+      run("apiRead", await b64(imgs.orig), await b64(imgs.enh), lastArm),
+      new Promise((_, rej) => { setTimeout(() => rej(new Error("時間切れ（100秒）。撮り直すか、下の「探す」で手入力してください")), 100000); cancelRead = () => rej(new Error("読み取りをやめました")); })
+    ]);
+    if (token !== readToken) return;
     photoId = r.photoId || "";
     lastRead = `${r.read.zuban} / ${r.read.seizo || "?"}-${r.read.goki || "?"} ${r.read.kensa || ""}`.trim();
     $("status").textContent = "";
@@ -604,6 +611,7 @@ $("q").addEventListener("input", () => {
 $("shootBtn").onclick = async () => { if (!(await openViewfinder())) $("cam").click(); };
 $("pickBtn").onclick = () => $("pick").click();
 $("vfCancel").onclick = closeViewfinder;
+$("busyCancel").onclick = () => { readToken++; cancelRead(); busy(false); };
 $("vfShot").onclick = () => { const c = shotFromViewfinder(); closeViewfinder(); if (c) readCanvas(c); };
 ["cam", "pick"].forEach(id => $(id).onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; const c = await cropFromFile(f); if (c) readCanvas(c); });
 
