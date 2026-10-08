@@ -38,7 +38,7 @@ let READ_DEADLINE = 0;
 function timeLeft_() { return READ_DEADLINE ? READ_DEADLINE - Date.now() : 1e9; }
 
 function apiRead(orig, enh, last) {
-  READ_DEADLINE = Date.now() + 75000;
+  READ_DEADLINE = Date.now() + 50000;
   const photoId = savePhoto_(orig);
   const imgs = [{data: FONT_REF_PNG, mime: 'image/png'}, orig, enh];
   const r1 = callAI_(P1, imgs, P1_SCHEMA);
@@ -50,7 +50,7 @@ function apiRead(orig, enh, last) {
   const sure = isSure_(top);
   let pick = sure ? {index: 0, confidence: '高', reason: '1回目で一致'} : null;
   // 2回目は時間に余裕があるときだけ（無ければ候補一覧から選んでもらう）
-  if (!sure && top.length && timeLeft_() > 30000) {
+  if (!sure && top.length && timeLeft_() > 22000) {
     try {
       const r2 = callAI_(p2Prompt_(top), imgs, P2_SCHEMA);
       const i = 'ABCDE'.indexOf(r2.choice);
@@ -75,10 +75,9 @@ function callGemini_(prompt, imgsB64, schema) {
   if (!key) throw new Error('GEMINI_API_KEY が未設定です');
   const parts = imgsB64.map(img_).map(i => ({inline_data: {mime_type: i.mime, data: i.data}}));
   parts.push({text: prompt});
-  const payload = JSON.stringify({
-    contents: [{role: 'user', parts: parts}],
-    generationConfig: {responseMimeType: 'application/json', responseSchema: geminiSchema_(schema)}
-  });
+  const gen = {responseMimeType: 'application/json', responseSchema: geminiSchema_(schema), thinkingConfig: {thinkingLevel: 'low'}};
+  const body = {contents: [{role: 'user', parts: parts}], generationConfig: gen};
+  let payload = JSON.stringify(body);
   // 本命モデル → 予備モデルの順。混雑(429/500/503)は同じモデルで2回まで待ってやり直す
   const models = [cfg_('GEMINI_MODEL')].concat(cfgList_('GEMINI_FALLBACK')).filter((m, i, arr) => m && arr.indexOf(m) === i);
   let last = '';
@@ -104,6 +103,8 @@ function callGemini_(prompt, imgsB64, schema) {
       }
       last = model + ' → ' + code + ' ' + msg.slice(0, 160);
       console.warn('Gemini %s', last);
+      // thinkingLevel を受け付けないモデルなら外してやり直す
+      if (code === 400 && /thinking/i.test(msg) && gen.thinkingConfig) { delete gen.thinkingConfig; payload = JSON.stringify(body); attempt--; continue; }
       if (code === 400 || code === 401 || code === 403) throw new Error('AI読取エラー（' + last + '）');
       if (code === 404) break;                                        // モデル名が無い → 次のモデル
       if (code === 429 && /quota|exhausted|limit/i.test(msg)) break; // 回数制限 → 次のモデル

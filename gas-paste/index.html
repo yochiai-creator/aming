@@ -457,29 +457,36 @@ function toBlob(c, q) { return new Promise(r => c.toBlob(r, "image/jpeg", q || 0
 function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
 function b64(blob) { return new Promise(r => { const f = new FileReader(); f.onload = () => r(String(f.result).split(",")[1]); f.readAsDataURL(blob); }); }
 // 切り抜いた canvas → 送信用2枚（元・凹凸強調）
+// iPhoneのSafariは canvas の filter（blur）が効かないので、ぼかしは「縮小して拡大し直す」で作る
+function blurred(src, w, h, factor) {
+  const sw = Math.max(4, Math.round(w / factor)), sh = Math.max(4, Math.round(h / factor));
+  const t = document.createElement("canvas"); t.width = sw; t.height = sh;
+  const tx = t.getContext("2d"); tx.imageSmoothingEnabled = true; tx.imageSmoothingQuality = "high"; tx.drawImage(src, 0, 0, sw, sh);
+  const o = document.createElement("canvas"); o.width = w; o.height = h;
+  const ox = o.getContext("2d"); ox.imageSmoothingEnabled = true; ox.imageSmoothingQuality = "high"; ox.drawImage(t, 0, 0, w, h);
+  return ox.getImageData(0, 0, w, h).data;
+}
+const gray = (d, i) => 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
 async function prepare(cv) {
-  const target = 1400, sc = Math.min(2.5, target / cv.width);
+  const target = 1100, sc = Math.min(2, target / cv.width);
   const w = Math.round(cv.width * sc), h = Math.round(cv.height * sc);
   const c = document.createElement("canvas"); c.width = w; c.height = h;
   const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(cv, 0, 0, w, h);
-  const orig = await toBlob(c);
-  // 凹凸強調：細かいノイズを先にぼかして消し、大きくぼかした背景との差（打刻の影）だけを伸ばす
-  const sm = document.createElement("canvas"); sm.width = w; sm.height = h;
-  const smx = sm.getContext("2d"); smx.filter = `blur(${Math.max(1.5, h / 140)}px) grayscale(1)`; smx.drawImage(c, 0, 0);
-  const bg = document.createElement("canvas"); bg.width = w; bg.height = h;
-  const bgx = bg.getContext("2d"); bgx.filter = `blur(${Math.max(8, Math.round(h / 20))}px) grayscale(1)`; bgx.drawImage(c, 0, 0);
-  const f = smx.getImageData(0, 0, w, h).data, bl = bgx.getImageData(0, 0, w, h).data;
+  const orig = await toBlob(c, 0.85);
+  // 凹凸強調：小さいぼかし（ノイズ除去）− 大きいぼかし（背景）＝打刻の影 → 伸ばす
+  const f = blurred(c, w, h, Math.max(2, h / 120)), bl = blurred(c, w, h, Math.max(12, h / 12));
   const out = x.createImageData(w, h), o = out.data, diff = new Float32Array(w * h), vals = [];
-  for (let i = 0, p = 0; i < f.length; i += 4, p++) { const v = f[i] - bl[i]; diff[p] = v; if (p % 5 === 0) vals.push(v); }
+  for (let i = 0, p = 0; i < f.length; i += 4, p++) { const v = gray(f, i) - gray(bl, i); diff[p] = v; if (p % 5 === 0) vals.push(v); }
   vals.sort((a, b) => a - b);
-  const lo = vals[Math.floor(vals.length * 0.02)], hi = vals[Math.floor(vals.length * 0.98)], k = 255 / ((hi - lo) || 1);
+  const lo = vals[Math.floor(vals.length * 0.02)], hi = vals[Math.floor(vals.length * 0.98)];
+  const span = Math.max(4, hi - lo); // 差がほぼ無い写真でも真っ黒にしない
   for (let i = 0, p = 0; i < o.length; i += 4, p++) {
-    const t = Math.max(0, Math.min(1, (diff[p] - lo) * k / 255));
-    const v = 255 * (t * t * (3 - 2 * t)); // なめらかに強調（ザラつきを出さない）
+    const t = Math.max(0, Math.min(1, (diff[p] - lo) / span));
+    const v = 255 * (t * t * (3 - 2 * t));
     o[i] = o[i+1] = o[i+2] = v; o[i+3] = 255;
   }
   x.putImageData(out, 0, 0);
-  return {orig, enh: await toBlob(c)};
+  return {orig, enh: await toBlob(c, 0.85)};
 }
 
 /* ---------- ファインダー（枠つきカメラ） ---------- */
