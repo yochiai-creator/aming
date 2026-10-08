@@ -23,7 +23,7 @@
 - タップ記録は**追記のみ**。訂正は取消フラグ→再記録。最新の有効記録がそのアームの状態
 - ねじ穴数は「穴数マスタ」に図番ごとに記憶し、次から自動入力。「全数OK」＝良＋処置数=ねじ穴数
 - 実データでのテスト：`test/fixtures/ship_values.json`（.gitignore済・コミットしない）があれば `npm test` で解析も確認
-- AI読取は `AI_PROVIDER`（既定 gemini / `gemini-3.8-flash`）。キーはスクリプトプロパティ `GEMINI_API_KEY`（claude なら `ANTHROPIC_API_KEY`）。ID類は空なら `setup()` がスクリプトプロパティに保存
+- AI読取は `AI_PROVIDER`（既定 gemini / `gemini-3.8-flash`、予備 `GEMINI_FALLBACK`＝3.6-flash→3.5-flash-lite。429/500/503は1.5s・3sで再試行、404や回数制限は次のモデルへ。エラー文は画面に出す）。凹凸強調は小ぼかしでノイズ除去→大ぼかし背景との差→2/98%で伸長＋smoothstep。キーはスクリプトプロパティ `GEMINI_API_KEY`（claude なら `ANTHROPIC_API_KEY`）。ID類は空なら `setup()` がスクリプトプロパティに保存
 
 ### 作成済みのGoogle側（2026-10-07、Driveコネクタで作成。IDは `01_設定.js` に埋め込み済み → `setup()` 不要）
 - フォルダ「aming」 https://drive.google.com/drive/folders/1qEAxXRBG7y0edZhMCNvVLe4QjBjlIZw8（Apps Scriptプロジェクト「aming」もここ）

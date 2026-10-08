@@ -34,6 +34,7 @@ const CONFIG = {
   // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
   AI_PROVIDER: 'gemini',
   GEMINI_MODEL: 'gemini-3.8-flash',
+  GEMINI_FALLBACK: 'gemini-3.6-flash,gemini-3.5-flash-lite',
   CLAUDE_MODEL: 'claude-opus-5-5',
   CLAUDE_EFFORT: 'medium',
 
@@ -62,6 +63,7 @@ const TRACK_CHANGE_COLS = DATE_COLS.concat(['出荷先', '建機号機']);
 const SETTINGS = [
   ['AI_PROVIDER', 'AI読取', 'gemini か claude'],
   ['GEMINI_MODEL', 'Geminiモデル', '例 gemini-3.8-flash'],
+  ['GEMINI_FALLBACK', 'Gemini予備モデル', '本命が混雑・回数制限のとき順に試す。カンマ区切り'],
   ['CLAUDE_MODEL', 'Claudeモデル', 'AI読取が claude のとき'],
   ['TRACK_FROM', '運用開始日', 'これより前に出荷したアームは未チェック扱いにしない（yyyy/MM/dd）'],
   ['ALERT_TO', '通知メール宛先', 'カンマ区切りで複数可。空なら自分'],
@@ -487,21 +489,38 @@ function callGemini_(prompt, imgsB64, schema) {
   if (!key) throw new Error('GEMINI_API_KEY が未設定です');
   const parts = imgsB64.map(img_).map(i => ({inline_data: {mime_type: i.mime, data: i.data}}));
   parts.push({text: prompt});
-  const body = {
+  const payload = JSON.stringify({
     contents: [{role: 'user', parts: parts}],
     generationConfig: {responseMimeType: 'application/json', responseSchema: geminiSchema_(schema)}
-  };
-  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + cfg_('GEMINI_MODEL') + ':generateContent', {
-    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-    headers: {'x-goog-api-key': key},
-    payload: JSON.stringify(body)
   });
-  const code = res.getResponseCode(), json = JSON.parse(res.getContentText() || '{}');
-  if (code === 429 || code === 503) throw new Error('混み合っています。少し待って撮り直してください');
-  if (code !== 200) throw new Error('AI読取エラー ' + code + ': ' + (json.error && json.error.message || ''));
-  const cand = (json.candidates || [])[0];
-  if (!cand || !cand.content) throw new Error('AIが読取を返しませんでした（' + (cand && cand.finishReason || (json.promptFeedback && json.promptFeedback.blockReason) || '不明') + '）');
-  return JSON.parse(cand.content.parts.map(p => p.text || '').join(''));
+  // 本命モデル → 予備モデルの順。混雑(429/500/503)は同じモデルで2回まで待ってやり直す
+  const models = [cfg_('GEMINI_MODEL')].concat(cfgList_('GEMINI_FALLBACK')).filter((m, i, arr) => m && arr.indexOf(m) === i);
+  let last = '';
+  for (const model of models) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) Utilities.sleep(1500 * attempt);
+      const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
+        method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        headers: {'x-goog-api-key': key}, payload: payload
+      });
+      const code = res.getResponseCode();
+      let json = {};
+      try { json = JSON.parse(res.getContentText() || '{}'); } catch (e) {}
+      const msg = (json.error && (json.error.status || '') + ' ' + (json.error.message || '')) || '';
+      if (code === 200) {
+        const cand = (json.candidates || [])[0];
+        if (!cand || !cand.content) throw new Error('AIが読取を返しませんでした（' + (cand && cand.finishReason || (json.promptFeedback && json.promptFeedback.blockReason) || '不明') + '）');
+        if (model !== models[0]) console.log('予備モデルで読取: %s', model);
+        return JSON.parse(cand.content.parts.map(p => p.text || '').join(''));
+      }
+      last = model + ' → ' + code + ' ' + msg.slice(0, 160);
+      console.warn('Gemini %s', last);
+      if (code === 400 || code === 401 || code === 403) throw new Error('AI読取エラー（' + last + '）');
+      if (code === 404) break;                                        // モデル名が無い → 次のモデル
+      if (code === 429 && /quota|exhausted|limit/i.test(msg)) break; // 回数制限 → 次のモデル
+    }
+  }
+  throw new Error('混み合っています。少し待って撮り直してください（' + last + '）');
 }
 // JSON Schema → Gemini の responseSchema（OpenAPI形式。additionalProperties は使えない）
 function geminiSchema_(s) {

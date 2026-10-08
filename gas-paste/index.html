@@ -461,15 +461,22 @@ async function prepare(cv) {
   const c = document.createElement("canvas"); c.width = w; c.height = h;
   const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(cv, 0, 0, w, h);
   const orig = await toBlob(c);
-  const src = x.getImageData(0, 0, w, h);
-  const b = document.createElement("canvas"); b.width = w; b.height = h;
-  const bx = b.getContext("2d"); bx.filter = `blur(${Math.max(8, Math.round(h / 25))}px) grayscale(1)`; bx.drawImage(c, 0, 0);
-  const bl = bx.getImageData(0, 0, w, h).data, s = src.data, diff = new Float32Array(w * h), vals = [];
-  for (let i = 0, p = 0; i < s.length; i += 4, p++) { const v = (0.299 * s[i] + 0.587 * s[i+1] + 0.114 * s[i+2]) - bl[i]; diff[p] = v; if (p % 7 === 0) vals.push(v); }
+  // 凹凸強調：細かいノイズを先にぼかして消し、大きくぼかした背景との差（打刻の影）だけを伸ばす
+  const sm = document.createElement("canvas"); sm.width = w; sm.height = h;
+  const smx = sm.getContext("2d"); smx.filter = `blur(${Math.max(1.5, h / 140)}px) grayscale(1)`; smx.drawImage(c, 0, 0);
+  const bg = document.createElement("canvas"); bg.width = w; bg.height = h;
+  const bgx = bg.getContext("2d"); bgx.filter = `blur(${Math.max(8, Math.round(h / 20))}px) grayscale(1)`; bgx.drawImage(c, 0, 0);
+  const f = smx.getImageData(0, 0, w, h).data, bl = bgx.getImageData(0, 0, w, h).data;
+  const out = x.createImageData(w, h), o = out.data, diff = new Float32Array(w * h), vals = [];
+  for (let i = 0, p = 0; i < f.length; i += 4, p++) { const v = f[i] - bl[i]; diff[p] = v; if (p % 5 === 0) vals.push(v); }
   vals.sort((a, b) => a - b);
-  const lo = vals[Math.floor(vals.length * 0.01)], hi = vals[Math.floor(vals.length * 0.99)], k = 255 / ((hi - lo) || 1);
-  for (let i = 0, p = 0; i < s.length; i += 4, p++) { const v = Math.max(0, Math.min(255, (diff[p] - lo) * k)); s[i] = s[i+1] = s[i+2] = v; }
-  x.putImageData(src, 0, 0);
+  const lo = vals[Math.floor(vals.length * 0.02)], hi = vals[Math.floor(vals.length * 0.98)], k = 255 / ((hi - lo) || 1);
+  for (let i = 0, p = 0; i < o.length; i += 4, p++) {
+    const t = Math.max(0, Math.min(1, (diff[p] - lo) * k / 255));
+    const v = 255 * (t * t * (3 - 2 * t)); // なめらかに強調（ザラつきを出さない）
+    o[i] = o[i+1] = o[i+2] = v; o[i+3] = 255;
+  }
+  x.putImageData(out, 0, 0);
   return {orig, enh: await toBlob(c)};
 }
 

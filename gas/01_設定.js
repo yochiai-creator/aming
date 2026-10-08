@@ -33,6 +33,7 @@ const CONFIG = {
   // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
   AI_PROVIDER: 'gemini',
   GEMINI_MODEL: 'gemini-3.8-flash',
+  GEMINI_FALLBACK: 'gemini-3.6-flash,gemini-3.5-flash-lite',
   CLAUDE_MODEL: 'claude-opus-5-5',
   CLAUDE_EFFORT: 'medium',
 
@@ -61,6 +62,7 @@ const TRACK_CHANGE_COLS = DATE_COLS.concat(['出荷先', '建機号機']);
 const SETTINGS = [
   ['AI_PROVIDER', 'AI読取', 'gemini か claude'],
   ['GEMINI_MODEL', 'Geminiモデル', '例 gemini-3.8-flash'],
+  ['GEMINI_FALLBACK', 'Gemini予備モデル', '本命が混雑・回数制限のとき順に試す。カンマ区切り'],
   ['CLAUDE_MODEL', 'Claudeモデル', 'AI読取が claude のとき'],
   ['TRACK_FROM', '運用開始日', 'これより前に出荷したアームは未チェック扱いにしない（yyyy/MM/dd）'],
   ['ALERT_TO', '通知メール宛先', 'カンマ区切りで複数可。空なら自分'],
