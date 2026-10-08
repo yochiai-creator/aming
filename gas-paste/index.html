@@ -96,7 +96,7 @@ textarea{min-height:64px}
 .st{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:700;padding:1px 8px;margin-left:8px;vertical-align:middle;font-family:"BIZ UDPGothic",sans-serif;letter-spacing:0;
   background:#080B0D;border:1px solid var(--edge)}
 .st::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor}
-.st.good{color:var(--ok)}.st.bad{color:var(--ng)}.st.todo{color:var(--warn)}
+.st.good{color:var(--ok)}.st.bad{color:var(--ng)}.st.todo{color:var(--warn)}.st.mid{color:var(--cyan)}.st.done{color:var(--sub)}
 .chip{font-size:.7rem;padding:0 6px;border:1px solid currentColor;color:var(--cyan);margin-left:6px;font-family:"BIZ UDPGothic",sans-serif;letter-spacing:0}
 .days{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px}
 .days button{flex:0 0 auto;padding:6px 12px;background:#0A0D0F;border:1px solid var(--edge);color:var(--steel);font-family:"Share Tech Mono","BIZ UDPGothic",monospace;font-weight:700;line-height:1.25;text-align:center}
@@ -212,6 +212,12 @@ h1{font-size:1.9rem}
 .photos img{display:block;width:100%;min-height:60px;filter:contrast(1.1)}
 .photos figcaption{display:flex;justify-content:space-between;align-items:center;font-family:"Share Tech Mono",monospace;font-size:.72rem;color:var(--sub);padding:2px 6px}
 .photos .del{color:var(--ng);font-size:.78rem}
+.purpose{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.purpose>span{font-family:"Share Tech Mono","BIZ UDPGothic",monospace;font-size:.8rem;color:var(--sub)}
+.purpose .seg button{min-width:0;padding:9px 12px;font-size:.88rem}
+.purpose .seg button.on{background:var(--accent);color:#fff;box-shadow:0 0 10px rgba(0,200,215,.45)}
+.goal{border-color:var(--accent);box-shadow:inset 0 0 22px rgba(0,200,215,.12)}
+#tapForm.focus{border-color:var(--accent);box-shadow:inset 0 0 22px rgba(0,200,215,.12)}
 </style>
 </head>
 <body>
@@ -233,6 +239,9 @@ h1{font-size:1.9rem}
   </nav>
 
   <div id="scanView">
+    <div class="purpose"><span>撮影の目的</span><div class="seg" id="purposeSeg">
+      <button type="button" data-act="purpose" data-v="塗装完了">塗装完了</button><button type="button" data-act="purpose" data-v="塗装後チェック">塗装後チェック</button><button type="button" data-act="purpose" data-v="出荷">出荷</button>
+    </div></div>
     <button class="shoot" id="shootBtn" type="button"><svg class="bucket" viewBox="0 0 34 26" fill="none" stroke="#fff" stroke-width="2.6"><path d="M2 8 V2 H9 M25 2 H32 V8 M32 18 V24 H25 M9 24 H2 V18"/><path d="M8 13 H26" stroke-width="1.6" opacity=".9"/></svg>刻印を撮影する<small>枠に図番と号機の2行を合わせる</small></button>
     <button class="shoot alt" id="pickBtn" type="button">写真を選んで枠で切り抜く</button>
     <input id="cam" type="file" accept="image/*" capture="environment" class="hidden">
@@ -285,14 +294,16 @@ const ls = {get: k => { try { return localStorage.getItem(k); } catch (e) { retu
 let boot = {people: [], days: [], today: ""};
 let me = ls.get("trace.me") || "";
 let readToken = 0, cancelRead = () => {};
+let purpose = ls.get("trace.purpose") || "塗装後チェック", scanPurpose = "";
+function syncPurpose() { document.querySelectorAll("#purposeSeg button").forEach(b => b.classList.toggle("on", b.dataset.v === purpose)); }
 let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastRead = "";
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
+const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
-  if (a.status === "良") return '<span class="st good">良</span>';
-  if (a.status === "否") return '<span class="st bad">否</span>';
-  return '<span class="st todo">未</span>';
+  const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
+  return `<span class="st ${STAGE_CLS[st] || "todo"}">${esc(st)}</span>`;
 }
 function armBtn(a, extra, cls) {
   return `<button type="button" class="arm ${cls || ""}" data-act="arm" data-k="${esc(a.key)}">
@@ -344,9 +355,10 @@ async function openArm(key, fromScan) {
   $("armView").innerHTML = '<section class="muted">読み込み中…</section>';
   try { armData = await run("apiArm", key); } catch (e) { $("armView").innerHTML = `<section>読み込めませんでした：${esc(errMsg(e))}</section>`; return; }
   if (!armData) { $("armView").innerHTML = "<section>台帳にありません</section>"; return; }
+  scanPurpose = fromScan ? purpose : "";
   if (!fromScan) photoId = "";
   else if (photoId) {
-    try { await run("apiLinkPhoto", photoId, key, lastRead); armData = await run("apiArm", key); } catch (e) { toast("写真のひも付けに失敗：" + errMsg(e)); }
+    try { await run("apiLinkPhoto", photoId, key, lastRead, purpose); armData = await run("apiArm", key); } catch (e) { toast("写真のひも付けに失敗：" + errMsg(e)); }
   }
   renderArm();
 }
@@ -366,8 +378,9 @@ function renderArm() {
       <dt>製缶図番</dt><dd class="mono">${esc(a.base || "-")}</dd>
     </dl>
   </section>
-  <section id="tapForm">
-    <h2>ねじ穴タップ チェック${photoId ? '<span class="chip">刻印写真つき</span>' : ""}</h2>
+  ${goalHtml(a)}
+  <section id="tapForm" class="${scanPurpose === "塗装後チェック" ? "focus" : ""}">
+    <h2>塗装後チェック（ねじ穴タップ）${photoId ? '<span class="chip">刻印写真つき</span>' : ""}</h2>
     <button type="button" class="btn ok" style="width:100%;min-height:56px;font-size:1.05rem" data-act="allok">全数OKで記録${a.holes ? `（${a.holes}穴）` : ""}</button>
     <div class="field"><label>結果</label><div class="seg"><button type="button" data-act="res" data-v="良" class="good">良</button><button type="button" data-act="res" data-v="否" class="bad">否</button></div></div>
     <div class="field"><label>ねじ穴数</label><input type="number" inputmode="numeric" min="0" id="fHoles" value="${esc(form.holes)}"><span class="muted">${a.holes ? "図番の記憶値" : "初回は入力（次から自動）"}</span></div>
@@ -378,7 +391,7 @@ function renderArm() {
     <div id="formMsg" class="muted"></div>
   </section>
   <section>
-    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${esc(p.at)}<button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
+    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${esc(p.at)}${p.purpose ? " " + esc(p.purpose) : ""}<button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
     <h2>工程ログ</h2>
     <ul class="tl steps">${a.steps.map(stepHtml).join("")}</ul>
     ${a.otherChanges.length ? `<p class="muted">${a.otherChanges.map(c => `${esc(c.col)}：${esc(c.from || "空")} → ${esc(c.to || "空")}（${esc(c.at)} 取込）`).join("<br>")}</p>` : ""}
@@ -398,6 +411,15 @@ async function loadPhotos() {
   for (const img of document.querySelectorAll("#armView img[data-photo]")) {
     try { img.src = await run("apiPhoto", img.dataset.photo); } catch (e) { img.alt = "写真を読み込めませんでした"; }
   }
+}
+function goalHtml(a) {
+  if (!scanPurpose) return "";
+  const step = scanPurpose === "塗装完了" ? "塗装完了" : scanPurpose === "出荷" ? "出荷" : "";
+  const done = step && a.steps.some(st => st.step === step && st.recs.some(r => !r.canceled));
+  return `<section class="goal"><h2>撮影の目的：${esc(scanPurpose)}</h2>
+    ${step ? (done ? `<p class="muted">このアームは「${esc(step)}」記録済みです。もう一度記録もできます。</p>` : "") + `<button type="button" class="btn go" style="width:100%;min-height:56px;font-size:1.05rem" data-act="step" data-s="${esc(step)}">${esc(step)}を記録</button>`
+      : `<button type="button" class="btn go" style="width:100%;min-height:52px" data-act="goal">↓ 下でねじ穴タップを記録</button>`}
+  </section>`;
 }
 function stepHtml(st) {
   const live = st.recs.filter(r => !r.canceled);
@@ -430,6 +452,7 @@ async function saveTap(rec) {
     lastArm = {z: armData.z, g: armData.g}; ls.set("trace.last", JSON.stringify(lastArm));
     photoId = "";
     toast(`${armData.z} ${armData.g}号機：${rec.result} を記録しました`);
+    scanPurpose = "";
     renderArm();
     refreshDays();
   } catch (e) {
@@ -642,7 +665,7 @@ document.addEventListener("click", async e => {
     const note = prompt(`${b.dataset.s}を記録します（${me}）。メモがあれば入力`, "");
     if (note === null) return;
     b.disabled = true;
-    try { armData = await run("apiSaveStep", {key: armData.key, step: b.dataset.s, person: me, note, photoId}); toast(b.dataset.s + "を記録しました"); renderArm(); }
+    try { armData = await run("apiSaveStep", {key: armData.key, step: b.dataset.s, person: me, note, photoId}); toast(b.dataset.s + "を記録しました"); scanPurpose = ""; renderArm(); }
     catch (err) { toast(errMsg(err)); b.disabled = false; }
   }
   else if (act === "delPhoto") {
@@ -670,6 +693,7 @@ document.addEventListener("click", async e => {
   }
 });
 
+syncPurpose();
 run("apiBoot").then(b => { boot = b; renderHead(); }).catch(e => toast("起動エラー：" + errMsg(e)));
 renderHead();
 })();

@@ -44,7 +44,7 @@ function apiRead(orig, enh, last) {
   const r1 = callAI_(P1, imgs, P1_SCHEMA);
   const fz = fitZuban_(r1.zuban), g = fitGoki_(r1.goki);
 
-  const taps = latestTaps_(loadTaps_());
+  const taps = latestTaps_(loadTaps_()), st = liveSteps_();
   const arms = loadArms_().map(a => ({z: a['図番'], g: a['号機'], ship: a['出荷日'], done: !!taps[a['キー']], src: a}));
   const top = rankArms_(fz.z, g, arms, {today: today_(), last: last}).slice(0, 5);
   const sure = isSure_(top);
@@ -59,7 +59,7 @@ function apiRead(orig, enh, last) {
   }
   return {
     read: {zuban: fz.z, fixed: fz.fixed, goki: g, seizo: r1.seizo, kensa: r1.kensa, note: r1.note},
-    cands: top.map(c => { const v = armView_(c.arm.src, taps[c.arm.src['キー']]); v.cost = Math.round(c.cost * 100) / 100; v.seq = c.seq; return v; }),
+    cands: top.map(c => { const v = armView_(c.arm.src, taps[c.arm.src['キー']], st[c.arm.src['キー']]); v.cost = Math.round(c.cost * 100) / 100; v.seq = c.seq; return v; }),
     pick: pick, sure: sure, photoId: photoId
   };
 }
@@ -154,17 +154,18 @@ function callClaude_(prompt, imgsB64, schema) {
  * 撮った刻印写真（枠で切り出した画像）をアームにひも付ける。
  * ファイル名を 図番_号機_日時.jpg に付け直し、「刻印写真」シートに記録（同じ写真を別のアームに付け直したら上書き）
  */
-function apiLinkPhoto(photoId, key, readText) {
+function apiLinkPhoto(photoId, key, readText, purpose) {
   if (!photoId) return null;
   const a = loadArms_().find(r => r['キー'] === key);
   if (!a) throw new Error('台帳にないアームです: ' + key);
   const file = DriveApp.getFileById(photoId);
   const stamp = Utilities.formatDate(file.getDateCreated(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
-  const name = a['図番'] + '_' + a['号機'] + '_' + stamp + '.jpg';
+  const name = a['図番'] + '_' + a['号機'] + '_' + stamp + (purpose ? '_' + purpose : '') + '.jpg';
   file.setName(name);
   const sh = sheet_(CONFIG.SHEETS.PHOTOS);
   const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
-  const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || ''];
+  if (sh.getLastColumn() < PHOTO_COLS.length) sh.getRange(1, 1, 1, PHOTO_COLS.length).setValues([PHOTO_COLS]).setFontWeight('bold');
+  const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || '', purpose || ''];
   const ids = sh.getLastRow() > 1 ? sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]) : [];
   const i = ids.indexOf(photoId);
   if (i < 0) appendRows_(CONFIG.SHEETS.PHOTOS, [row]);

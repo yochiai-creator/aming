@@ -102,11 +102,27 @@ function loadHoles_() {
 }
 function today_() { return Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd'); }
 
-function armView_(a, last) {
+// キー → 現場で記録済みの工程（取消を除く）
+function liveSteps_() {
+  const m = {};
+  readTable_(sheet_(CONFIG.SHEETS.STEPS)).forEach(r => { if (r['取消'] !== '1') (m[r['キー']] = m[r['キー']] || {})[r['工程']] = r['日時']; });
+  return m;
+}
+// 今の段階：未 → 塗装完了 → 塗装後チェック済（タップ良）→ 出荷済。否は「要処置」
+function stage_(last, steps) {
+  steps = steps || {};
+  if (steps['出荷']) return '出荷済';
+  if (last && last['結果'] === '否') return '要処置';
+  if (last && last['結果'] === '良') return '塗装後チェック済';
+  if (steps['塗装後修正完了'] || steps['塗装完了']) return '塗装完了';
+  return '未';
+}
+function armView_(a, last, steps) {
   return {
     key: a['キー'], z: a['図番'], g: a['号機'], kishu: a['機種'], spec: a['仕様'], kenki: a['建機号機'],
     to: a['出荷先'], ship: a['出荷日'], deliv: a['納入日'],
-    status: last ? last['結果'] : '', by: last ? last['確認者'] : '', at: last ? last['日時'] : ''
+    status: last ? last['結果'] : '', by: last ? last['確認者'] : '', at: last ? last['日時'] : '',
+    stage: stage_(last, steps)
   };
 }
 
@@ -125,13 +141,13 @@ function apiBoot() {
 function apiSearch(q) {
   const words = String(q || '').toUpperCase().split(/[\s　]+/).filter(Boolean);
   if (!words.length) return [];
-  const last = latestTaps_(loadTaps_());
+  const last = latestTaps_(loadTaps_()), st = liveSteps_();
   const hits = loadArms_().filter(a => {
     const hay = [a['図番'], a['建機号機'], a['注文番号'], a['製缶図番']].join(' ').toUpperCase();
     return words.every(w => /^\d{1,4}$/.test(w) ? (a['号機'] === String(+w) || hay.indexOf(w) >= 0) : hay.indexOf(w) >= 0);
   });
   hits.sort((x, y) => (y['出荷日'] || '').localeCompare(x['出荷日'] || ''));
-  return hits.slice(0, 40).map(a => armView_(a, last[a['キー']]));
+  return hits.slice(0, 40).map(a => armView_(a, last[a['キー']], st[a['キー']]));
 }
 
 /** 1本の全履歴 */
@@ -140,7 +156,7 @@ function apiArm(key) {
   if (!a) return null;
   const taps = loadTaps_().filter(t => t['キー'] === key);
   const live = taps.filter(t => t['取消'] !== '1');
-  const view = armView_(a, live[live.length - 1]);
+  const view = armView_(a, live[live.length - 1], liveSteps_()[key]);
   const changes = readTable_(sheet_(CONFIG.SHEETS.CHANGES)).filter(c => c['キー'] === key);
   const recs = readTable_(sheet_(CONFIG.SHEETS.STEPS)).filter(r => r['キー'] === key);
   const fieldStep = {};
@@ -158,7 +174,7 @@ function apiArm(key) {
     by: t['確認者'], note: t['備考'], photo: t['写真ID'] ? 'https://drive.google.com/file/d/' + t['写真ID'] + '/view' : '', canceled: t['取消'] === '1'})).reverse();
   view.holes = loadHoles_()[a['図番']] || '';
   view.photos = readTable_(sheet_(CONFIG.SHEETS.PHOTOS)).filter(r => r['キー'] === key)
-    .map(r => ({id: r['写真ID'], at: r['日時'], name: r['ファイル名']})).reverse();
+    .map(r => ({id: r['写真ID'], at: r['日時'], name: r['ファイル名'], purpose: r['目的'] || ''})).reverse();
   return view;
 }
 
@@ -219,7 +235,7 @@ function saveHoles_(z, n, now) {
 /** 出荷日ごとの本数と未チェック数（今日〜21日後。過ぎた出荷日は出さない） */
 function apiDays() {
   const today = today_(), from = today, to = shiftDate_(today, 21);
-  const last = latestTaps_(loadTaps_());
+  const last = latestTaps_(loadTaps_()), st = liveSteps_();
   const m = {};
   loadArms_().forEach(a => {
     const d = a['出荷日'];
@@ -234,9 +250,9 @@ function apiDays() {
 
 /** ある出荷日のアーム一覧 */
 function apiDay(date) {
-  const last = latestTaps_(loadTaps_());
+  const last = latestTaps_(loadTaps_()), st = liveSteps_();
   return loadArms_().filter(a => a['出荷日'] === date)
-    .map(a => armView_(a, last[a['キー']]))
+    .map(a => armView_(a, last[a['キー']], st[a['キー']]))
     .sort((x, y) => (x.to + x.z + x.g.padStart(5, '0')).localeCompare(y.to + y.z + y.g.padStart(5, '0')));
 }
 
@@ -247,9 +263,9 @@ function apiUnchecked(daysAhead) {
 }
 function uncheckedBetween_(from, to) {
   if (from < cfg_('TRACK_FROM')) from = cfg_('TRACK_FROM');
-  const last = latestTaps_(loadTaps_());
+  const last = latestTaps_(loadTaps_()), st = liveSteps_();
   return loadArms_().filter(a => a['出荷日'] >= from && a['出荷日'] <= to && !(last[a['キー']] && last[a['キー']]['結果'] === '良'))
-    .map(a => armView_(a, last[a['キー']]))
+    .map(a => armView_(a, last[a['キー']], st[a['キー']]))
     .sort((x, y) => (x.ship + x.z).localeCompare(y.ship + y.z));
 }
 /** 今日より後で一番近い出荷日（台帳の出荷日から。土日祝や休みは自然に飛ぶ） */

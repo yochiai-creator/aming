@@ -53,7 +53,7 @@ const TAP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '結果', 
 const DATE_COLS = ['着工', '検査完了日', '塗装完了日', '塗装後修正完了日', '出荷日', '納入日'];
 const STEP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '工程', '確認者', '備考', '写真ID', '取消'];
 const CHANGE_COLS = ['日時', 'キー', '項目', '前', '後', '元ファイル'];
-const PHOTO_COLS = ['日時', 'キー', '図番', '号機', '写真ID', 'ファイル名', 'AI読取'];
+const PHOTO_COLS = ['日時', 'キー', '図番', '号機', '写真ID', 'ファイル名', 'AI読取', '目的'];
 // 現場で記録する工程（名前 → 台帳の対応する日付列）
 const STEPS = [['塗装完了', '塗装完了日'], ['塗装後修正完了', '塗装後修正完了日'], ['出荷', '出荷日']];
 // 取込で値が変わったら変更履歴に残す列
@@ -244,11 +244,27 @@ function loadHoles_() {
 }
 function today_() { return Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd'); }
 
-function armView_(a, last) {
+// キー → 現場で記録済みの工程（取消を除く）
+function liveSteps_() {
+  const m = {};
+  readTable_(sheet_(CONFIG.SHEETS.STEPS)).forEach(r => { if (r['取消'] !== '1') (m[r['キー']] = m[r['キー']] || {})[r['工程']] = r['日時']; });
+  return m;
+}
+// 今の段階：未 → 塗装完了 → 塗装後チェック済（タップ良）→ 出荷済。否は「要処置」
+function stage_(last, steps) {
+  steps = steps || {};
+  if (steps['出荷']) return '出荷済';
+  if (last && last['結果'] === '否') return '要処置';
+  if (last && last['結果'] === '良') return '塗装後チェック済';
+  if (steps['塗装後修正完了'] || steps['塗装完了']) return '塗装完了';
+  return '未';
+}
+function armView_(a, last, steps) {
   return {
     key: a['キー'], z: a['図番'], g: a['号機'], kishu: a['機種'], spec: a['仕様'], kenki: a['建機号機'],
     to: a['出荷先'], ship: a['出荷日'], deliv: a['納入日'],
-    status: last ? last['結果'] : '', by: last ? last['確認者'] : '', at: last ? last['日時'] : ''
+    status: last ? last['結果'] : '', by: last ? last['確認者'] : '', at: last ? last['日時'] : '',
+    stage: stage_(last, steps)
   };
 }
 
@@ -267,13 +283,13 @@ function apiBoot() {
 function apiSearch(q) {
   const words = String(q || '').toUpperCase().split(/[\s　]+/).filter(Boolean);
   if (!words.length) return [];
-  const last = latestTaps_(loadTaps_());
+  const last = latestTaps_(loadTaps_()), st = liveSteps_();
   const hits = loadArms_().filter(a => {
     const hay = [a['図番'], a['建機号機'], a['注文番号'], a['製缶図番']].join(' ').toUpperCase();
     return words.every(w => /^\d{1,4}$/.test(w) ? (a['号機'] === String(+w) || hay.indexOf(w) >= 0) : hay.indexOf(w) >= 0);
   });
   hits.sort((x, y) => (y['出荷日'] || '').localeCompare(x['出荷日'] || ''));
-  return hits.slice(0, 40).map(a => armView_(a, last[a['キー']]));
+  return hits.slice(0, 40).map(a => armView_(a, last[a['キー']], st[a['キー']]));
 }
 
 /** 1本の全履歴 */
@@ -282,7 +298,7 @@ function apiArm(key) {
   if (!a) return null;
   const taps = loadTaps_().filter(t => t['キー'] === key);
   const live = taps.filter(t => t['取消'] !== '1');
-  const view = armView_(a, live[live.length - 1]);
+  const view = armView_(a, live[live.length - 1], liveSteps_()[key]);
   const changes = readTable_(sheet_(CONFIG.SHEETS.CHANGES)).filter(c => c['キー'] === key);
   const recs = readTable_(sheet_(CONFIG.SHEETS.STEPS)).filter(r => r['キー'] === key);
   const fieldStep = {};
@@ -300,7 +316,7 @@ function apiArm(key) {
     by: t['確認者'], note: t['備考'], photo: t['写真ID'] ? 'https://drive.google.com/file/d/' + t['写真ID'] + '/view' : '', canceled: t['取消'] === '1'})).reverse();
   view.holes = loadHoles_()[a['図番']] || '';
   view.photos = readTable_(sheet_(CONFIG.SHEETS.PHOTOS)).filter(r => r['キー'] === key)
-    .map(r => ({id: r['写真ID'], at: r['日時'], name: r['ファイル名']})).reverse();
+    .map(r => ({id: r['写真ID'], at: r['日時'], name: r['ファイル名'], purpose: r['目的'] || ''})).reverse();
   return view;
 }
 
@@ -361,7 +377,7 @@ function saveHoles_(z, n, now) {
 /** 出荷日ごとの本数と未チェック数（今日〜21日後。過ぎた出荷日は出さない） */
 function apiDays() {
   const today = today_(), from = today, to = shiftDate_(today, 21);
-  const last = latestTaps_(loadTaps_());
+  const last = latestTaps_(loadTaps_()), st = liveSteps_();
   const m = {};
   loadArms_().forEach(a => {
     const d = a['出荷日'];
@@ -376,9 +392,9 @@ function apiDays() {
 
 /** ある出荷日のアーム一覧 */
 function apiDay(date) {
-  const last = latestTaps_(loadTaps_());
+  const last = latestTaps_(loadTaps_()), st = liveSteps_();
   return loadArms_().filter(a => a['出荷日'] === date)
-    .map(a => armView_(a, last[a['キー']]))
+    .map(a => armView_(a, last[a['キー']], st[a['キー']]))
     .sort((x, y) => (x.to + x.z + x.g.padStart(5, '0')).localeCompare(y.to + y.z + y.g.padStart(5, '0')));
 }
 
@@ -389,9 +405,9 @@ function apiUnchecked(daysAhead) {
 }
 function uncheckedBetween_(from, to) {
   if (from < cfg_('TRACK_FROM')) from = cfg_('TRACK_FROM');
-  const last = latestTaps_(loadTaps_());
+  const last = latestTaps_(loadTaps_()), st = liveSteps_();
   return loadArms_().filter(a => a['出荷日'] >= from && a['出荷日'] <= to && !(last[a['キー']] && last[a['キー']]['結果'] === '良'))
-    .map(a => armView_(a, last[a['キー']]))
+    .map(a => armView_(a, last[a['キー']], st[a['キー']]))
     .sort((x, y) => (x.ship + x.z).localeCompare(y.ship + y.z));
 }
 /** 今日より後で一番近い出荷日（台帳の出荷日から。土日祝や休みは自然に飛ぶ） */
@@ -464,7 +480,7 @@ function apiRead(orig, enh, last) {
   const r1 = callAI_(P1, imgs, P1_SCHEMA);
   const fz = fitZuban_(r1.zuban), g = fitGoki_(r1.goki);
 
-  const taps = latestTaps_(loadTaps_());
+  const taps = latestTaps_(loadTaps_()), st = liveSteps_();
   const arms = loadArms_().map(a => ({z: a['図番'], g: a['号機'], ship: a['出荷日'], done: !!taps[a['キー']], src: a}));
   const top = rankArms_(fz.z, g, arms, {today: today_(), last: last}).slice(0, 5);
   const sure = isSure_(top);
@@ -479,7 +495,7 @@ function apiRead(orig, enh, last) {
   }
   return {
     read: {zuban: fz.z, fixed: fz.fixed, goki: g, seizo: r1.seizo, kensa: r1.kensa, note: r1.note},
-    cands: top.map(c => { const v = armView_(c.arm.src, taps[c.arm.src['キー']]); v.cost = Math.round(c.cost * 100) / 100; v.seq = c.seq; return v; }),
+    cands: top.map(c => { const v = armView_(c.arm.src, taps[c.arm.src['キー']], st[c.arm.src['キー']]); v.cost = Math.round(c.cost * 100) / 100; v.seq = c.seq; return v; }),
     pick: pick, sure: sure, photoId: photoId
   };
 }
@@ -574,17 +590,18 @@ function callClaude_(prompt, imgsB64, schema) {
  * 撮った刻印写真（枠で切り出した画像）をアームにひも付ける。
  * ファイル名を 図番_号機_日時.jpg に付け直し、「刻印写真」シートに記録（同じ写真を別のアームに付け直したら上書き）
  */
-function apiLinkPhoto(photoId, key, readText) {
+function apiLinkPhoto(photoId, key, readText, purpose) {
   if (!photoId) return null;
   const a = loadArms_().find(r => r['キー'] === key);
   if (!a) throw new Error('台帳にないアームです: ' + key);
   const file = DriveApp.getFileById(photoId);
   const stamp = Utilities.formatDate(file.getDateCreated(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
-  const name = a['図番'] + '_' + a['号機'] + '_' + stamp + '.jpg';
+  const name = a['図番'] + '_' + a['号機'] + '_' + stamp + (purpose ? '_' + purpose : '') + '.jpg';
   file.setName(name);
   const sh = sheet_(CONFIG.SHEETS.PHOTOS);
   const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
-  const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || ''];
+  if (sh.getLastColumn() < PHOTO_COLS.length) sh.getRange(1, 1, 1, PHOTO_COLS.length).setValues([PHOTO_COLS]).setFontWeight('bold');
+  const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || '', purpose || ''];
   const ids = sh.getLastRow() > 1 ? sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]) : [];
   const i = ids.indexOf(photoId);
   if (i < 0) appendRows_(CONFIG.SHEETS.PHOTOS, [row]);
