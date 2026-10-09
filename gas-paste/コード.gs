@@ -503,7 +503,8 @@ function readCore_(orig, enh, last) {
   const taps = latestTaps_(loadTaps_()), st = liveSteps_();
   const arms = loadArms_().map(a => ({z: a['図番'], g: a['号機'], ship: a['出荷日'], done: !!taps[a['キー']], src: a}));
   const top = rankArms_(fz.z, g, arms, {today: today_(), last: last}).slice(0, 5);
-  const sure = isSure_(top);
+  // 完全一致なら隣の号機があっても確定（記録画面で号機を確認できる）
+  const sure = isSure_(top) || (top.length > 0 && isExact_(fz.z, g, top[0].arm));
   let pick = sure ? {index: 0, confidence: '高', reason: '1回目で一致'} : null;
   // 2回目は時間に余裕があるときだけ（無ければ候補一覧から選んでもらう）
   if (!sure && top.length && cfg_('AI_SECOND_PASS') === 'する' && timeLeft_() > 22000) {
@@ -899,6 +900,9 @@ function rankArms_(z, g, arms, opts) {
 }
 // 1位が完全一致で、2位以下がはっきり離れていれば確認（2回目の読取）を省く
 function isSure_(top) { return !!top.length && top[0].cost === 0 && (!top[1] || top[1].cost >= 2); }
+
+// AIが読んだ図番・号機が台帳のアームと1文字も違わず一致（? なし）なら確定扱い
+function isExact_(z, g, arm) { return !!arm && !!z && !!g && !/\?/.test(z + g) && z === arm.z && String(+g) === String(arm.g); }
 
 function shiftDate_(ymd, days) {
   const p = ymd.split('/').map(Number), d = new Date(p[0], p[1] - 1, p[2] + days);

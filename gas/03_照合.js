@@ -68,9 +68,12 @@ function rankArms_(z, g, arms, opts) {
 // 1位が完全一致で、2位以下がはっきり離れていれば確認（2回目の読取）を省く
 function isSure_(top) { return !!top.length && top[0].cost === 0 && (!top[1] || top[1].cost >= 2); }
 
+// AIが読んだ図番・号機が台帳のアームと1文字も違わず一致（? なし）なら確定扱い
+function isExact_(z, g, arm) { return !!arm && !!z && !!g && !/\?/.test(z + g) && z === arm.z && String(+g) === String(arm.g); }
+
 function shiftDate_(ymd, days) {
   const p = ymd.split('/').map(Number), d = new Date(p[0], p[1] - 1, p[2] + days);
   return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
 }
 
-if (typeof module !== 'undefined') module.exports = {wdist_, fitZuban_, fitGoki_, rankArms_, isSure_, shiftDate_, normKokuin_};
+if (typeof module !== 'undefined') module.exports = {wdist_, fitZuban_, fitGoki_, rankArms_, isSure_, isExact_, shiftDate_, normKokuin_};

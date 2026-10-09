@@ -19,6 +19,12 @@ t("rankArms 完全一致が1位・確定", () => {
   assert.strictEqual(r[0].arm.g, "1152"); assert.strictEqual(r[0].arm.z, "YN12B20269F1");
   assert.strictEqual(run("isSure_")(r), false); // 1151 が近いので2回目へ回す
 });
+t("isExact 完全一致だけ確定", () => {
+  assert.ok(run("isExact_")("YY12B00902F1G2", "2020", {z: "YY12B00902F1G2", g: "2020"}));
+  assert.ok(run("isExact_")("YY12B00902F1G2", "0020", {z: "YY12B00902F1G2", g: "20"}));
+  assert.ok(!run("isExact_")("YY12B00902F1G2", "2724", {z: "YY12B00902F1G2", g: "2024"}));
+  assert.ok(!run("isExact_")("Y?12B00273F1", "247", {z: "YB12B00273F1", g: "247"}));
+});
 t("rankArms 続き番号優先", () => {
   const r = run(`rankArms_('LS12B10010F1', '4?', [{z:'LS12B10010F1', g:'40'}, {z:'LS12B10010F1', g:'47'}], {last:{z:'LS12B10010F1', g:'39'}})`);
   assert.strictEqual(r[0].arm.g, "40"); assert.ok(r[0].seq);
