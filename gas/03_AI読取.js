@@ -94,13 +94,15 @@ function callGemini_(prompt, imgsB64, schema) {
   const gen = {responseMimeType: 'application/json', responseSchema: geminiSchema_(schema), thinkingConfig: {thinkingLevel: 'low'}};
   const body = {contents: [{role: 'user', parts: parts}], generationConfig: gen};
   let payload = JSON.stringify(body);
-  // 本命モデル → 予備モデルの順。混雑(429/500/503)は同じモデルで2回まで待ってやり直す
-  const models = [cfg_('GEMINI_MODEL')].concat(cfgList_('GEMINI_FALLBACK')).filter((m, i, arr) => m && arr.indexOf(m) === i);
+  // 本命 → 予備の順。混雑(503)や回数制限(429)のモデルはすぐ次へ回し、しばらく（503は2分・429は10分）使わない
+  const cache = CacheService.getScriptCache();
+  const all = [cfg_('GEMINI_MODEL')].concat(cfgList_('GEMINI_FALLBACK')).filter((m, i, arr) => m && arr.indexOf(m) === i);
+  const ready = all.filter(m => !cache.get('cool_' + m));
+  const models = ready.length ? ready.concat(all.filter(m => ready.indexOf(m) < 0)) : all;
   let last = '';
   for (const model of models) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (timeLeft_() < 12000) throw new Error('時間切れです。撮り直すか、下の「探す」で手入力してください（' + (last || model) + '）');
-      if (attempt) Utilities.sleep(1500 * attempt);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (timeLeft_() < 8000) throw new Error('時間切れです。撮り直すか、下の「探す」で手入力してください（' + (last || model) + '）');
       const t0 = Date.now();
       const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
         method: 'post', contentType: 'application/json', muteHttpExceptions: true,
@@ -114,16 +116,16 @@ function callGemini_(prompt, imgsB64, schema) {
       if (code === 200) {
         const cand = (json.candidates || [])[0];
         if (!cand || !cand.content) throw new Error('AIが読取を返しませんでした（' + (cand && cand.finishReason || (json.promptFeedback && json.promptFeedback.blockReason) || '不明') + '）');
-        if (model !== models[0]) console.log('予備モデルで読取: %s', model);
         return JSON.parse(cand.content.parts.map(p => p.text || '').join(''));
       }
-      last = model + ' → ' + code + ' ' + msg.slice(0, 160);
-      rlog_('NG ' + last);
+      last = model + ' → ' + code + ' ' + msg.slice(0, 120);
       // thinkingLevel を受け付けないモデルなら外してやり直す
-      if (code === 400 && /thinking/i.test(msg) && gen.thinkingConfig) { delete gen.thinkingConfig; payload = JSON.stringify(body); attempt--; continue; }
+      if (code === 400 && /thinking/i.test(msg) && gen.thinkingConfig) { delete gen.thinkingConfig; payload = JSON.stringify(body); continue; }
       if (code === 400 || code === 401 || code === 403) throw new Error('AI読取エラー（' + last + '）');
-      if (code === 404) break;                                        // モデル名が無い → 次のモデル
-      if (code === 429 && /quota|exhausted|limit/i.test(msg)) break; // 回数制限 → 次のモデル
+      if (code === 503) { cache.put('cool_' + model, '1', 120); break; }
+      if (code === 429) { cache.put('cool_' + model, '1', /quota|exhausted/i.test(msg) ? 600 : 120); break; }
+      if (code === 404) { cache.put('cool_' + model, '1', 3600); break; }
+      if (attempt === 0) Utilities.sleep(1000); // 500など一時的なものは1回だけやり直す
     }
   }
   throw new Error('混み合っています。少し待って撮り直してください（' + last + '）');

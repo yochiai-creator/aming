@@ -145,7 +145,8 @@ function diffArm_(old, a) {
 }
 
 function readTable_(sh) {
-  const v = sh.getDataRange().getDisplayValues();
+  // シートは全部テキスト書式なので getValues で十分（getDisplayValues より速い）。日付が混ざっても文字にそろえる
+  const v = sh.getDataRange().getValues().map(r => r.map(x => isDate_(x) ? Utilities.formatDate(x, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm') : String(x)));
   const hdr = v.shift();
   return v.filter(r => r[0] !== '').map(r => { const o = {}; hdr.forEach((h, i) => { o[h] = r[i]; }); return o; });
 }

@@ -33,9 +33,9 @@ const CONFIG = {
 
   // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
   AI_PROVIDER: 'gemini',
-  GEMINI_MODEL: 'gemini-3.8-flash',
+  GEMINI_MODEL: 'gemini-3.6-flash',
   AI_SECOND_PASS: 'しない',
-  GEMINI_FALLBACK: 'gemini-3.6-flash,gemini-3.5-flash-lite',
+  GEMINI_FALLBACK: 'gemini-3.5-flash-lite,gemini-3.8-flash',
   CLAUDE_MODEL: 'claude-opus-5-5',
   CLAUDE_EFFORT: 'medium',
 
@@ -64,7 +64,7 @@ const TRACK_CHANGE_COLS = DATE_COLS.concat(['出荷先', '建機号機']);
 // 「設定」シートに出す項目：[キー, 項目名, 説明]。値はシートが優先、空ならCONFIG
 const SETTINGS = [
   ['AI_PROVIDER', 'AI読取', 'gemini か claude'],
-  ['GEMINI_MODEL', 'Geminiモデル', '例 gemini-3.8-flash'],
+  ['GEMINI_MODEL', 'Geminiモデル', '例 gemini-3.6-flash'],
   ['AI_SECOND_PASS', 'AI読取2回目', 'する／しない。「する」だと候補と写真を見比べて精度は上がるが、待ち時間が倍になる'],
   ['GEMINI_FALLBACK', 'Gemini予備モデル', '本命が混雑・回数制限のとき順に試す。カンマ区切り'],
   ['CLAUDE_MODEL', 'Claudeモデル', 'AI読取が claude のとき'],
@@ -534,13 +534,15 @@ function callGemini_(prompt, imgsB64, schema) {
   const gen = {responseMimeType: 'application/json', responseSchema: geminiSchema_(schema), thinkingConfig: {thinkingLevel: 'low'}};
   const body = {contents: [{role: 'user', parts: parts}], generationConfig: gen};
   let payload = JSON.stringify(body);
-  // 本命モデル → 予備モデルの順。混雑(429/500/503)は同じモデルで2回まで待ってやり直す
-  const models = [cfg_('GEMINI_MODEL')].concat(cfgList_('GEMINI_FALLBACK')).filter((m, i, arr) => m && arr.indexOf(m) === i);
+  // 本命 → 予備の順。混雑(503)や回数制限(429)のモデルはすぐ次へ回し、しばらく（503は2分・429は10分）使わない
+  const cache = CacheService.getScriptCache();
+  const all = [cfg_('GEMINI_MODEL')].concat(cfgList_('GEMINI_FALLBACK')).filter((m, i, arr) => m && arr.indexOf(m) === i);
+  const ready = all.filter(m => !cache.get('cool_' + m));
+  const models = ready.length ? ready.concat(all.filter(m => ready.indexOf(m) < 0)) : all;
   let last = '';
   for (const model of models) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (timeLeft_() < 12000) throw new Error('時間切れです。撮り直すか、下の「探す」で手入力してください（' + (last || model) + '）');
-      if (attempt) Utilities.sleep(1500 * attempt);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (timeLeft_() < 8000) throw new Error('時間切れです。撮り直すか、下の「探す」で手入力してください（' + (last || model) + '）');
       const t0 = Date.now();
       const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
         method: 'post', contentType: 'application/json', muteHttpExceptions: true,
@@ -554,16 +556,16 @@ function callGemini_(prompt, imgsB64, schema) {
       if (code === 200) {
         const cand = (json.candidates || [])[0];
         if (!cand || !cand.content) throw new Error('AIが読取を返しませんでした（' + (cand && cand.finishReason || (json.promptFeedback && json.promptFeedback.blockReason) || '不明') + '）');
-        if (model !== models[0]) console.log('予備モデルで読取: %s', model);
         return JSON.parse(cand.content.parts.map(p => p.text || '').join(''));
       }
-      last = model + ' → ' + code + ' ' + msg.slice(0, 160);
-      rlog_('NG ' + last);
+      last = model + ' → ' + code + ' ' + msg.slice(0, 120);
       // thinkingLevel を受け付けないモデルなら外してやり直す
-      if (code === 400 && /thinking/i.test(msg) && gen.thinkingConfig) { delete gen.thinkingConfig; payload = JSON.stringify(body); attempt--; continue; }
+      if (code === 400 && /thinking/i.test(msg) && gen.thinkingConfig) { delete gen.thinkingConfig; payload = JSON.stringify(body); continue; }
       if (code === 400 || code === 401 || code === 403) throw new Error('AI読取エラー（' + last + '）');
-      if (code === 404) break;                                        // モデル名が無い → 次のモデル
-      if (code === 429 && /quota|exhausted|limit/i.test(msg)) break; // 回数制限 → 次のモデル
+      if (code === 503) { cache.put('cool_' + model, '1', 120); break; }
+      if (code === 429) { cache.put('cool_' + model, '1', /quota|exhausted/i.test(msg) ? 600 : 120); break; }
+      if (code === 404) { cache.put('cool_' + model, '1', 3600); break; }
+      if (attempt === 0) Utilities.sleep(1000); // 500など一時的なものは1回だけやり直す
     }
   }
   throw new Error('混み合っています。少し待って撮り直してください（' + last + '）');
@@ -808,7 +810,8 @@ function diffArm_(old, a) {
 }
 
 function readTable_(sh) {
-  const v = sh.getDataRange().getDisplayValues();
+  // シートは全部テキスト書式なので getValues で十分（getDisplayValues より速い）。日付が混ざっても文字にそろえる
+  const v = sh.getDataRange().getValues().map(r => r.map(x => isDate_(x) ? Utilities.formatDate(x, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm') : String(x)));
   const hdr = v.shift();
   return v.filter(r => r[0] !== '').map(r => { const o = {}; hdr.forEach((h, i) => { o[h] = r[i]; }); return o; });
 }
