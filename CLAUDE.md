@@ -35,6 +35,7 @@
 - ウェブアプリ @1：https://script.google.com/a/macros/nodagumi40.com/s/AKfycbxASmlgFgrQyYGJ1e5OtipzMPre5pfU6H_Lv_IfasA69LtgXnsZ4LPky-XXTH0S5buI3g/exec
   - 更新は `clasp push` → `clasp deploy -i AKfycbxASmlgFgrQyYGJ1e5OtipzMPre5pfU6H_Lv_IfasA69LtgXnsZ4LPky-XXTH0S5buI3g`（同じURLのまま新版）
 - **clasp ログイン（クラウド環境）**：Workspaceの再認証で `invalid_rapt` が出たら `python3 scripts/clasp_login.py start` → URLをユーザーに渡す → 戻ってきた `http://localhost:8888/?state=...&code=...` を `python3 scripts/clasp_login.py finish '<URL>'`。裏で待つ `clasp login` はターン間でプロセスが消えるので使わない（要：既存 ~/.clasprc.json の client_id/secret）
+- 注意：ローカルでファイルを消しただけだと `clasp push` が「already up to date」で**リモートのファイルが残る**ことがある。Apps Script API の `projects/{id}/content` を GET→対象を除いて PUT で消す
 - 注意：`clasp create` は appsscript.json を初期値で上書きするので git checkout で戻すこと
 - 注意：nodagumi40.com のWorkspaceは clasp に spreadsheets/drive スコープ追加を**ブロック**。クラウド環境からは script.google.com にも出られないので、`?fn=`（gas-run.sh）での関数実行はできない。関数実行・権限承認はユーザーがブラウザで
 
