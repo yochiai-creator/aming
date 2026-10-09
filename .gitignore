@@ -2,3 +2,4 @@ node_modules/
 dist/
 test/fixtures/
 .gas-autopilot.json
+gas/00_一時キー.js

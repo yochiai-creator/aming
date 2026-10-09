@@ -526,7 +526,15 @@ function callAI_(prompt, imgsB64, schema) {
   return cfg_('AI_PROVIDER') === 'claude' ? callClaude_(prompt, imgsB64, schema) : callGemini_(prompt, imgsB64, schema);
 }
 
+// 一時ファイルにキーがあればスクリプトプロパティへ移す（一度だけ）
+function migrateKey_() {
+  if (typeof TMP_GEMINI_KEY === 'undefined' || !TMP_GEMINI_KEY) return;
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('GEMINI_API_KEY') !== TMP_GEMINI_KEY) { props.setProperty('GEMINI_API_KEY', TMP_GEMINI_KEY); rlog_('APIキーを登録しました'); }
+}
+
 function callGemini_(prompt, imgsB64, schema) {
+  migrateKey_();
   const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!key) throw new Error('GEMINI_API_KEY が未設定です');
   const parts = imgsB64.map(img_).map(i => ({inline_data: {mime_type: i.mime, data: i.data}}));
