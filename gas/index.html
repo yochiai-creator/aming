@@ -657,7 +657,9 @@ $("vfShot").onclick = () => { const c = shotFromViewfinder(); closeViewfinder();
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act;
-  if (act === "nav") show(b.dataset.v);
+  if (act === "purpose") { purpose = b.dataset.v; ls.set("trace.purpose", purpose); syncPurpose(); }
+  else if (act === "goal") { const t = document.getElementById("tapForm"); if (t) t.scrollIntoView({behavior: "smooth", block: "start"}); }
+  else if (act === "nav") show(b.dataset.v);
   else if (act === "day") { day = b.dataset.d; renderList(); }
   else if (act === "arm") openArm(b.dataset.k, !!b.closest("#cands"));
   else if (act === "back") show(day ? "list" : "scan");

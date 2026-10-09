@@ -100,6 +100,8 @@ const click = sel => w.document.querySelector(sel).dispatchEvent(new w.MouseEven
 process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('NG   unhandled', e); });
 (async () => {
   await wait(30);
+  click('[data-act="purpose"][data-v="出荷"]');
+  t("撮影の目的：選べる", () => assert.ok(w.document.querySelector('[data-act="purpose"][data-v="出荷"]').classList.contains("on")));
   t("起動：未チェックバッジ", () => assert.strictEqual(w.document.getElementById("todoBadge").textContent, "7"));
   click('[data-act="nav"][data-v="list"]'); await wait(30);
   t("一覧：出荷日と未チェック", () => {
