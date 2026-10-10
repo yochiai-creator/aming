@@ -154,8 +154,9 @@ ul.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--edge);margi
 .prog{position:relative;height:22px;background:#0A0D0F;border:1px solid var(--edge);margin-bottom:8px}
 .prog i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#00848F,#22C3D0)}
 .prog span{position:relative;display:block;text-align:center;font-size:.8rem;line-height:20px;color:#fff;font-weight:700}
-.lf{display:flex;gap:6px;margin-bottom:4px}
-.lf button{flex:1;padding:5px 0;background:#0A0D0F;border:1px solid var(--edge);color:var(--steel);font-weight:700;font-size:.85rem}
+.lf{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px;margin-bottom:4px}
+.lf button:first-child{grid-row:span 2;padding:0 12px}
+.lf button{padding:6px 2px;background:#0A0D0F;border:1px solid var(--edge);color:var(--steel);font-weight:700;font-size:.85rem}
 .lf button small{margin-left:4px;font-weight:400;color:var(--sub)}
 .lf button.on{border-color:var(--accent);color:#fff;background:linear-gradient(180deg,#22C3D0,#00848F)}
 .lf button.on small{color:#E6FCFF}
@@ -378,7 +379,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/10-43"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/10-44"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -410,27 +411,32 @@ function renderHead() {
 }
 
 /* ================= 一覧 ================= */
-let listFilter = ls.get("trace.listFilter") || "全部", listRows = [];
-const LIST_FILTERS = {"全部": () => true, "未": a => stOf(a) === "未" || stOf(a) === "塗装完了", "要処置": a => stOf(a) === "要処置", "済": a => stOf(a) === "塗装後チェック済" || stOf(a) === "出荷済"};
+let listFilter = ls.get("trace.listFilter") || "すべて", listRows = [];
+// 古い保存データ（painted/fixed なし）は段階から判断
+const isPainted = a => a.painted !== undefined ? a.painted : stOf(a) !== "未";
+const isFixed = a => a.fixed !== undefined ? a.fixed : ["塗装後チェック済", "出荷済"].includes(stOf(a));
+const LIST_FILTERS = {"すべて": () => true, "未塗装": a => !isPainted(a), "塗装済": isPainted, "未塗装後修正": a => !isFixed(a), "塗装後修正済": isFixed};
+const TILE_LABEL = {"未": "未塗装", "塗装完了": "塗装済", "塗装後チェック済": "修正済"};
 function stOf(a) { return a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未"); }
 // 図番ごとにまとめて、号機をタイルで並べる
 function armGroups(rows, withShip) {
   const g = new Map();
   rows.forEach(a => { const k = a.z + "|" + (withShip ? a.ship : ""); if (!g.has(k)) g.set(k, []); g.get(k).push(a); });
   return [...g.values()].map(list => {
-    const a0 = list[0], ok = list.filter(a => LIST_FILTERS["済"](a)).length;
+    const a0 = list[0], ok = list.filter(isFixed).length;
     list.sort((x, y) => String(x.g).localeCompare(String(y.g), "ja", {numeric: true}));
     return `<div class="grp"><div class="gh"><span class="gz">${esc(a0.z)}</span><span class="gc">${ok}/${list.length}</span>
       <span class="gm">${withShip ? "出荷 " + esc(md(a0.ship || "-")) + "　" : ""}${esc(a0.to || "")}　${esc(a0.kishu || "")}</span></div>
-      <div class="tiles">${list.map(a => { const st = stOf(a); return `<button type="button" class="tile ${STAGE_CLS[st] || "todo"}" data-act="arm" data-k="${esc(a.key)}"><b>${esc(a.g)}</b><small>${esc(st === "塗装後チェック済" ? "済" : st)}${a.by ? "・" + esc(a.by) : ""}</small></button>`; }).join("")}</div></div>`;
+      <div class="tiles">${list.map(a => { const st = stOf(a); return `<button type="button" class="tile ${STAGE_CLS[st] || "todo"}" data-act="arm" data-k="${esc(a.key)}"><b>${esc(a.g)}</b><small>${esc(TILE_LABEL[st] || st)}${a.by ? "・" + esc(a.by) : ""}</small></button>`; }).join("")}</div></div>`;
   }).join("");
 }
 function renderDayList() {
-  const rows = listRows, f = LIST_FILTERS[listFilter] || LIST_FILTERS["全部"];
+  if (!LIST_FILTERS[listFilter]) listFilter = "すべて";
+  const rows = listRows, f = LIST_FILTERS[listFilter];
   if (!rows.length) { $("dayList").innerHTML = '<p class="muted">この日の出荷はありません</p>'; return; }
-  const n = k => rows.filter(LIST_FILTERS[k]).length, done = n("済"), shown = rows.filter(f);
-  $("dayList").innerHTML = `<div class="prog"><i style="width:${Math.round(done / rows.length * 100)}%"></i><span>済 ${done} / ${rows.length}本</span></div>
-    <div class="lf">${Object.keys(LIST_FILTERS).map(k => `<button type="button" data-act="lf" data-f="${k}" class="${k === listFilter ? "on" : ""}">${k}<small>${k === "全部" ? rows.length : n(k)}</small></button>`).join("")}</div>
+  const n = k => rows.filter(LIST_FILTERS[k]).length, done = n("塗装後修正済"), shown = rows.filter(f);
+  $("dayList").innerHTML = `<div class="prog"><i style="width:${Math.round(done / rows.length * 100)}%"></i><span>塗装後修正済 ${done} / ${rows.length}本</span></div>
+    <div class="lf">${Object.keys(LIST_FILTERS).map(k => `<button type="button" data-act="lf" data-f="${k}" class="${k === listFilter ? "on" : ""}">${k}<small>${k === "すべて" ? rows.length : n(k)}</small></button>`).join("")}</div>
     ${shown.length ? armGroups(shown) : '<p class="muted">該当なし</p>'}`;
 }
 // 一覧はまとめて取得して端末に保存 → 開くと即表示、裏で最新に更新（変わった時だけ描き直す）
