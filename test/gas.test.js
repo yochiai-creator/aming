@@ -173,4 +173,5 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
   t("撮るだけ：記録の取消", () => { assert.ok(calls.includes("apiQueueUnrecord")); assert.ok(w.document.querySelector('[data-act="qrec"][data-id="q2"]')); });
   console.log("errors", JSON.stringify(errors));
   process.exitCode = errors.length ? 1 : 0;
+  w.close(); // 画面の定期更新タイマーを止めて終了させる
 })();
