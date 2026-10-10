@@ -43,7 +43,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 #paintNow small{font-size:.66rem;color:var(--sub);letter-spacing:.04em}
 #paintNow b{font-family:"Share Tech Mono",monospace;font-size:1.35rem;color:#fff;text-shadow:0 0 8px rgba(63,208,255,.5)}
 #paintNow b i{font-style:normal;font-size:.95rem;color:var(--sub)}
-#paintNow em{font-style:normal;font-size:.68rem;color:var(--ok)}
+#paintNow em{font-style:normal;font-size:.68rem;color:var(--warn)}
+#paintNow.all em{color:var(--ok)}
 #paintNow.all b{color:var(--ok)}
 @media (max-width:380px){#paintNow small{font-size:.58rem}#paintNow{gap:4px;padding:3px 6px;right:10px}#paintNow b{font-size:1.15rem}}
 #today{font-family:"Share Tech Mono",monospace;font-size:1.1rem;color:var(--cyan);text-shadow:0 0 8px rgba(63,208,255,.45);
@@ -395,7 +396,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/10-48"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/10-49"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -423,7 +424,7 @@ function renderHead() {
   const pn = listData && listData.paint;
   if (pn && pn.date === boot.today) {
     $("paintNow").classList.remove("hidden"); $("paintNow").classList.toggle("all", pn.total > 0 && pn.done >= pn.total);
-    $("paintNow").innerHTML = `<small>本日塗装予定</small><b>${pn.total}<i>本</i></b><em>済 ${pn.done}</em>`;
+    $("paintNow").innerHTML = `<small>本日塗装予定</small><b>${pn.total}<i>本</i></b><em>${pn.total - pn.done > 0 ? "残り " + (pn.total - pn.done) : "完了"}</em>`;
   }
   $("meSeg").innerHTML = boot.people.map(n => `<button type="button" data-act="me" data-n="${esc(n)}" class="${n === me ? "on" : ""}">${esc(n)}</button>`).join("") || '<span class="muted">台帳の「設定」シートの確認者に名前を入れてください</span>';
   $("today").textContent = boot.today ? md(boot.today) + "(" + wd(boot.today) + ")" : "";
