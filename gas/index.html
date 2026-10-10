@@ -39,6 +39,13 @@ button{font:inherit;cursor:pointer;border:none;border-radius:0;color:inherit}
 button:disabled{opacity:.45;cursor:default}
 button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 #meBtn{background:transparent;color:var(--sub);font-family:"Share Tech Mono","BIZ UDPGothic",monospace;font-size:.78rem;padding:4px 0 0;text-decoration:none;border-bottom:1px dashed var(--edge-hi)}
+#paintNow{position:absolute;top:12px;right:14px;z-index:2;display:flex;align-items:baseline;gap:6px;padding:4px 10px;background:#0A0D0F;border:1px solid var(--edge-hi);color:var(--ink);line-height:1.1;font-family:"BIZ UDPGothic",sans-serif}
+#paintNow small{font-size:.66rem;color:var(--sub);letter-spacing:.04em}
+#paintNow b{font-family:"Share Tech Mono",monospace;font-size:1.35rem;color:#fff;text-shadow:0 0 8px rgba(63,208,255,.5)}
+#paintNow b i{font-style:normal;font-size:.95rem;color:var(--sub)}
+#paintNow em{font-style:normal;font-size:.68rem;color:var(--ok)}
+#paintNow.all b{color:var(--ok)}
+@media (max-width:380px){#paintNow small{font-size:.58rem}#paintNow{gap:4px;padding:3px 6px;right:10px}#paintNow b{font-size:1.15rem}}
 #today{font-family:"Share Tech Mono",monospace;font-size:1.1rem;color:var(--cyan);text-shadow:0 0 8px rgba(63,208,255,.45);
   background:#060909;border:1px solid var(--edge);padding:2px 10px;letter-spacing:.06em}
 #nav{display:flex;gap:4px;margin:0 0 14px;padding:4px;background:#0A0D0F;border:1px solid var(--edge)}
@@ -285,6 +292,7 @@ h1{font-size:1.9rem}
       <button type="button" id="meBtn" data-act="nav" data-v="scan">確認者：未設定</button>
       <div style="margin-top:8px"><span id="today"></span></div>
     </div>
+    <button type="button" id="paintNow" class="hidden" data-act="nav" data-v="list"></button>
     <div data-exc></div>
   </header>
   <div class="tracks"></div>
@@ -381,7 +389,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/10-46"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/10-47"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -406,6 +414,11 @@ function show(v) {
 }
 function renderHead() {
   $("meBtn").textContent = "確認者：" + (me || "未設定 ▶");
+  const pn = listData && listData.paint;
+  if (pn && pn.date === boot.today) {
+    $("paintNow").classList.remove("hidden"); $("paintNow").classList.toggle("all", pn.total > 0 && pn.done >= pn.total);
+    $("paintNow").innerHTML = `<small>本日塗装予定</small><b>${pn.total}<i>本</i></b><em>済 ${pn.done}</em>`;
+  }
   $("meSeg").innerHTML = boot.people.map(n => `<button type="button" data-act="me" data-n="${esc(n)}" class="${n === me ? "on" : ""}">${esc(n)}</button>`).join("") || '<span class="muted">台帳の「設定」シートの確認者に名前を入れてください</span>';
   $("today").textContent = boot.today ? md(boot.today) + "(" + wd(boot.today) + ")" : "";
   const todo = boot.days.filter(d => d.date >= boot.today).slice(0, 4).reduce((s, d) => s + d.todo, 0);

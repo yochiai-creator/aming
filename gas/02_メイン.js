@@ -304,7 +304,10 @@ function apiList() {
     s.total++;
     if (!a.status) { if (a.ship >= from) s.todo++; } else if (a.status === '否') s.ng++;
   });
-  return {days: Object.keys(m).sort().map(k => m[k]), rows: rows,
+  // 本日の塗装完了予定（Excelの塗装完了日＝今日）と、そのうち塗装済の数
+  const pt = loadArms_().filter(a => a['塗装完了日'] === today).map(a => armView_(a, last[a['キー']], st[a['キー']]));
+  return {paint: {date: today, total: pt.length, done: pt.filter(a => a.painted).length},
+    days: Object.keys(m).sort().map(k => m[k]), rows: rows,
     unchecked: rows.filter(a => a.ship >= from && a.ship <= alertTo && a.status !== '良')};
 }
 
