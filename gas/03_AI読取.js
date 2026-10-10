@@ -263,6 +263,16 @@ function photoName_(z, g, purpose, created) {
   const label = PHOTO_LABEL[purpose] || purpose || '';
   return z + '_' + g + (label ? '_' + label : '') + '_' + Utilities.formatDate(created, 'Asia/Tokyo', 'yyyyMMdd_HHmm') + '.jpg';
 }
+/** 画面を開いたとき裏で1回だけ：刻印写真フォルダ直下に残った写真を整理 */
+function apiAutoOrganize() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('PHOTOS_ORGANIZED') === '1') return 0;
+  const c = CacheService.getScriptCache();
+  if (c.get('organizing')) return 0;   // 別の画面で実行中
+  c.put('organizing', '1', 600);
+  try { organizePhotos(); props.setProperty('PHOTOS_ORGANIZED', '1'); } finally { c.remove('organizing'); }
+  return 1;
+}
 /** 既存の写真を 年-月 フォルダへ整理し、ひも付け済みは 図番_号機_工程_日時.jpg に付け直す（何度実行してもよい） */
 function organizePhotos() {
   const root = DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID'));

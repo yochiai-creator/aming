@@ -879,7 +879,7 @@ document.addEventListener("click", async e => {
 
 syncPurpose();
 qBoot();
-run("apiBoot").then(b => { boot = b; renderHead(); }).catch(e => toast("起動エラー：" + errMsg(e)));
+run("apiBoot").then(b => { boot = b; renderHead(); run("apiAutoOrganize").catch(() => {}); }).catch(e => toast("起動エラー：" + errMsg(e)));
 renderHead();
 })();
 </script>
