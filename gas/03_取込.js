@@ -134,7 +134,7 @@ function mergeArms_(arms, at, fileName) {
   const rows = Object.keys(byKey).sort().map(k => ARM_COLS.map(c => byKey[k][c] === undefined ? '' : byKey[k][c]));
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, ARM_COLS.length).clearContent();
   if (rows.length) sh.getRange(2, 1, rows.length, ARM_COLS.length).setNumberFormat('@').setValues(rows);
-  ARMS_MEMO = null;
+  clearArmsCache_();
   if (changes.length) appendRows_(CONFIG.SHEETS.CHANGES, changes);
   return {added: added, updated: updated, changes: changes.length};
 }

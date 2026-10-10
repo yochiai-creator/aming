@@ -84,10 +84,37 @@ function setup() {
 
 /* ---------------- データ読み出し ---------------- */
 let ARMS_MEMO = null;
+// 台帳はキャッシュ（gzip＋分割、6時間）から読む。無ければシートから読んでキャッシュに置く。取込時に clearArmsCache_()
 function loadArms_() {
-  if (!ARMS_MEMO) ARMS_MEMO = readTable_(sheet_(CONFIG.SHEETS.ARMS));
+  if (ARMS_MEMO) return ARMS_MEMO;
+  ARMS_MEMO = armsFromCache_();
+  if (!ARMS_MEMO) { ARMS_MEMO = readTable_(sheet_(CONFIG.SHEETS.ARMS)); armsToCache_(ARMS_MEMO); }
   return ARMS_MEMO;
 }
+const ARMS_CACHE_CHUNK = 90000;
+function armsFromCache_() {
+  try {
+    const cache = CacheService.getScriptCache(), n = +cache.get('arms_n');
+    if (!n) return null;
+    const keys = []; for (let i = 0; i < n; i++) keys.push('arms_' + i);
+    const parts = cache.getAll(keys);
+    if (keys.some(k => !parts[k])) return null;
+    const json = Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(keys.map(k => parts[k]).join('')), 'application/x-gzip')).getDataAsString();
+    return JSON.parse(json).map(r => { const o = {}; ARM_COLS.forEach((c, i) => { o[c] = r[i]; }); return o; });
+  } catch (e) { console.warn('台帳キャッシュ読込失敗: ' + e); return null; }
+}
+function armsToCache_(arms) {
+  try {
+    const rows = arms.map(a => ARM_COLS.map(c => a[c] || ''));
+    const b64 = Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(JSON.stringify(rows), 'application/json')).getBytes());
+    const put = {};
+    let n = 0;
+    for (let i = 0; i < b64.length; i += ARMS_CACHE_CHUNK) put['arms_' + n++] = b64.slice(i, i + ARMS_CACHE_CHUNK);
+    put.arms_n = String(n);
+    CacheService.getScriptCache().putAll(put, 21600);
+  } catch (e) { console.warn('台帳キャッシュ保存失敗: ' + e); }
+}
+function clearArmsCache_() { ARMS_MEMO = null; try { CacheService.getScriptCache().remove('arms_n'); } catch (e) {} }
 function loadTaps_() { return readTable_(sheet_(CONFIG.SHEETS.TAPS)); }
 // キー → 最新の有効なタップ記録
 function latestTaps_(taps) {
