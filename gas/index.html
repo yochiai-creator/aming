@@ -136,6 +136,33 @@ ul.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--edge);margi
 .hist li{border-top:1px dashed var(--edge);padding:8px 0}
 .hist li.cx{color:var(--sub);text-decoration:line-through}
 .link{background:transparent;color:var(--cyan);text-decoration:underline;padding:2px 4px;font-size:.8rem}
+.grp{border-top:1px dashed var(--edge);padding:8px 0 10px}
+.grp:first-of-type{border-top:none}
+.gh{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;margin-bottom:6px}
+.gz{font-family:"Share Tech Mono",monospace;font-size:1rem;letter-spacing:.06em;color:#fff}
+.gc{margin-left:auto;font-family:"Share Tech Mono",monospace;color:var(--accent);font-weight:700}
+.gm{flex-basis:100%;font-size:.75rem;color:var(--sub)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:6px}
+.tile{padding:6px 2px 5px;background:#0A0D0F;border:1px solid var(--edge);border-left:4px solid var(--steel);color:var(--ink);text-align:center;line-height:1.15}
+.tile b{display:block;font-family:"Share Tech Mono",monospace;font-size:1.25rem;letter-spacing:.04em}
+.tile small{display:block;font-size:.68rem;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.todo{border-left-color:#FFB020}.tile.todo small{color:#FFB020}
+.tile.mid{border-left-color:#3FD0FF}.tile.mid small{color:#3FD0FF}
+.tile.good,.tile.done{border-left-color:var(--ok);opacity:.7}.tile.good small,.tile.done small{color:var(--ok)}
+.tile.bad{border-left-color:var(--ng);background:rgba(255,77,61,.1)}.tile.bad small{color:var(--ng);font-weight:700}
+.tile:active{background:rgba(0,167,181,.15)}
+.prog{position:relative;height:22px;background:#0A0D0F;border:1px solid var(--edge);margin-bottom:8px}
+.prog i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#00848F,#22C3D0)}
+.prog span{position:relative;display:block;text-align:center;font-size:.8rem;line-height:20px;color:#fff;font-weight:700}
+.lf{display:flex;gap:6px;margin-bottom:4px}
+.lf button{flex:1;padding:5px 0;background:#0A0D0F;border:1px solid var(--edge);color:var(--steel);font-weight:700;font-size:.85rem}
+.lf button small{margin-left:4px;font-weight:400;color:var(--sub)}
+.lf button.on{border-color:var(--accent);color:#fff;background:linear-gradient(180deg,#22C3D0,#00848F)}
+.lf button.on small{color:#E6FCFF}
+.ud{border-top:1px dashed var(--edge)}
+.ud summary{display:flex;justify-content:space-between;padding:10px 4px;cursor:pointer;font-weight:700}
+.ud summary b{color:var(--ng)}
+.ud[open] summary{color:#fff}
 .warnbox{border-color:var(--ng);box-shadow:inset 0 0 24px rgba(255,77,61,.08)}
 .warnbox h2{color:var(--ng)}
 .warnbox h2::before{background:var(--ng);box-shadow:0 0 6px var(--ng)}
@@ -357,22 +384,45 @@ function renderHead() {
 }
 
 /* ================= 一覧 ================= */
+let listFilter = ls.get("trace.listFilter") || "全部", listRows = [];
+const LIST_FILTERS = {"全部": () => true, "未": a => stOf(a) === "未" || stOf(a) === "塗装完了", "要処置": a => stOf(a) === "要処置", "済": a => stOf(a) === "塗装後チェック済" || stOf(a) === "出荷済"};
+function stOf(a) { return a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未"); }
+// 図番ごとにまとめて、号機をタイルで並べる
+function armGroups(rows, withShip) {
+  const g = new Map();
+  rows.forEach(a => { const k = a.z + "|" + (withShip ? a.ship : ""); if (!g.has(k)) g.set(k, []); g.get(k).push(a); });
+  return [...g.values()].map(list => {
+    const a0 = list[0], ok = list.filter(a => LIST_FILTERS["済"](a)).length;
+    list.sort((x, y) => String(x.g).localeCompare(String(y.g), "ja", {numeric: true}));
+    return `<div class="grp"><div class="gh"><span class="gz">${esc(a0.z)}</span><span class="gc">${ok}/${list.length}</span>
+      <span class="gm">${withShip ? "出荷 " + esc(md(a0.ship || "-")) + "　" : ""}${esc(a0.to || "")}　${esc(a0.kishu || "")}</span></div>
+      <div class="tiles">${list.map(a => { const st = stOf(a); return `<button type="button" class="tile ${STAGE_CLS[st] || "todo"}" data-act="arm" data-k="${esc(a.key)}"><b>${esc(a.g)}</b><small>${esc(st === "塗装後チェック済" ? "済" : st)}${a.by ? "・" + esc(a.by) : ""}</small></button>`; }).join("")}</div></div>`;
+  }).join("");
+}
+function renderDayList() {
+  const rows = listRows, f = LIST_FILTERS[listFilter] || LIST_FILTERS["全部"];
+  if (!rows.length) { $("dayList").innerHTML = '<p class="muted">この日の出荷はありません</p>'; return; }
+  const n = k => rows.filter(LIST_FILTERS[k]).length, done = n("済"), shown = rows.filter(f);
+  $("dayList").innerHTML = `<div class="prog"><i style="width:${Math.round(done / rows.length * 100)}%"></i><span>済 ${done} / ${rows.length}本</span></div>
+    <div class="lf">${Object.keys(LIST_FILTERS).map(k => `<button type="button" data-act="lf" data-f="${k}" class="${k === listFilter ? "on" : ""}">${k}<small>${k === "全部" ? rows.length : n(k)}</small></button>`).join("")}</div>
+    ${shown.length ? armGroups(shown) : '<p class="muted">該当なし</p>'}`;
+}
 async function renderList() {
   const el = $("listView");
   if (!day || !boot.days.some(d => d.date === day)) day = (boot.days[0] || {}).date || boot.today;
   el.innerHTML = `<div class="days">${boot.days.map(d => `<button type="button" data-act="day" data-d="${d.date}" class="${d.date === day ? "on" : ""} ${d.todo ? "has-todo" : ""}">${md(d.date)}(${wd(d.date)})<small>${d.todo ? "未" + d.todo + " / " : ""}${d.total}本</small></button>`).join("")}</div>
-    <section id="uncheckedSec" class="warnbox hidden"></section>
-    <section><h2>${esc(md(day))} 出荷分</h2><div id="dayList" class="muted">読み込み中…</div></section>`;
+    <section><h2>${esc(md(day))}(${esc(wd(day))}) 出荷分</h2><div id="dayList" class="muted">読み込み中…</div></section>
+    <section id="uncheckedSec" class="warnbox hidden"></section>`;
   const on = el.querySelector(".days .on"); if (on) on.scrollIntoView({inline: "center", block: "nearest"});
   try {
     const [rows, un] = await Promise.all([run("apiDay", day), run("apiUnchecked")]);
+    listRows = rows; $("dayList").classList.remove("muted"); renderDayList();
     if (un.length) {
+      const byDay = new Map(); un.forEach(a => { if (!byDay.has(a.ship)) byDay.set(a.ship, []); byDay.get(a.ship).push(a); });
       $("uncheckedSec").classList.remove("hidden");
-      $("uncheckedSec").innerHTML = `<h2>出荷前で未チェック ${un.length}本</h2>${un.slice(0, 30).map(a => armBtn(a)).join("")}${un.length > 30 ? `<p class="muted">ほか ${un.length - 30}本</p>` : ""}`;
+      $("uncheckedSec").innerHTML = `<h2>出荷前で未チェック ${un.length}本</h2>${[...byDay].map(([d, list]) =>
+        `<details class="ud"><summary><span>${esc(md(d))}(${esc(wd(d))}) 出荷</span><b>${list.length}本</b></summary>${armGroups(list)}</details>`).join("")}`;
     }
-    const done = rows.filter(a => a.status === "良").length;
-    $("dayList").classList.remove("muted");
-    $("dayList").innerHTML = rows.length ? `<p class="muted">済 ${done} / ${rows.length}本</p>` + rows.map(a => armBtn(a, a.by ? `<span class="chip">${esc(a.by)}</span>` : "")).join("") : '<p class="muted">この日の出荷はありません</p>';
   } catch (e) { $("dayList").textContent = "読み込めませんでした：" + errMsg(e); }
 }
 
@@ -783,6 +833,7 @@ document.addEventListener("click", async e => {
   else if (act === "goal") { const t = document.getElementById("tapForm"); if (t) t.scrollIntoView({behavior: "smooth", block: "start"}); }
   else if (act === "nav") show(b.dataset.v);
   else if (act === "day") { day = b.dataset.d; renderList(); }
+  else if (act === "lf") { listFilter = b.dataset.f; ls.set("trace.listFilter", listFilter); renderDayList(); }
   else if (act === "arm") openArm(b.dataset.k, !!b.closest("#cands"));
   else if (act === "back") show(day ? "list" : "scan");
   else if (act === "res") { form.result = b.dataset.v; syncForm(); }
