@@ -25,6 +25,21 @@ t("isExact 完全一致だけ確定", () => {
   assert.ok(!run("isExact_")("YY12B00902F1G2", "2724", {z: "YY12B00902F1G2", g: "2024"}));
   assert.ok(!run("isExact_")("Y?12B00273F1", "247", {z: "YB12B00273F1", g: "247"}));
 });
+t("自動学習：読み間違いを集めて照合に効かせる", () => {
+  assert.strictEqual(JSON.stringify(run("parseRead_('YY12B00902F1G2 / 2512-2724 U')")), '{"z":"YY12B00902F1G2","g":"2724"}');
+  assert.deepStrictEqual(Array.from(run("diffPairs_('2724', '2024')")), ["7>0"]);
+  const st = run(`learnStats_([
+    {read:'YY12B00902F1G2 / 2512-2724 U', z:'YY12B00902F1G2', g:'2024'},
+    {read:'YY12B00902F1G2 / 2610-2722 U', z:'YY12B00902F1G2', g:'2022'},
+    {read:'YY12B10167F1 / 2610-1331 UM', z:'YY12B10167F1', g:'1331'},
+    {read:'Y?12B00273F1 / 2510-247 UM', z:'YB12B00273F1', g:'247'}])`);
+  assert.strictEqual(st.pairs["7>0"], 2); assert.strictEqual(st.total, 4); assert.strictEqual(st.miss, 2);
+  assert.ok(run("learnHint_")(st).includes("「0」を「7」"));
+  // 学習あり：2724 の読みで 2024 が 2724 寄りの別号機より上に来る
+  const arms = `[{z:'YY12B00902F1G2', g:'2024'}, {z:'YY12B00902F1G2', g:'2124'}]`;
+  assert.strictEqual(run(`rankArms_('YY12B00902F1G2', '2724', ${arms}, {learned: {'7>0': 2}})`)[0].arm.g, "2024");
+  assert.ok(!run("isSure_")(run(`rankArms_('YY12B00902F1G2', '2724', ${arms}, {learned: {'7>0': 2}})`))); // 学習だけで自動確定はしない
+});
 t("rankArms 続き番号優先", () => {
   const r = run(`rankArms_('LS12B10010F1', '4?', [{z:'LS12B10010F1', g:'40'}, {z:'LS12B10010F1', g:'47'}], {last:{z:'LS12B10010F1', g:'39'}})`);
   assert.strictEqual(r[0].arm.g, "40"); assert.ok(r[0].seq);

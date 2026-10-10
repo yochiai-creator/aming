@@ -57,7 +57,7 @@ function readCore_(orig, enh, last) {
   const photoId = savePhoto_(orig);
   rlog_('写真保存 ' + photoId);
   const imgs = [{data: FONT_REF_PNG, mime: 'image/png'}, orig, enh];
-  const r1 = callAI_(P1, imgs, P1_SCHEMA);
+  const r1 = callAI_(P1 + learnHint_(learned_()), imgs, P1_SCHEMA);
   const m = matchRead_(r1, last), fz = m.fz, g = m.g, top = m.top, sure = m.sure, taps = m.taps, st = m.st;
   let pick = sure ? {index: 0, confidence: '高', reason: '1回目で一致'} : null;
   // 2回目は時間に余裕があるときだけ（無ければ候補一覧から選んでもらう）
@@ -82,11 +82,23 @@ function matchRead_(r1, last) {
   const fz = fitZuban_(r1.zuban), g = fitGoki_(r1.goki);
   const taps = latestTaps_(loadTaps_()), st = liveSteps_();
   const arms = loadArms_().map(a => ({z: a['図番'], g: a['号機'], ship: a['出荷日'], done: !!taps[a['キー']], src: a}));
-  const top = rankArms_(fz.z, g, arms, {today: today_(), last: last}).slice(0, 5);
+  const top = rankArms_(fz.z, g, arms, {today: today_(), last: last, learned: learned_().pairs}).slice(0, 5);
   // 完全一致なら隣の号機があっても確定（記録画面で号機を確認できる）
   const sure = isSure_(top) || (top.length > 0 && isExact_(fz.z, g, top[0].arm));
   return {fz: fz, g: g, top: top, sure: sure, taps: taps, st: st,
     cands: top.map(c => { const v = armView_(c.arm.src, taps[c.arm.src['キー']], st[c.arm.src['キー']]); v.cost = Math.round(c.cost * 100) / 100; v.seq = c.seq; return v; })};
+}
+
+/** 自動学習：「刻印写真」シート（AIの読み と ひも付けた正解）から読み間違いを集計。1時間キャッシュ、ひも付けで更新 */
+function learned_() {
+  const c = CacheService.getScriptCache(), hit = c.get('learned');
+  if (hit) return JSON.parse(hit);
+  const sh = sheet_(CONFIG.SHEETS.PHOTOS);
+  const v = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, PHOTO_COLS.length).getDisplayValues() : [];
+  const ix = k => PHOTO_COLS.indexOf(k);
+  const st = learnStats_(v.map(r => ({read: r[ix('AI読取')], z: r[ix('図番')], g: r[ix('号機')]})));
+  try { c.put('learned', JSON.stringify(st), 3600); } catch (e) {}
+  return st;
 }
 
 function callAI_(prompt, imgsB64, schema) {
@@ -204,6 +216,7 @@ function apiLinkPhoto(photoId, key, readText, purpose) {
   const i = ids.indexOf(photoId);
   if (i < 0) appendRows_(CONFIG.SHEETS.PHOTOS, [row]);
   else sh.getRange(i + 2, 1, 1, row.length).setValues([row]);
+  CacheService.getScriptCache().remove('learned');
   return name;
 }
 

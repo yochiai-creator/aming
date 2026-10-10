@@ -66,7 +66,7 @@ function apiQueueProcess(id) {
   const t0 = Date.now();
   try {
     const b64 = Utilities.base64Encode(DriveApp.getFileById(row['元写真ID']).getBlob().getBytes());
-    const r1 = callAI_(P_FULL, [{data: FONT_REF_PNG, mime: 'image/png'}, b64], P_FULL_SCHEMA);
+    const r1 = callAI_(P_FULL + learnHint_(learned_()), [{data: FONT_REF_PNG, mime: 'image/png'}, b64], P_FULL_SCHEMA);
     const box = r1.found && r1.box && r1.box.length === 4 ? r1.box : null;
     const m = matchRead_(r1, null);
     const read = m.fz.z + ' / ' + (r1.seizo || '?') + '-' + (m.g || '?') + ' ' + (r1.kensa || '');
@@ -89,7 +89,7 @@ function apiQueueCrop(id, cropB64, enhB64) {
     READ_DEADLINE = Date.now() + 40000; READ_LOG = [];
     const t0 = Date.now();
     try {
-      const r1 = callAI_(P1, [{data: FONT_REF_PNG, mime: 'image/png'}, cropB64, enhB64], P1_SCHEMA);
+      const r1 = callAI_(P1 + learnHint_(learned_()), [{data: FONT_REF_PNG, mime: 'image/png'}, cropB64, enhB64], P1_SCHEMA);
       const m = matchRead_(r1, null);
       const read = m.fz.z + ' / ' + (r1.seizo || '?') + '-' + (m.g || '?') + ' ' + (r1.kensa || '');
       queueSet_(row, {'AI読取': read.trim(), '候補': JSON.stringify(m.cands), 'キー': m.sure && m.cands[0] ? m.cands[0].key : '', '状態': m.sure ? '確定' : '候補'});

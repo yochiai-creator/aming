@@ -530,7 +530,7 @@ function readCore_(orig, enh, last) {
   const photoId = savePhoto_(orig);
   rlog_('写真保存 ' + photoId);
   const imgs = [{data: FONT_REF_PNG, mime: 'image/png'}, orig, enh];
-  const r1 = callAI_(P1, imgs, P1_SCHEMA);
+  const r1 = callAI_(P1 + learnHint_(learned_()), imgs, P1_SCHEMA);
   const m = matchRead_(r1, last), fz = m.fz, g = m.g, top = m.top, sure = m.sure, taps = m.taps, st = m.st;
   let pick = sure ? {index: 0, confidence: '高', reason: '1回目で一致'} : null;
   // 2回目は時間に余裕があるときだけ（無ければ候補一覧から選んでもらう）
@@ -555,11 +555,23 @@ function matchRead_(r1, last) {
   const fz = fitZuban_(r1.zuban), g = fitGoki_(r1.goki);
   const taps = latestTaps_(loadTaps_()), st = liveSteps_();
   const arms = loadArms_().map(a => ({z: a['図番'], g: a['号機'], ship: a['出荷日'], done: !!taps[a['キー']], src: a}));
-  const top = rankArms_(fz.z, g, arms, {today: today_(), last: last}).slice(0, 5);
+  const top = rankArms_(fz.z, g, arms, {today: today_(), last: last, learned: learned_().pairs}).slice(0, 5);
   // 完全一致なら隣の号機があっても確定（記録画面で号機を確認できる）
   const sure = isSure_(top) || (top.length > 0 && isExact_(fz.z, g, top[0].arm));
   return {fz: fz, g: g, top: top, sure: sure, taps: taps, st: st,
     cands: top.map(c => { const v = armView_(c.arm.src, taps[c.arm.src['キー']], st[c.arm.src['キー']]); v.cost = Math.round(c.cost * 100) / 100; v.seq = c.seq; return v; })};
+}
+
+/** 自動学習：「刻印写真」シート（AIの読み と ひも付けた正解）から読み間違いを集計。1時間キャッシュ、ひも付けで更新 */
+function learned_() {
+  const c = CacheService.getScriptCache(), hit = c.get('learned');
+  if (hit) return JSON.parse(hit);
+  const sh = sheet_(CONFIG.SHEETS.PHOTOS);
+  const v = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, PHOTO_COLS.length).getDisplayValues() : [];
+  const ix = k => PHOTO_COLS.indexOf(k);
+  const st = learnStats_(v.map(r => ({read: r[ix('AI読取')], z: r[ix('図番')], g: r[ix('号機')]})));
+  try { c.put('learned', JSON.stringify(st), 3600); } catch (e) {}
+  return st;
 }
 
 function callAI_(prompt, imgsB64, schema) {
@@ -677,6 +689,7 @@ function apiLinkPhoto(photoId, key, readText, purpose) {
   const i = ids.indexOf(photoId);
   if (i < 0) appendRows_(CONFIG.SHEETS.PHOTOS, [row]);
   else sh.getRange(i + 2, 1, 1, row.length).setValues([row]);
+  CacheService.getScriptCache().remove('learned');
   return name;
 }
 
@@ -773,7 +786,7 @@ function apiQueueProcess(id) {
   const t0 = Date.now();
   try {
     const b64 = Utilities.base64Encode(DriveApp.getFileById(row['元写真ID']).getBlob().getBytes());
-    const r1 = callAI_(P_FULL, [{data: FONT_REF_PNG, mime: 'image/png'}, b64], P_FULL_SCHEMA);
+    const r1 = callAI_(P_FULL + learnHint_(learned_()), [{data: FONT_REF_PNG, mime: 'image/png'}, b64], P_FULL_SCHEMA);
     const box = r1.found && r1.box && r1.box.length === 4 ? r1.box : null;
     const m = matchRead_(r1, null);
     const read = m.fz.z + ' / ' + (r1.seizo || '?') + '-' + (m.g || '?') + ' ' + (r1.kensa || '');
@@ -796,7 +809,7 @@ function apiQueueCrop(id, cropB64, enhB64) {
     READ_DEADLINE = Date.now() + 40000; READ_LOG = [];
     const t0 = Date.now();
     try {
-      const r1 = callAI_(P1, [{data: FONT_REF_PNG, mime: 'image/png'}, cropB64, enhB64], P1_SCHEMA);
+      const r1 = callAI_(P1 + learnHint_(learned_()), [{data: FONT_REF_PNG, mime: 'image/png'}, cropB64, enhB64], P1_SCHEMA);
       const m = matchRead_(r1, null);
       const read = m.fz.z + ' / ' + (r1.seizo || '?') + '-' + (m.g || '?') + ' ' + (r1.kensa || '');
       queueSet_(row, {'AI読取': read.trim(), '候補': JSON.stringify(m.cands), 'キー': m.sure && m.cands[0] ? m.cands[0].key : '', '状態': m.sure ? '確定' : '候補'});
@@ -1010,14 +1023,19 @@ const SIM_GROUPS = [['0','O','D','Q'],['1','I','L','7','T'],['2','Z'],['5','S','
 const SIM_MAP = {};
 SIM_GROUPS.forEach(g => g.forEach(a => g.forEach(b => { if (a !== b) SIM_MAP[a + b] = 1; })));
 
-function subCost_(a, b) { if (a === b) return 0; if (a === '?' || b === '?') return 0.25; return SIM_MAP[a + b] ? 0.35 : 1; }
-// 打刻で紛らわしい文字ペアを安くした編集距離
-function wdist_(a, b) {
+// L = 学習した読み間違い {'AIの字>正しい字': 回数}。2回以上あった間違いはほぼ同じ字として扱う
+function subCost_(a, b, L) {
+  if (a === b) return 0; if (a === '?' || b === '?') return 0.25;
+  const n = L ? L[a + '>' + b] || 0 : 0, c = SIM_MAP[a + b] ? 0.35 : 1;
+  return n >= 2 ? Math.min(c, 0.15) : n === 1 ? Math.min(c, 0.5) : c;
+}
+// 打刻で紛らわしい文字ペアを安くした編集距離（a=AIの読み, b=台帳）
+function wdist_(a, b, L) {
   const m = a.length, n = b.length, d = [];
   for (let i = 0; i <= m; i++) d.push([i]);
   for (let j = 1; j <= n; j++) d[0][j] = j;
   for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
-    d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + subCost_(a[i-1], b[j-1]));
+    d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + subCost_(a[i-1], b[j-1], L));
   return d[m][n];
 }
 function normKokuin_(s) { return String(s || '').toUpperCase().replace(/[ØΦθ∅]/g, '0').replace(/[^A-Z0-9?]/g, ''); }
@@ -1054,7 +1072,7 @@ function rankArms_(z, g, arms, opts) {
   opts = opts || {};
   const last = opts.last, today = opts.today || '';
   const out = arms.map(a => {
-    let cost = (z ? wdist_(z, a.z) : 3) + (g ? wdist_(g, String(a.g)) * 1.5 : 2);
+    let cost = (z ? wdist_(z, a.z, opts.learned) : 3) + (g ? wdist_(g, String(a.g), opts.learned) * 1.5 : 2);
     let seq = false;
     // 直前に記録したのと同じ図番の続き番号なら優先
     if (last && last.z === a.z && /^\d+$/.test(String(a.g)) && /^\d+$/.test(String(last.g))) {
@@ -1079,6 +1097,56 @@ function isExact_(z, g, arm) { return !!arm && !!z && !!g && !/\?/.test(z + g) &
 function shiftDate_(ymd, days) {
   const p = ymd.split('/').map(Number), d = new Date(p[0], p[1] - 1, p[2] + days);
   return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
+}
+
+/* ===== 自動学習：確定した刻印写真（AIの読み と 正解）から読み間違いを集める ===== */
+// 「YY12B00902F1G2 / 2512-2724 U」→ {z, g}
+function parseRead_(text) {
+  const p = String(text || '').split(' / ');
+  const m = (p[1] || '').match(/-\s*([0-9A-Z?]+)/);
+  const z = normKokuin_(p[0]), g = m ? fitGoki_(m[1]) : '';
+  return {z: /^\?*$/.test(z) ? '' : z, g: /^\?*$/.test(g) ? '' : g}; // 全部 ? は読めてないので使わない
+}
+// 同じ長さの部分で、AIの字→正しい字 の置き換えを拾う（編集距離の逆たどり）
+function diffPairs_(a, b) {
+  const m = a.length, n = b.length, d = [];
+  for (let i = 0; i <= m; i++) { d.push([i]); }
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+  const out = [];
+  let i = m, j = n;
+  while (i > 0 && j > 0) {
+    const c = a[i-1] === b[j-1] ? 0 : 1;
+    if (d[i][j] === d[i-1][j-1] + c) { if (c && a[i-1] !== '?') out.push(a[i-1] + '>' + b[j-1]); i--; j--; }
+    else if (d[i][j] === d[i-1][j] + 1) i--; else j--;
+  }
+  return out;
+}
+// rows: [{read:'AI読取', z:'図番', g:'号機'}] → {pairs:{'7>0':n}, examples:[{ai, ok}], total, miss}
+function learnStats_(rows) {
+  const pairs = {}, examples = [];
+  let total = 0, miss = 0;
+  rows.forEach(r => {
+    const ai = parseRead_(r.read);
+    if (!ai.z && !ai.g) return;
+    total++;
+    const ps = (ai.z ? diffPairs_(ai.z, r.z) : []).concat(ai.g ? diffPairs_(ai.g, String(r.g)) : []);
+    if (!ps.length && (!ai.z || ai.z.length === r.z.length) && (!ai.g || ai.g.length === String(r.g).length)) return; // ? だけなら間違いに数えない
+    miss++;
+    ps.forEach(k => { pairs[k] = (pairs[k] || 0) + 1; });
+    examples.push({ai: ai.z + ' ' + ai.g, ok: r.z + ' ' + r.g});
+  });
+  return {pairs: pairs, examples: examples.slice(-8), total: total, miss: miss};
+}
+// AIに渡すヒント文（2回以上の間違いと最近の例）
+function learnHint_(st) {
+  if (!st || !st.miss) return '';
+  const top = Object.keys(st.pairs).filter(k => st.pairs[k] >= 2).sort((x, y) => st.pairs[y] - st.pairs[x]).slice(0, 8);
+  const lines = ['これまでの実績で、あなたは次の読み間違いをしています。同じ間違いに注意してください。'];
+  if (top.length) lines.push('よくある間違い: ' + top.map(k => '「' + k.split('>')[1] + '」を「' + k.split('>')[0] + '」と読んだ(' + st.pairs[k] + '回)').join('、'));
+  st.examples.slice(-5).forEach(e => lines.push('例: 読み ' + e.ai + ' → 正解 ' + e.ok));
+  return '\n' + lines.join('\n');
 }
 
 
