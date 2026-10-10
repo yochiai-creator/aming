@@ -281,6 +281,12 @@ h1{font-size:1.9rem}
 .qi .x{background:transparent;color:var(--sub);font-size:1.1rem;padding:0 4px}
 .spin{display:inline-block;width:10px;height:10px;border:2px solid var(--cyan);border-right-color:transparent;border-radius:50%;animation:sp 1s linear infinite;vertical-align:-1px;margin-right:4px}
 @keyframes sp{to{transform:rotate(360deg)}}
+@media (min-width:520px){
+  /* タブレット：ショベルの左隣（AMINGとショベルの間）に縦並びで置く */
+  #paintNow{position:static;order:1;margin:auto;flex-direction:column;align-items:center;gap:2px;padding:6px 12px;white-space:nowrap}
+  .hero .exc{position:static;order:2;flex:0 1 330px;width:auto;min-width:0;align-self:flex-end}
+  #paintNow b{font-size:1.8rem}
+}
 </style>
 </head>
 <body>
@@ -389,7 +395,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/10-47"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/10-48"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
