@@ -129,7 +129,8 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
   t("撮るだけ：キューが出る", () => { assert.strictEqual(w.document.querySelectorAll("#qList .qi").length, 2); assert.ok(w.document.querySelector("#qList").textContent.includes("特定")); });
   t("撮るだけ：塗装完了は一覧から記録ボタン", () => assert.ok(w.document.querySelector('[data-act="qrec"][data-id="q1"]')));
   click('[data-act="qrec"][data-id="q1"]'); await wait(30);
-  t("撮るだけ：名前未設定なら設定へ", () => { assert.ok(!calls.includes("apiQueueRecord")); assert.ok(!w.document.getElementById("settingsView").classList.contains("hidden")); });
+  t("撮るだけ：名前未設定なら確認者を選ばせる", () => { assert.ok(!calls.includes("apiQueueRecord")); assert.ok(w.document.getElementById("meRow").classList.contains("need")); });
+  t("読取画面で確認者を選べる", () => assert.ok(w.document.querySelector('#meSeg [data-act="me"][data-n="田中"]')));
   click('[data-act="nav"][data-v="scan"]'); await wait(10);
   t("撮影の目的：撮るボタンに目的が出る", () => assert.ok(w.document.getElementById("shootBtn").textContent.includes("【")));
   click('[data-act="qopen"][data-id="q1"]'); await wait(40);

@@ -247,6 +247,10 @@ h1{font-size:1.9rem}
 #scanView[data-p="塗装後チェック"] .shoot:not(.alt){background:linear-gradient(180deg,#F29A1F,#B85F00)}
 #scanView[data-p="出荷"] .shoot:not(.alt){background:linear-gradient(180deg,#34C574,#16773F)}
 .shoot b.pl{display:block;font-size:.8rem;letter-spacing:.1em;opacity:.95}
+#meSeg{flex-wrap:wrap}
+#meSeg button.on{background:var(--accent);color:#fff;box-shadow:0 0 10px rgba(0,200,215,.45)}
+#meRow.need{animation:need 1s 2}#meRow.need>span{color:var(--ng);font-weight:700}
+@keyframes need{50%{background:rgba(255,77,61,.18)}}
 .qbar{display:flex;gap:8px;margin:0 0 8px}
 .qbar button{flex:1}.qbar .go{flex:2}
 .qi.recd{opacity:.75}
@@ -273,7 +277,7 @@ h1{font-size:1.9rem}
   <header class="hero">
     <div>
       <div class="brand"><span class="led"></span><div><h1>AMING</h1><small>ARM TRACE SYSTEM</small></div></div>
-      <button type="button" id="meBtn" data-act="nav" data-v="settings">確認者：未設定</button>
+      <button type="button" id="meBtn" data-act="nav" data-v="scan">確認者：未設定</button>
       <div style="margin-top:8px"><span id="today"></span></div>
     </div>
     <div data-exc></div>
@@ -289,6 +293,7 @@ h1{font-size:1.9rem}
     <div class="purpose"><span>撮影の目的</span><div class="seg" id="purposeSeg">
       <button type="button" data-act="purpose" data-v="塗装完了">塗装完了</button><button type="button" data-act="purpose" data-v="塗装後チェック">塗装後チェック</button><button type="button" data-act="purpose" data-v="出荷">出荷</button>
     </div></div>
+    <div class="purpose" id="meRow"><span>確認者</span><div class="seg" id="meSeg"></div></div>
     <button class="shoot" id="shootBtn" type="button"><svg class="bucket" viewBox="0 0 34 26" fill="none" stroke="#fff" stroke-width="2.6"><path d="M2 8 V2 H9 M25 2 H32 V8 M32 18 V24 H25 M9 24 H2 V18"/><path d="M8 13 H26" stroke-width="1.6" opacity=".9"/></svg><b class="pl" id="shootPurpose"></b>刻印を撮る<small>撮るだけでOK。続けて何枚でも。読み取りは裏でやって、終わったら知らせます</small></button>
     <button class="shoot alt" id="pickBtn" type="button">写真を選んで自分で枠を合わせる</button>
     <input id="cam" type="file" accept="image/*" capture="environment" class="hidden">
@@ -362,12 +367,16 @@ function syncPurpose() {
   document.querySelectorAll("#purposeSeg button").forEach(b => b.classList.toggle("on", b.dataset.v === purpose));
   $("scanView").dataset.p = purpose; $("shootPurpose").textContent = "【" + purpose + "】";
 }
+function needMe() {
+  toast("先に確認者（自分の名前）を選んでください"); show("scan");
+  const r = $("meRow"); r.classList.remove("need"); void r.offsetWidth; r.classList.add("need"); r.scrollIntoView({block: "center"});
+}
 const STEP_PURPOSE = p => p === "塗装完了" || p === "出荷";
 let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastRead = "";
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/10-41"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/10-42"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -392,6 +401,7 @@ function show(v) {
 }
 function renderHead() {
   $("meBtn").textContent = "確認者：" + (me || "未設定 ▶");
+  $("meSeg").innerHTML = boot.people.map(n => `<button type="button" data-act="me" data-n="${esc(n)}" class="${n === me ? "on" : ""}">${esc(n)}</button>`).join("") || '<span class="muted">台帳の「設定」シートの確認者に名前を入れてください</span>';
   $("today").textContent = boot.today ? md(boot.today) + "(" + wd(boot.today) + ")" : "";
   const todo = boot.days.filter(d => d.date >= boot.today).slice(0, 4).reduce((s, d) => s + d.todo, 0);
   $("todoBadge").textContent = todo; $("todoBadge").classList.toggle("hidden", !todo);
@@ -575,10 +585,7 @@ async function refreshDays() { try { boot.days = await run("apiDays"); renderHea
 /* ================= 設定 ================= */
 function renderSettings() {
   $("settingsView").innerHTML = `
-  <section><h2>自分の名前（確認者）</h2>
-    <div class="names">${boot.people.map(n => `<button type="button" data-act="me" data-n="${esc(n)}" class="${n === me ? "on" : ""}">${esc(n)}</button>`).join("") || '<span class="muted">台帳の「設定」シートの確認者に名前を入れてください</span>'}</div>
-    <p class="muted">この端末で選んだ名前が、記録画面の確認者に最初から入ります。名前の追加は台帳スプレッドシートの「設定」シート（確認者）で。</p>
-  </section>
+  <p class="muted">確認者は「読取」画面で選びます。名前の追加は台帳スプレッドシートの「設定」シート（確認者）で。</p>
   <section><h2>CSV出力（タップ記録）</h2>
     <div class="row"><input type="text" id="csvFrom" placeholder="出荷日 から 例 2026/10/01"><input type="text" id="csvTo" placeholder="出荷日 まで"></div>
     <div class="row"><button type="button" class="btn sec" data-act="csv">ダウンロード</button></div>
@@ -875,7 +882,7 @@ document.addEventListener("click", async e => {
     return;
   }
   if (act === "qrec" || act === "qrecAll") {
-    if (!me) { toast("先に設定タブで自分の名前を選んでください"); show("settings"); return; }
+    if (!me) { needMe(); return; }
     const ids = act === "qrec" ? [b.dataset.id] : queue.filter(q => !q.seen && q.state === "確定" && !q.rec && STEP_PURPOSE(q.purpose)).map(q => q.id);
     b.disabled = true;
     try { const vs = await run("apiQueueRecord", ids, me); vs.forEach(qUpdate); toast(`✔ ${vs.length}本 記録しました`); listData && fetchList().catch(() => {}); }
@@ -906,7 +913,7 @@ document.addEventListener("click", async e => {
   }
   else if (act === "save") { readForm(); saveTap({result: form.result, holes: form.holes, treated: form.treated, person: form.person, note: form.note}); }
   else if (act === "step") {
-    if (!me) { toast("設定タブで自分の名前を選んでください"); return; }
+    if (!me) { toast("読取画面の「確認者」で自分の名前を選んでください"); return; }
     const note = prompt(`${b.dataset.s}を記録します（${me}）。メモがあれば入力`, "");
     if (note === null) return;
     b.disabled = true;
