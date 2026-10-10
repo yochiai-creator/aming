@@ -242,7 +242,15 @@ h1{font-size:1.9rem}
 .purpose{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
 .purpose>span{font-family:"Share Tech Mono","BIZ UDPGothic",monospace;font-size:.8rem;color:var(--sub)}
 .purpose .seg button{min-width:0;padding:9px 12px;font-size:.88rem}
-.purpose .seg button.on{background:var(--accent);color:#fff;box-shadow:0 0 10px rgba(0,200,215,.45)}
+.purpose .seg button.on{background:var(--pc);color:#fff;box-shadow:0 0 10px var(--pc)}
+.purpose .seg button[data-v="塗装完了"]{--pc:#00A7B5}.purpose .seg button[data-v="塗装後チェック"]{--pc:#D97A00}.purpose .seg button[data-v="出荷"]{--pc:#1F9E55}
+#scanView[data-p="塗装後チェック"] .shoot:not(.alt){background:linear-gradient(180deg,#F29A1F,#B85F00)}
+#scanView[data-p="出荷"] .shoot:not(.alt){background:linear-gradient(180deg,#34C574,#16773F)}
+.shoot b.pl{display:block;font-size:.8rem;letter-spacing:.1em;opacity:.95}
+.qbar{display:flex;gap:8px;margin:0 0 8px}
+.qbar button{flex:1}.qbar .go{flex:2}
+.qi.recd{opacity:.75}
+.qdone{color:var(--ok);font-weight:700}
 .goal{border-color:var(--accent);box-shadow:inset 0 0 22px rgba(0,200,215,.12)}
 #tapForm.focus{border-color:var(--accent);box-shadow:inset 0 0 22px rgba(0,200,215,.12)}
 .qi{display:flex;gap:10px;align-items:flex-start;border-top:1px dashed var(--edge);padding:10px 0}
@@ -281,7 +289,7 @@ h1{font-size:1.9rem}
     <div class="purpose"><span>撮影の目的</span><div class="seg" id="purposeSeg">
       <button type="button" data-act="purpose" data-v="塗装完了">塗装完了</button><button type="button" data-act="purpose" data-v="塗装後チェック">塗装後チェック</button><button type="button" data-act="purpose" data-v="出荷">出荷</button>
     </div></div>
-    <button class="shoot" id="shootBtn" type="button"><svg class="bucket" viewBox="0 0 34 26" fill="none" stroke="#fff" stroke-width="2.6"><path d="M2 8 V2 H9 M25 2 H32 V8 M32 18 V24 H25 M9 24 H2 V18"/><path d="M8 13 H26" stroke-width="1.6" opacity=".9"/></svg>刻印を撮る<small>撮るだけでOK。続けて何枚でも。読み取りは裏でやって、終わったら知らせます</small></button>
+    <button class="shoot" id="shootBtn" type="button"><svg class="bucket" viewBox="0 0 34 26" fill="none" stroke="#fff" stroke-width="2.6"><path d="M2 8 V2 H9 M25 2 H32 V8 M32 18 V24 H25 M9 24 H2 V18"/><path d="M8 13 H26" stroke-width="1.6" opacity=".9"/></svg><b class="pl" id="shootPurpose"></b>刻印を撮る<small>撮るだけでOK。続けて何枚でも。読み取りは裏でやって、終わったら知らせます</small></button>
     <button class="shoot alt" id="pickBtn" type="button">写真を選んで自分で枠を合わせる</button>
     <input id="cam" type="file" accept="image/*" capture="environment" class="hidden">
     <input id="camMulti" type="file" accept="image/*" multiple class="hidden">
@@ -289,6 +297,7 @@ h1{font-size:1.9rem}
     <p class="tip" id="tip">ライトを真横から当てて、打刻の影がはっきり出る角度で撮ると読み取りが安定します。</p>
     <section id="queueSec" class="hidden">
       <h2>撮った刻印 <span id="qCount" class="muted"></span></h2>
+      <div class="qbar" id="qBar"></div>
       <div id="qList"></div>
       <div class="row"><button type="button" class="btn sec mini" id="addMulti">アルバムからまとめて追加</button></div>
     </section>
@@ -348,8 +357,12 @@ const ls = {get: k => { try { return localStorage.getItem(k); } catch (e) { retu
 let boot = {people: [], days: [], today: ""};
 let me = ls.get("trace.me") || "";
 let readToken = 0, cancelRead = () => {};
-let purpose = ls.get("trace.purpose") || "塗装後チェック", scanPurpose = "";
-function syncPurpose() { document.querySelectorAll("#purposeSeg button").forEach(b => b.classList.toggle("on", b.dataset.v === purpose)); }
+let purpose = ls.get("trace.purpose") || "塗装完了", scanPurpose = "";
+function syncPurpose() {
+  document.querySelectorAll("#purposeSeg button").forEach(b => b.classList.toggle("on", b.dataset.v === purpose));
+  $("scanView").dataset.p = purpose; $("shootPurpose").textContent = "【" + purpose + "】";
+}
+const STEP_PURPOSE = p => p === "塗装完了" || p === "出荷";
 let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastRead = "";
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
@@ -727,15 +740,20 @@ function renderQueue() {
   $("queueSec").classList.toggle("hidden", !live.length);
   const wait = live.filter(q => ["送信中", "待ち", "処理中"].includes(q.state)).length;
   $("qCount").textContent = wait ? `読み取り中 ${wait}件` : `${live.length}件`;
+  const todo = live.filter(q => q.state === "確定" && !q.rec && STEP_PURPOSE(q.purpose)), recd = live.filter(q => q.rec);
+  $("qBar").innerHTML = (todo.length >= 2 ? `<button type="button" class="btn go" data-act="qrecAll">特定した${todo.length}本をまとめて記録</button>` : "") +
+    (recd.length ? `<button type="button" class="btn sec mini" data-act="qclear">記録済みを片付ける</button>` : "");
   $("qList").innerHTML = live.map(q => {
     const lb = Q_LABEL[q.state] || ["wait", q.state];
     const thumb = q.thumb ? `style="background-image:url('${q.thumb}')"` : "";
     let acts = "";
-    if (q.state === "確定") acts = `<button type="button" class="btn go mini" data-act="qopen" data-id="${esc(q.id)}">記録を開く</button>`;
+    if (q.state === "確定" && q.rec) acts = `<span class="qdone">✔ ${esc(q.purpose)} 記録済み</span> <button type="button" class="link" data-act="qunrec" data-id="${esc(q.id)}">取消</button> <button type="button" class="link" data-act="qopen" data-id="${esc(q.id)}">詳細</button>`;
+    else if (q.state === "確定" && STEP_PURPOSE(q.purpose)) acts = `<button type="button" class="btn go mini" data-act="qrec" data-id="${esc(q.id)}">${esc(q.purpose)}を記録</button> <button type="button" class="link" data-act="qopen" data-id="${esc(q.id)}">詳細</button>`;
+    else if (q.state === "確定") acts = `<button type="button" class="btn go mini" data-act="qopen" data-id="${esc(q.id)}">タップを記録</button>`;
     else if (q.state === "候補") acts = (q.cands || []).slice(0, 3).map(a => `<button type="button" class="arm" data-act="qpick" data-id="${esc(q.id)}" data-k="${esc(a.key)}"><span class="az">${esc(a.z)}<b>${esc(a.g)}</b></span></button>`).join("");
     else if (q.state === "刻印なし" || q.state === "失敗") acts = `<button type="button" class="btn sec mini" data-act="qretry" data-id="${esc(q.id)}">もう一度読む</button>`;
     const arm = q.state === "確定" && q.cands && q.cands[0] ? `${q.cands[0].z} ${q.cands[0].g}号機` : (q.read || "");
-    return `<div class="qi"><div class="qt" ${thumb}></div><div class="qb">
+    return `<div class="qi ${q.rec ? "recd" : ""}"><div class="qt" ${thumb}></div><div class="qb">
       <div class="qs ${lb[0]}">${lb[0] === "wait" ? '<span class="spin"></span>' : ""}${esc(lb[1])}${q.purpose ? "　" + esc(q.purpose) : ""}</div>
       <div class="qr">${esc(arm)}</div>${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
       <div class="qa">${acts}</div></div>
@@ -845,7 +863,29 @@ document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act;
   if (act === "qopen") { const q = queue.find(x => x.id === b.dataset.id); if (!q) return; run("apiQueueDone", q.id).catch(() => {}); q.seen = true; renderQueue(); photoId = ""; openArm(q.key, false, q.purpose); return; }
-  if (act === "qpick") { const q = queue.find(x => x.id === b.dataset.id); b.disabled = true; try { const v = await run("apiQueuePick", b.dataset.id, b.dataset.k); qUpdate(v); run("apiQueueDone", v.id).catch(() => {}); v.seen = true; Object.assign(q, {seen: true}); renderQueue(); photoId = ""; openArm(b.dataset.k, false, q && q.purpose); } catch (err) { toast(errMsg(err)); b.disabled = false; } return; }
+  if (act === "qpick") {
+    const q = queue.find(x => x.id === b.dataset.id); b.disabled = true;
+    try {
+      const v = await run("apiQueuePick", b.dataset.id, b.dataset.k); qUpdate(v);
+      if (STEP_PURPOSE(v.purpose || (q && q.purpose))) return; // 塗装完了・出荷は一覧のまま「記録」ボタンへ
+      run("apiQueueDone", v.id).catch(() => {}); v.seen = true; Object.assign(q, {seen: true}); renderQueue(); photoId = ""; openArm(b.dataset.k, false, q && q.purpose);
+    } catch (err) { toast(errMsg(err)); b.disabled = false; }
+    return;
+  }
+  if (act === "qrec" || act === "qrecAll") {
+    if (!me) { toast("先に設定タブで自分の名前を選んでください"); show("settings"); return; }
+    const ids = act === "qrec" ? [b.dataset.id] : queue.filter(q => !q.seen && q.state === "確定" && !q.rec && STEP_PURPOSE(q.purpose)).map(q => q.id);
+    b.disabled = true;
+    try { const vs = await run("apiQueueRecord", ids, me); vs.forEach(qUpdate); toast(`✔ ${vs.length}本 記録しました`); listData && fetchList().catch(() => {}); }
+    catch (err) { toast(errMsg(err)); b.disabled = false; }
+    return;
+  }
+  if (act === "qunrec") {
+    b.disabled = true;
+    try { qUpdate(await run("apiQueueUnrecord", b.dataset.id)); toast("取り消しました"); fetchList().catch(() => {}); } catch (err) { toast(errMsg(err)); b.disabled = false; }
+    return;
+  }
+  if (act === "qclear") { queue.filter(q => !q.seen && q.rec).forEach(q => { q.seen = true; run("apiQueueDone", q.id).catch(() => {}); }); renderQueue(); return; }
   if (act === "qdone") { const q = queue.find(x => x.id === b.dataset.id); if (q) { q.seen = true; renderQueue(); run("apiQueueDone", q.id).catch(() => {}); } return; }
   if (act === "qretry") { const q = queue.find(x => x.id === b.dataset.id); if (q) { q.state = "待ち"; q.error = ""; renderQueue(); qPump(); } return; }
   if (act === "purpose") { purpose = b.dataset.v; ls.set("trace.purpose", purpose); syncPurpose(); }

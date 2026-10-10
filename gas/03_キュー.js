@@ -40,7 +40,7 @@ function queueView_(r) {
   let box = null;
   try { box = r['枠'] ? JSON.parse(r['枠']) : null; } catch (e) {}
   return {id: r['ID'], at: r['日時'], purpose: r['目的'], state: r['状態'], fullId: r['元写真ID'], cropId: r['切り出しID'],
-    box: box, read: r['AI読取'], key: r['キー'], cands: cands, error: r['エラー'], seen: r['確認'] === '済'};
+    box: box, read: r['AI読取'], key: r['キー'], cands: cands, error: r['エラー'], seen: r['確認'] === '済', rec: r['記録'] || ''};
 }
 
 /** 撮った写真（全体・縮小済み）を積む。すぐ返る */
@@ -107,6 +107,32 @@ function apiQueuePick(id, key) {
   const photo = row['切り出しID'] || row['元写真ID'];
   if (photo) apiLinkPhoto(photo, key, row['AI読取'], row['目的']);
   return queueView_(row);
+}
+/** 特定済みの写真から、目的の工程（塗装完了・出荷）をまとめて記録。詳細を開かずに一覧から押せる */
+function apiQueueRecord(ids, person) {
+  if (!person) throw new Error('設定タブで自分の名前を選んでください');
+  const sh = queueSheet_();
+  if (sh.getRange(1, QUEUE_COLS.length).getValue() !== '記録') sh.getRange(1, QUEUE_COLS.length).setValue('記録').setFontWeight('bold');
+  const rows = queueRows_(), arms = {};
+  loadArms_().forEach(a => { arms[a['キー']] = a; });
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm'), add = [], done = [];
+  ids.forEach(id => {
+    const r = rows.find(x => x['ID'] === id), step = r && r['目的'];
+    if (!r || r['状態'] !== '確定' || r['記録'] || (step !== '塗装完了' && step !== '出荷')) return;
+    const a = arms[r['キー']];
+    if (!a) return;
+    const recId = Utilities.getUuid().slice(0, 8);
+    add.push([recId, now, a['キー'], a['図番'], a['号機'], step, person, '', r['切り出しID'] || r['元写真ID'] || '', '']);
+    done.push([r, recId]);
+  });
+  if (add.length) appendRows_(CONFIG.SHEETS.STEPS, add);
+  return done.map(d => queueView_(queueSet_(d[0], {'記録': d[1]})));
+}
+/** 一覧から記録した工程を取り消す */
+function apiQueueUnrecord(id) {
+  const row = queueFind_(id);
+  if (row['記録']) cancelRow_(CONFIG.SHEETS.STEPS, STEP_COLS, row['記録']);
+  return queueView_(queueSet_(row, {'記録': ''}));
 }
 /** 一覧から消す（確認済み） */
 function apiQueueDone(id) { return queueView_(queueSet_(queueFind_(id), {'確認': '済'})); }

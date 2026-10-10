@@ -104,6 +104,8 @@ const api = {
   apiQueueList: () => [{id: "q1", state: "確定", key: arm.key, purpose: "塗装完了", cands: [arm], read: "YN12B20269F1 / 2609-1152 UM"}, {id: "q2", state: "候補", purpose: "出荷", cands: [arm], read: "YN12B2026?F1 / 1152"}],
   apiQueueDone: id => ({id, seen: true}),
   apiQueuePick: (id, key) => ({id, state: "確定", key, cands: [arm]}),
+  apiQueueRecord: (ids, person) => ids.map(id => ({id, state: "確定", key: arm.key, purpose: "塗装完了", cands: [arm], rec: "r-" + id, by: person})),
+  apiQueueUnrecord: id => ({id, state: "確定", key: arm.key, purpose: "塗装完了", cands: [arm], rec: ""}),
   apiDeletePhoto: () => Object.assign(api.apiArm(), {photos: []}),
   apiPhoto: () => "data:image/jpeg;base64,AAAA",
   apiSaveStep: rec => { const v = api.apiArm(); v.steps[1].recs.push({id: "s1", at: "2026/10/07 10:00", by: rec.person, note: rec.note, canceled: false}); return v; },
@@ -125,6 +127,11 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
 (async () => {
   await wait(30);
   t("撮るだけ：キューが出る", () => { assert.strictEqual(w.document.querySelectorAll("#qList .qi").length, 2); assert.ok(w.document.querySelector("#qList").textContent.includes("特定")); });
+  t("撮るだけ：塗装完了は一覧から記録ボタン", () => assert.ok(w.document.querySelector('[data-act="qrec"][data-id="q1"]')));
+  click('[data-act="qrec"][data-id="q1"]'); await wait(30);
+  t("撮るだけ：名前未設定なら設定へ", () => { assert.ok(!calls.includes("apiQueueRecord")); assert.ok(!w.document.getElementById("settingsView").classList.contains("hidden")); });
+  click('[data-act="nav"][data-v="scan"]'); await wait(10);
+  t("撮影の目的：撮るボタンに目的が出る", () => assert.ok(w.document.getElementById("shootBtn").textContent.includes("【")));
   click('[data-act="qopen"][data-id="q1"]'); await wait(40);
   t("撮るだけ：確定→記録を開く（目的バナー）", () => { assert.ok(calls.includes("apiArm")); assert.ok(w.document.querySelector(".goal").textContent.includes("塗装完了")); });
   click('[data-act="nav"][data-v="scan"]'); await wait(10);
@@ -157,6 +164,12 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
   click('[data-act="nav"][data-v="list"]'); await wait(30); click('#dayList [data-act="arm"]'); await wait(30);
   click('[data-act="step"][data-s="塗装完了"]'); await wait(30);
   t("工程ログ：塗装完了を記録", () => { assert.ok(calls.includes("apiSaveStep")); assert.ok(w.document.querySelector(".steps .rec").textContent.includes("田中")); });
+  click('[data-act="nav"][data-v="scan"]'); await wait(10);
+  t("撮るだけ：候補を選んだ出荷は一覧に残って記録ボタン", () => assert.ok(w.document.querySelector('[data-act="qrec"][data-id="q2"]')));
+  click('[data-act="qrec"][data-id="q2"]'); await wait(30);
+  t("撮るだけ：一覧から記録→記録済み", () => { assert.ok(calls.includes("apiQueueRecord")); assert.ok(w.document.querySelector("#qList").textContent.includes("記録済み")); assert.ok(w.document.querySelector('[data-act="qclear"]')); });
+  click('[data-act="qunrec"][data-id="q2"]'); await wait(30);
+  t("撮るだけ：記録の取消", () => { assert.ok(calls.includes("apiQueueUnrecord")); assert.ok(w.document.querySelector('[data-act="qrec"][data-id="q2"]')); });
   console.log("errors", JSON.stringify(errors));
   process.exitCode = errors.length ? 1 : 0;
 })();

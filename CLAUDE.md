@@ -11,7 +11,7 @@
 | `gas/03_取込.js` | Excel(.xlsm)→Googleシート変換→`parseShipValues_`→台帳へ上書きマージ。列は**見出し名で探す** |
 | `gas/03_照合.js` | `fitZuban_`/`fitGoki_`/`wdist_`/`rankArms_`（純粋関数・nodeでテスト可） |
 | `gas/03_AI読取.js` | `apiRead`：Gemini（既定）か Claude で2段階読取（JSONスキーマ指定）＋刻印写真をDrive保存 |
-| `gas/03_キュー.js` | **撮るだけモード**（10/10〜メイン）：`apiQueueAdd`（全体写真を長辺2000で保存→「読取キュー」シート）→`apiQueueProcess`（写真全体をGeminiへ：`P_FULL` で刻印の枠 box[ymin,xmin,ymax,xmax 0-1000]＋読み→照合）→画面が枠で切り出して `apiQueueCrop`（確定ならひも付け、候補なら切り出し＋強調で読み直し）。`apiQueuePick`/`apiQueueDone`/`apiQueueList`。画面を閉じても `processQueue` トリガー（5分おき、setupTriggersで作成）が待ちを読む |
+| `gas/03_キュー.js` | **撮るだけモード**（10/10〜メイン）：`apiQueueAdd`（全体写真を長辺2000で保存→「読取キュー」シート）→`apiQueueProcess`（写真全体をGeminiへ：`P_FULL` で刻印の枠 box[ymin,xmin,ymax,xmax 0-1000]＋読み→照合）→画面が枠で切り出して `apiQueueCrop`（確定ならひも付け、候補なら切り出し＋強調で読み直し）。`apiQueuePick`/`apiQueueDone`/`apiQueueList`。目的が塗装完了・出荷なら一覧から直接「○○を記録」／「まとめて記録」（`apiQueueRecord`＝工程記録へ追記、キューの「記録」列に記録ID、`apiQueueUnrecord` で取消）。塗装後チェックは詳細を開いてタップ記録。目的は色分け（塗装完了=ブルーグリーン/塗装後チェック=オレンジ/出荷=緑）し撮るボタンに【目的】表示、既定は塗装完了。画面を閉じても `processQueue` トリガー（5分おき、setupTriggersで作成）が待ちを読む |
 | `gas/03_フォント見本.js` | 刻印機 Telesis TMC470 の11x16ドットフォント見本（PNG base64）。AI読取の1枚目に添える。元画像 `data/telesis_font_11x16.png` |
 | `gas/03_通知.js` | `notifyUnchecked`：次の出荷日（台帳上の翌出荷日）分で「良」がないアームをメール。`TRACK_FROM`（運用開始日 2026/10/08）より前の出荷は対象外 |
 | `gas/04_テスト.js` | GASエディタで実行する確認用関数 |
