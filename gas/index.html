@@ -379,7 +379,15 @@ const errMsg = e => (e && e.message || String(e)).replace(/^Error:\s*/, "");
 function toast(m) { const t = $("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2600); }
 const ls = {get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }};
 
+// 起動を待たずに出すため、前回の起動データを端末に保存して先に表示（日付は端末の時計＝日本時間）
+function todayJst() {
+  const p = new Intl.DateTimeFormat("ja-JP", {timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit"}).formatToParts(new Date());
+  const g = t => (p.find(x => x.type === t) || {}).value;
+  return `${g("year")}/${g("month")}/${g("day")}`;
+}
 let boot = {people: [], days: [], today: ""};
+try { boot = Object.assign(boot, JSON.parse(localStorage.getItem("trace.boot") || "{}")); } catch (e) {}
+try { boot.today = todayJst(); } catch (e) {}
 let me = ls.get("trace.me") || "";
 let readToken = 0, cancelRead = () => {};
 let purpose = ls.get("trace.purpose") || "塗装完了", scanPurpose = "";
@@ -396,7 +404,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/10-49"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/10-50"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1045,7 +1053,7 @@ document.addEventListener("click", async e => {
 
 syncPurpose();
 qBoot();
-run("apiBoot").then(b => { boot = b; renderHead(); fetchList().catch(() => {}); run("apiAutoOrganize").catch(() => {}); }).catch(e => toast("起動エラー：" + errMsg(e)));
+run("apiBoot").then(b => { boot = b; ls.set("trace.boot", JSON.stringify({people: b.people, days: b.days})); renderHead(); fetchList().catch(() => {}); run("apiAutoOrganize").catch(() => {}); }).catch(e => toast("起動エラー：" + errMsg(e)));
 renderHead();
 })();
 </script>
