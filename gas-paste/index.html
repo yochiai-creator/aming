@@ -150,6 +150,8 @@ ul.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--edge);margi
 .tile.mid{border-left-color:#3FD0FF}.tile.mid small{color:#3FD0FF}
 .tile.good,.tile.done{border-left-color:var(--ok);opacity:.7}.tile.good small,.tile.done small{color:var(--ok)}
 .tile.bad{border-left-color:var(--ng);background:rgba(255,77,61,.1)}.tile.bad small{color:var(--ng);font-weight:700}
+.tile i.plan{display:block;font-style:normal;font-size:.66rem;color:var(--sub);font-family:"Share Tech Mono","BIZ UDPGothic",monospace}
+.tile i.plan.late{color:var(--ng);font-weight:700}
 .tile:active{background:rgba(0,167,181,.15)}
 .prog{position:relative;height:22px;background:#0A0D0F;border:1px solid var(--edge);margin-bottom:8px}
 .prog i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#00848F,#22C3D0)}
@@ -379,7 +381,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/10-44"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/10-45"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -417,6 +419,12 @@ const isPainted = a => a.painted !== undefined ? a.painted : stOf(a) !== "未";
 const isFixed = a => a.fixed !== undefined ? a.fixed : ["塗装後チェック済", "出荷済"].includes(stOf(a));
 const LIST_FILTERS = {"すべて": () => true, "未塗装": a => !isPainted(a), "塗装済": isPainted, "未塗装後修正": a => !isFixed(a), "塗装後修正済": isFixed};
 const TILE_LABEL = {"未": "未塗装", "塗装完了": "塗装済", "塗装後チェック済": "修正済"};
+// 次にやる工程のExcel予定日（塗＝塗装完了、修＝塗装後修正完了）。過ぎていたら赤
+function planHtml(a) {
+  const p = !isPainted(a) ? ["塗", a.paintPlan] : !isFixed(a) ? ["修", a.fixPlan] : null;
+  if (!p || !p[1]) return "";
+  return `<i class="plan ${p[1] < boot.today ? "late" : ""}">${p[0]}${esc(md(p[1]))}</i>`;
+}
 function stOf(a) { return a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未"); }
 // 図番ごとにまとめて、号機をタイルで並べる
 function armGroups(rows, withShip) {
@@ -427,7 +435,7 @@ function armGroups(rows, withShip) {
     list.sort((x, y) => String(x.g).localeCompare(String(y.g), "ja", {numeric: true}));
     return `<div class="grp"><div class="gh"><span class="gz">${esc(a0.z)}</span><span class="gc">${ok}/${list.length}</span>
       <span class="gm">${withShip ? "出荷 " + esc(md(a0.ship || "-")) + "　" : ""}${esc(a0.to || "")}　${esc(a0.kishu || "")}</span></div>
-      <div class="tiles">${list.map(a => { const st = stOf(a); return `<button type="button" class="tile ${STAGE_CLS[st] || "todo"}" data-act="arm" data-k="${esc(a.key)}"><b>${esc(a.g)}</b><small>${esc(TILE_LABEL[st] || st)}${a.by ? "・" + esc(a.by) : ""}</small></button>`; }).join("")}</div></div>`;
+      <div class="tiles">${list.map(a => { const st = stOf(a); return `<button type="button" class="tile ${STAGE_CLS[st] || "todo"}" data-act="arm" data-k="${esc(a.key)}"><b>${esc(a.g)}</b><small>${esc(TILE_LABEL[st] || st)}${a.by ? "・" + esc(a.by) : ""}</small>${planHtml(a)}</button>`; }).join("")}</div></div>`;
   }).join("");
 }
 function renderDayList() {
