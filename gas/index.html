@@ -367,6 +367,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
+const APP_VER = "10/10-41"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -581,7 +582,8 @@ function renderSettings() {
   <section><h2>CSV出力（タップ記録）</h2>
     <div class="row"><input type="text" id="csvFrom" placeholder="出荷日 から 例 2026/10/01"><input type="text" id="csvTo" placeholder="出荷日 まで"></div>
     <div class="row"><button type="button" class="btn sec" data-act="csv">ダウンロード</button></div>
-  </section>`;
+  </section>
+  <p class="muted" style="text-align:center">画面の版 ${APP_VER}</p>`;
 }
 
 /* ================= 画像 ================= */
