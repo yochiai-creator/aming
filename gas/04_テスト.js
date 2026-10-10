@@ -18,9 +18,11 @@ function testDays() {
 }
 // AI読取：刻印写真フォルダの最新写真で1回目だけ試す
 function testReadLatestPhoto() {
-  const it = DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getFiles();
   let f = null;
-  while (it.hasNext()) { const x = it.next(); if (!f || x.getDateCreated() > f.getDateCreated()) f = x; }
+  [photoFolder_(new Date()), photoFolder_(new Date(), '未特定')].forEach(dir => {
+    const it = dir.getFiles();
+    while (it.hasNext()) { const x = it.next(); if (!f || x.getDateCreated() > f.getDateCreated()) f = x; }
+  });
   if (!f) { console.log('写真がありません'); return; }
   const b = Utilities.base64Encode(f.getBlob().getBytes());
   console.log(JSON.stringify(callAI_(P1, [{data: FONT_REF_PNG, mime: 'image/png'}, b, b], P1_SCHEMA)));

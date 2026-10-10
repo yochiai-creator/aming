@@ -671,16 +671,16 @@ function callClaude_(prompt, imgsB64, schema) {
 
 /**
  * 撮った刻印写真（枠で切り出した画像）をアームにひも付ける。
- * ファイル名を 図番_号機_日時.jpg に付け直し、「刻印写真」シートに記録（同じ写真を別のアームに付け直したら上書き）
+ * ファイル名を 図番_号機_工程_日時.jpg に付け直して 年-月 フォルダへ移し、「刻印写真」シートに記録（同じ写真を別のアームに付け直したら上書き）
  */
 function apiLinkPhoto(photoId, key, readText, purpose) {
   if (!photoId) return null;
   const a = loadArms_().find(r => r['キー'] === key);
   if (!a) throw new Error('台帳にないアームです: ' + key);
   const file = DriveApp.getFileById(photoId);
-  const stamp = Utilities.formatDate(file.getDateCreated(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
-  const name = a['図番'] + '_' + a['号機'] + '_' + stamp + (purpose ? '_' + purpose : '') + '.jpg';
+  const name = photoName_(a['図番'], a['号機'], purpose, file.getDateCreated());
   file.setName(name);
+  file.moveTo(photoFolder_(file.getDateCreated()));
   const sh = sheet_(CONFIG.SHEETS.PHOTOS);
   const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
   if (sh.getLastColumn() < PHOTO_COLS.length) sh.getRange(1, 1, 1, PHOTO_COLS.length).setValues([PHOTO_COLS]).setFontWeight('bold');
@@ -711,10 +711,50 @@ function apiPhoto(photoId) {
 }
 
 function savePhoto_(b64, prefix) {
-  const id = cfg_('PHOTO_FOLDER_ID');
-  if (!id) return '';
+  if (!cfg_('PHOTO_FOLDER_ID')) return '';
   const name = (prefix || 'kokuin') + '_' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss') + '_' + Utilities.getUuid().slice(0, 4) + '.jpg';
-  return DriveApp.getFolderById(id).createFile(Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg', name)).getId();
+  // まだ号機が決まっていない写真は 年-月/未特定（撮るだけモードの全体写真は 年-月/元写真）
+  return photoFolder_(new Date(), prefix === 'raw' ? '元写真' : '未特定').createFile(Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg', name)).getId();
+}
+
+/* 刻印写真フォルダの下を 年-月（例 2026-10）で分ける。sub を付けるとその中のフォルダ */
+const PHOTO_LABEL = {'塗装完了': '塗装完了', '塗装後チェック': '塗装後修正完了', '出荷': '出荷'};
+function photoFolder_(date, sub) {
+  const ym = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy-MM'), ck = 'pf_' + ym + (sub ? '_' + sub : '');
+  const c = CacheService.getScriptCache(), id = c.get(ck);
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
+  const lock = LockService.getScriptLock(); lock.tryLock(10000);
+  try {
+    const child = (parent, name) => { const it = parent.getFoldersByName(name); return it.hasNext() ? it.next() : parent.createFolder(name); };
+    let f = child(DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')), ym);
+    if (sub) f = child(f, sub);
+    c.put(ck, f.getId(), 21600);
+    return f;
+  } finally { lock.releaseLock(); }
+}
+function photoName_(z, g, purpose, created) {
+  const label = PHOTO_LABEL[purpose] || purpose || '';
+  return z + '_' + g + (label ? '_' + label : '') + '_' + Utilities.formatDate(created, 'Asia/Tokyo', 'yyyyMMdd_HHmm') + '.jpg';
+}
+/** 既存の写真を 年-月 フォルダへ整理し、ひも付け済みは 図番_号機_工程_日時.jpg に付け直す（何度実行してもよい） */
+function organizePhotos() {
+  const root = DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID'));
+  const sh = sheet_(CONFIG.SHEETS.PHOTOS), ix = k => PHOTO_COLS.indexOf(k);
+  const v = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, PHOTO_COLS.length).getDisplayValues() : [];
+  const linked = {};
+  v.forEach((r, i) => { linked[r[ix('写真ID')]] = {row: i + 2, z: r[ix('図番')], g: r[ix('号機')], purpose: r[ix('目的')]}; });
+  let n = 0;
+  const it = root.getFiles();
+  while (it.hasNext()) {
+    const f = it.next(), L = linked[f.getId()], d = f.getDateCreated();
+    if (L) {
+      const name = photoName_(L.z, L.g, L.purpose, d);
+      f.setName(name); f.moveTo(photoFolder_(d));
+      sh.getRange(L.row, ix('ファイル名') + 1).setValue(name);
+    } else f.moveTo(photoFolder_(d, /^raw_/.test(f.getName()) ? '元写真' : '未特定'));
+    n++;
+  }
+  console.log('整理した写真: %s 枚', n);
 }
 
 /* ===== 03_キュー.js ===== */
@@ -1190,9 +1230,11 @@ function testDays() {
 }
 // AI読取：刻印写真フォルダの最新写真で1回目だけ試す
 function testReadLatestPhoto() {
-  const it = DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getFiles();
   let f = null;
-  while (it.hasNext()) { const x = it.next(); if (!f || x.getDateCreated() > f.getDateCreated()) f = x; }
+  [photoFolder_(new Date()), photoFolder_(new Date(), '未特定')].forEach(dir => {
+    const it = dir.getFiles();
+    while (it.hasNext()) { const x = it.next(); if (!f || x.getDateCreated() > f.getDateCreated()) f = x; }
+  });
   if (!f) { console.log('写真がありません'); return; }
   const b = Utilities.base64Encode(f.getBlob().getBytes());
   console.log(JSON.stringify(callAI_(P1, [{data: FONT_REF_PNG, mime: 'image/png'}, b, b], P1_SCHEMA)));
