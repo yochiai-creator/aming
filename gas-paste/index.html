@@ -218,6 +218,18 @@ h1{font-size:1.9rem}
 .purpose .seg button.on{background:var(--accent);color:#fff;box-shadow:0 0 10px rgba(0,200,215,.45)}
 .goal{border-color:var(--accent);box-shadow:inset 0 0 22px rgba(0,200,215,.12)}
 #tapForm.focus{border-color:var(--accent);box-shadow:inset 0 0 22px rgba(0,200,215,.12)}
+.qi{display:flex;gap:10px;align-items:flex-start;border-top:1px dashed var(--edge);padding:10px 0}
+.qi:first-child{border-top:none}
+.qi .qt{flex:0 0 112px;height:56px;background:#060909 center/cover no-repeat;border:1px solid var(--edge)}
+.qi .qb{flex:1;min-width:0}
+.qi .qs{font-size:.78rem;font-weight:700}
+.qi .qs.ok{color:var(--ok)}.qi .qs.ng{color:var(--ng)}.qi .qs.wait{color:var(--cyan)}.qi .qs.mid{color:var(--warn)}
+.qi .qr{font-family:"Share Tech Mono",monospace;font-size:.85rem;color:var(--stamp);word-break:break-all}
+.qi .qa{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.qi .qa .arm{border:1px solid var(--edge);padding:6px 8px}
+.qi .x{background:transparent;color:var(--sub);font-size:1.1rem;padding:0 4px}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--cyan);border-right-color:transparent;border-radius:50%;animation:sp 1s linear infinite;vertical-align:-1px;margin-right:4px}
+@keyframes sp{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -242,11 +254,17 @@ h1{font-size:1.9rem}
     <div class="purpose"><span>撮影の目的</span><div class="seg" id="purposeSeg">
       <button type="button" data-act="purpose" data-v="塗装完了">塗装完了</button><button type="button" data-act="purpose" data-v="塗装後チェック">塗装後チェック</button><button type="button" data-act="purpose" data-v="出荷">出荷</button>
     </div></div>
-    <button class="shoot" id="shootBtn" type="button"><svg class="bucket" viewBox="0 0 34 26" fill="none" stroke="#fff" stroke-width="2.6"><path d="M2 8 V2 H9 M25 2 H32 V8 M32 18 V24 H25 M9 24 H2 V18"/><path d="M8 13 H26" stroke-width="1.6" opacity=".9"/></svg>刻印を撮影する<small>枠に図番と号機の2行を合わせる</small></button>
-    <button class="shoot alt" id="pickBtn" type="button">写真を選んで枠で切り抜く</button>
+    <button class="shoot" id="shootBtn" type="button"><svg class="bucket" viewBox="0 0 34 26" fill="none" stroke="#fff" stroke-width="2.6"><path d="M2 8 V2 H9 M25 2 H32 V8 M32 18 V24 H25 M9 24 H2 V18"/><path d="M8 13 H26" stroke-width="1.6" opacity=".9"/></svg>刻印を撮る<small>撮るだけでOK。続けて何枚でも。読み取りは裏でやって、終わったら知らせます</small></button>
+    <button class="shoot alt" id="pickBtn" type="button">写真を選んで自分で枠を合わせる</button>
     <input id="cam" type="file" accept="image/*" capture="environment" class="hidden">
+    <input id="camMulti" type="file" accept="image/*" multiple class="hidden">
     <input id="pick" type="file" accept="image/*" class="hidden">
     <p class="tip" id="tip">ライトを真横から当てて、打刻の影がはっきり出る角度で撮ると読み取りが安定します。</p>
+    <section id="queueSec" class="hidden">
+      <h2>撮った刻印 <span id="qCount" class="muted"></span></h2>
+      <div id="qList"></div>
+      <div class="row"><button type="button" class="btn sec mini" id="addMulti">アルバムからまとめて追加</button></div>
+    </section>
     <section id="resultSec" class="hidden">
       <h2>読み取り結果</h2>
       <div id="preview"><img id="pv1" alt="切り抜いた刻印"><img id="pv2" alt="凹凸強調"></div>
@@ -359,12 +377,12 @@ async function renderList() {
 }
 
 /* ================= アーム詳細＋記録 ================= */
-async function openArm(key, fromScan) {
+async function openArm(key, fromScan, qPurpose) {
   show("arm");
   $("armView").innerHTML = '<section class="muted">読み込み中…</section>';
   try { armData = await run("apiArm", key); } catch (e) { $("armView").innerHTML = `<section>読み込めませんでした：${esc(errMsg(e))}</section>`; return; }
   if (!armData) { $("armView").innerHTML = "<section>台帳にありません</section>"; return; }
-  scanPurpose = fromScan ? purpose : "";
+  scanPurpose = qPurpose || (fromScan ? purpose : "");
   if (!fromScan) photoId = "";
   else if (photoId) {
     try { await run("apiLinkPhoto", photoId, key, lastRead, purpose); armData = await run("apiArm", key); } catch (e) { toast("写真のひも付けに失敗：" + errMsg(e)); }
@@ -630,6 +648,103 @@ async function readCanvas(cv) {
   } finally { setBusy(false); busy(false); }
 }
 
+/* ================= 撮るだけモード（読取キュー） ================= */
+let queue = [], qLocal = {}, qBusy = 0, qTmp = 0;
+const Q_MAX = 2; // 同時に読む数
+const Q_LABEL = {"送信中": ["wait", "送信中"], "待ち": ["wait", "読み取り待ち"], "処理中": ["wait", "読み取り中"], "確定": ["ok", "特定"], "候補": ["mid", "要確認：候補から選んで"], "刻印なし": ["ng", "刻印が見つからない"], "失敗": ["ng", "失敗"]};
+function qUpdate(v) { const i = queue.findIndex(q => q.id === v.id || q.id === v._tmp); if (i >= 0) queue[i] = Object.assign(queue[i], v); else queue.unshift(v); renderQueue(); }
+function renderQueue() {
+  const live = queue.filter(q => !q.seen);
+  $("queueSec").classList.toggle("hidden", !live.length);
+  const wait = live.filter(q => ["送信中", "待ち", "処理中"].includes(q.state)).length;
+  $("qCount").textContent = wait ? `読み取り中 ${wait}件` : `${live.length}件`;
+  $("qList").innerHTML = live.map(q => {
+    const lb = Q_LABEL[q.state] || ["wait", q.state];
+    const thumb = q.thumb ? `style="background-image:url('${q.thumb}')"` : "";
+    let acts = "";
+    if (q.state === "確定") acts = `<button type="button" class="btn go mini" data-act="qopen" data-id="${esc(q.id)}">記録を開く</button>`;
+    else if (q.state === "候補") acts = (q.cands || []).slice(0, 3).map(a => `<button type="button" class="arm" data-act="qpick" data-id="${esc(q.id)}" data-k="${esc(a.key)}"><span class="az">${esc(a.z)}<b>${esc(a.g)}</b></span></button>`).join("");
+    else if (q.state === "刻印なし" || q.state === "失敗") acts = `<button type="button" class="btn sec mini" data-act="qretry" data-id="${esc(q.id)}">もう一度読む</button>`;
+    const arm = q.state === "確定" && q.cands && q.cands[0] ? `${q.cands[0].z} ${q.cands[0].g}号機` : (q.read || "");
+    return `<div class="qi"><div class="qt" ${thumb}></div><div class="qb">
+      <div class="qs ${lb[0]}">${lb[0] === "wait" ? '<span class="spin"></span>' : ""}${esc(lb[1])}${q.purpose ? "　" + esc(q.purpose) : ""}</div>
+      <div class="qr">${esc(arm)}</div>${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
+      <div class="qa">${acts}</div></div>
+      ${["送信中", "処理中"].includes(q.state) ? "" : `<button type="button" class="x" data-act="qdone" data-id="${esc(q.id)}" aria-label="一覧から消す">×</button>`}</div>`;
+  }).join("");
+}
+function qNotify(q) {
+  if (q.state === "確定") toast(`✔ 特定：${q.cands && q.cands[0] ? q.cands[0].z + " " + q.cands[0].g + "号機" : q.key}`);
+  else if (q.state === "候補") toast("要確認：候補から選んでください");
+  else if (q.state === "刻印なし") toast("刻印が見つかりませんでした。撮り直すか「もう一度読む」");
+  else if (q.state === "失敗") toast("読み取り失敗：" + (q.error || ""));
+  try { navigator.vibrate && navigator.vibrate(120); } catch (e) {}
+}
+// 写真全体を長辺2000pxに縮める
+async function fullCanvas(img) {
+  const k = Math.min(1, 2000 / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+  const c = document.createElement("canvas"); c.width = Math.round((img.naturalWidth || img.width) * k); c.height = Math.round((img.naturalHeight || img.height) * k);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+// AIが返した枠（0〜1000）で切り出す。少し余白を足す
+function cropByBox(src, box) {
+  const W = src.width, H = src.height;
+  let [y0, x0, y1, x1] = box.map(v => v / 1000);
+  const mx = (x1 - x0) * 0.08, my = (y1 - y0) * 0.15;
+  x0 = Math.max(0, x0 - mx); x1 = Math.min(1, x1 + mx); y0 = Math.max(0, y0 - my); y1 = Math.min(1, y1 + my);
+  const c = document.createElement("canvas"); c.width = Math.max(20, Math.round((x1 - x0) * W)); c.height = Math.max(10, Math.round((y1 - y0) * H));
+  c.getContext("2d").drawImage(src, x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H, 0, 0, c.width, c.height);
+  return c;
+}
+async function queueAddFile(f) {
+  const tmp = "tmp" + (++qTmp);
+  let canvas;
+  try { canvas = await fullCanvas(await loadImg(URL.createObjectURL(f))); } catch (e) { toast("写真を開けませんでした"); return; }
+  const small = document.createElement("canvas"); small.width = 224; small.height = Math.round(224 * canvas.height / canvas.width);
+  small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
+  qUpdate({id: tmp, state: "送信中", purpose, thumb: small.toDataURL("image/jpeg", .7)});
+  try {
+    const v = await run("apiQueueAdd", await b64(await toBlob(canvas, 0.85)), purpose);
+    qLocal[v.id] = canvas;
+    v._tmp = tmp; qUpdate(v); delete queue.find(q => q.id === v.id)._tmp;
+    qPump();
+  } catch (e) { qUpdate({id: tmp, state: "失敗", error: errMsg(e)}); }
+}
+function qPump() {
+  queue.filter(q => q.state === "待ち" && !q._run).forEach(q => {
+    if (qBusy >= Q_MAX) return;
+    q._run = true; qBusy++; renderQueue();
+    run("apiQueueProcess", q.id).then(v => { qUpdate(v); return qAfter(queue.find(x => x.id === v.id)); })
+      .catch(e => qUpdate({id: q.id, state: "失敗", error: errMsg(e)}))
+      .finally(() => { qBusy--; const x = queue.find(y => y.id === q.id); if (x) x._run = false; qPump(); });
+  });
+}
+// 読めたら：手元の写真を枠で切り出して送る（確定ならひも付け、候補なら切り出し画像で読み直し）
+async function qAfter(q) {
+  if (!q || !q.box || q.cropId || !["確定", "候補"].includes(q.state)) { if (q && q.state !== "待ち") qNotify(q); return; }
+  let src = qLocal[q.id];
+  if (!src && q.fullId) { try { src = await fullCanvas(await loadImg(await run("apiPhoto", q.fullId))); } catch (e) {} }
+  if (!src) { qNotify(q); return; }
+  const cv = cropByBox(src, q.box);
+  q.thumb = cv.toDataURL("image/jpeg", .7); renderQueue();
+  const imgs = await prepare(cv);
+  try {
+    const v = await run("apiQueueCrop", q.id, await b64(imgs.orig), q.state === "候補" ? await b64(imgs.enh) : "");
+    qUpdate(v);
+  } catch (e) { console.warn(e); }
+  qNotify(queue.find(x => x.id === q.id));
+}
+async function qBoot() {
+  try { queue = await run("apiQueueList"); } catch (e) { return; }
+  renderQueue();
+  for (const q of queue) {
+    if (q.cropId && !q.thumb) run("apiPhoto", q.cropId).then(u => { q.thumb = u; renderQueue(); }).catch(() => {});
+    if (q.box && !q.cropId && ["確定", "候補"].includes(q.state)) qAfter(q);
+  }
+  qPump();
+}
+
 /* ================= 検索 ================= */
 let qTimer = null;
 $("q").addEventListener("input", () => {
@@ -647,16 +762,23 @@ $("q").addEventListener("input", () => {
 });
 
 /* ================= イベント ================= */
-$("shootBtn").onclick = async () => { if (!(await openViewfinder())) $("cam").click(); };
+$("shootBtn").onclick = () => $("cam").click();
+$("addMulti").onclick = () => $("camMulti").click();
+$("cam").onchange = e => { const fs = [...e.target.files]; e.target.value = ""; fs.forEach(queueAddFile); };
+$("camMulti").onchange = e => { const fs = [...e.target.files]; e.target.value = ""; fs.forEach(queueAddFile); };
 $("pickBtn").onclick = () => $("pick").click();
 $("vfCancel").onclick = closeViewfinder;
 $("busyCancel").onclick = () => { readToken++; cancelRead(); busy(false); };
 $("vfShot").onclick = () => { const c = shotFromViewfinder(); closeViewfinder(); if (c) readCanvas(c); };
-["cam", "pick"].forEach(id => $(id).onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; const c = await cropFromFile(f); if (c) readCanvas(c); });
+["pick"].forEach(id => $(id).onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; const c = await cropFromFile(f); if (c) readCanvas(c); });
 
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act;
+  if (act === "qopen") { const q = queue.find(x => x.id === b.dataset.id); if (!q) return; run("apiQueueDone", q.id).catch(() => {}); q.seen = true; renderQueue(); photoId = ""; openArm(q.key, false, q.purpose); return; }
+  if (act === "qpick") { const q = queue.find(x => x.id === b.dataset.id); b.disabled = true; try { const v = await run("apiQueuePick", b.dataset.id, b.dataset.k); qUpdate(v); run("apiQueueDone", v.id).catch(() => {}); v.seen = true; Object.assign(q, {seen: true}); renderQueue(); photoId = ""; openArm(b.dataset.k, false, q && q.purpose); } catch (err) { toast(errMsg(err)); b.disabled = false; } return; }
+  if (act === "qdone") { const q = queue.find(x => x.id === b.dataset.id); if (q) { q.seen = true; renderQueue(); run("apiQueueDone", q.id).catch(() => {}); } return; }
+  if (act === "qretry") { const q = queue.find(x => x.id === b.dataset.id); if (q) { q.state = "待ち"; q.error = ""; renderQueue(); qPump(); } return; }
   if (act === "purpose") { purpose = b.dataset.v; ls.set("trace.purpose", purpose); syncPurpose(); }
   else if (act === "goal") { const t = document.getElementById("tapForm"); if (t) t.scrollIntoView({behavior: "smooth", block: "start"}); }
   else if (act === "nav") show(b.dataset.v);
@@ -705,6 +827,7 @@ document.addEventListener("click", async e => {
 });
 
 syncPurpose();
+qBoot();
 run("apiBoot").then(b => { boot = b; renderHead(); }).catch(e => toast("起動エラー：" + errMsg(e)));
 renderHead();
 })();

@@ -86,6 +86,9 @@ const api = {
     {name: "着工", date: "2026/09/24", step: "", changes: [], recs: []},
     {name: "塗装完了", date: "2026/10/02", step: "塗装完了", changes: [{at: "2026/10/07 06:00", from: "2026/09/30", to: "2026/10/02"}], recs: []},
     {name: "出荷", date: "2026/10/07", step: "出荷", changes: [], recs: []}], otherChanges: [], photos: [{id: "p1", at: "2026/10/07 10:00", name: "x.jpg"}], order: "A5", base: "YY", updated: "", taps: [], holes: 33}),
+  apiQueueList: () => [{id: "q1", state: "確定", key: arm.key, purpose: "塗装完了", cands: [arm], read: "YN12B20269F1 / 2609-1152 UM"}, {id: "q2", state: "候補", purpose: "出荷", cands: [arm], read: "YN12B2026?F1 / 1152"}],
+  apiQueueDone: id => ({id, seen: true}),
+  apiQueuePick: (id, key) => ({id, state: "確定", key, cands: [arm]}),
   apiDeletePhoto: () => Object.assign(api.apiArm(), {photos: []}),
   apiPhoto: () => "data:image/jpeg;base64,AAAA",
   apiSaveStep: rec => { const v = api.apiArm(); v.steps[1].recs.push({id: "s1", at: "2026/10/07 10:00", by: rec.person, note: rec.note, canceled: false}); return v; },
@@ -106,6 +109,13 @@ const click = sel => w.document.querySelector(sel).dispatchEvent(new w.MouseEven
 process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('NG   unhandled', e); });
 (async () => {
   await wait(30);
+  t("撮るだけ：キューが出る", () => { assert.strictEqual(w.document.querySelectorAll("#qList .qi").length, 2); assert.ok(w.document.querySelector("#qList").textContent.includes("特定")); });
+  click('[data-act="qopen"][data-id="q1"]'); await wait(40);
+  t("撮るだけ：確定→記録を開く（目的バナー）", () => { assert.ok(calls.includes("apiArm")); assert.ok(w.document.querySelector(".goal").textContent.includes("塗装完了")); });
+  click('[data-act="nav"][data-v="scan"]'); await wait(10);
+  click('[data-act="qpick"][data-id="q2"]'); await wait(40);
+  t("撮るだけ：候補を選ぶ", () => assert.ok(calls.includes("apiQueuePick")));
+  click('[data-act="nav"][data-v="scan"]'); await wait(10);
   click('[data-act="purpose"][data-v="出荷"]');
   t("撮影の目的：選べる", () => assert.ok(w.document.querySelector('[data-act="purpose"][data-v="出荷"]').classList.contains("on")));
   t("起動：未チェックバッジ", () => assert.strictEqual(w.document.getElementById("todoBadge").textContent, "7"));

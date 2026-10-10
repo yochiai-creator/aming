@@ -58,13 +58,7 @@ function readCore_(orig, enh, last) {
   rlog_('写真保存 ' + photoId);
   const imgs = [{data: FONT_REF_PNG, mime: 'image/png'}, orig, enh];
   const r1 = callAI_(P1, imgs, P1_SCHEMA);
-  const fz = fitZuban_(r1.zuban), g = fitGoki_(r1.goki);
-
-  const taps = latestTaps_(loadTaps_()), st = liveSteps_();
-  const arms = loadArms_().map(a => ({z: a['図番'], g: a['号機'], ship: a['出荷日'], done: !!taps[a['キー']], src: a}));
-  const top = rankArms_(fz.z, g, arms, {today: today_(), last: last}).slice(0, 5);
-  // 完全一致なら隣の号機があっても確定（記録画面で号機を確認できる）
-  const sure = isSure_(top) || (top.length > 0 && isExact_(fz.z, g, top[0].arm));
+  const m = matchRead_(r1, last), fz = m.fz, g = m.g, top = m.top, sure = m.sure, taps = m.taps, st = m.st;
   let pick = sure ? {index: 0, confidence: '高', reason: '1回目で一致'} : null;
   // 2回目は時間に余裕があるときだけ（無ければ候補一覧から選んでもらう）
   if (!sure && top.length && cfg_('AI_SECOND_PASS') === 'する' && timeLeft_() > 22000) {
@@ -76,13 +70,25 @@ function readCore_(orig, enh, last) {
   }
   return {
     read: {zuban: fz.z, fixed: fz.fixed, goki: g, seizo: r1.seizo, kensa: r1.kensa, note: r1.note},
-    cands: top.map(c => { const v = armView_(c.arm.src, taps[c.arm.src['キー']], st[c.arm.src['キー']]); v.cost = Math.round(c.cost * 100) / 100; v.seq = c.seq; return v; }),
+    cands: m.cands,
     pick: pick, sure: sure, photoId: photoId
   };
 }
 
 // 画像は base64文字列（JPEG）か {data, mime}
 function img_(x) { return typeof x === 'string' ? {data: x, mime: 'image/jpeg'} : x; }
+/** AIの読み → 台帳照合（上位5件・確定判定） */
+function matchRead_(r1, last) {
+  const fz = fitZuban_(r1.zuban), g = fitGoki_(r1.goki);
+  const taps = latestTaps_(loadTaps_()), st = liveSteps_();
+  const arms = loadArms_().map(a => ({z: a['図番'], g: a['号機'], ship: a['出荷日'], done: !!taps[a['キー']], src: a}));
+  const top = rankArms_(fz.z, g, arms, {today: today_(), last: last}).slice(0, 5);
+  // 完全一致なら隣の号機があっても確定（記録画面で号機を確認できる）
+  const sure = isSure_(top) || (top.length > 0 && isExact_(fz.z, g, top[0].arm));
+  return {fz: fz, g: g, top: top, sure: sure, taps: taps, st: st,
+    cands: top.map(c => { const v = armView_(c.arm.src, taps[c.arm.src['キー']], st[c.arm.src['キー']]); v.cost = Math.round(c.cost * 100) / 100; v.seq = c.seq; return v; })};
+}
+
 function callAI_(prompt, imgsB64, schema) {
   return cfg_('AI_PROVIDER') === 'claude' ? callClaude_(prompt, imgsB64, schema) : callGemini_(prompt, imgsB64, schema);
 }
@@ -143,6 +149,7 @@ function callGemini_(prompt, imgsB64, schema) {
 function geminiSchema_(s) {
   const o = {type: String(s.type).toUpperCase()};
   if (s.enum) o.enum = s.enum;
+  if (s.items) o.items = geminiSchema_(s.items);
   if (s.required) o.required = s.required;
   if (s.properties) {
     o.properties = {};
@@ -217,9 +224,9 @@ function apiPhoto(photoId) {
   return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
 }
 
-function savePhoto_(b64) {
+function savePhoto_(b64, prefix) {
   const id = cfg_('PHOTO_FOLDER_ID');
   if (!id) return '';
-  const name = 'kokuin_' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss') + '.jpg';
+  const name = (prefix || 'kokuin') + '_' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss') + '_' + Utilities.getUuid().slice(0, 4) + '.jpg';
   return DriveApp.getFolderById(id).createFile(Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg', name)).getId();
 }

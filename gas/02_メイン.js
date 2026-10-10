@@ -40,6 +40,10 @@ function healthCheck() {
 /** 毎朝のトリガーを入れる（何度実行しても同じ2本だけになる） */
 function setupTriggers() {
   const plan = [['importLatest', cfgNum_('IMPORT_HOUR') || 6], ['notifyUnchecked', cfgNum_('NOTIFY_HOUR') || 7]];
+  // 撮るだけモードの取りこぼしを5分おきに読む
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'processQueue') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('processQueue').timeBased().everyMinutes(5).create();
+  console.log('トリガー: processQueue 5分おき');
   ScriptApp.getProjectTriggers().forEach(t => {
     if (plan.some(p => p[0] === t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
   });

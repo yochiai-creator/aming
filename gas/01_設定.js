@@ -27,7 +27,7 @@ const CONFIG = {
     SETTINGS: '設定',
     ARMS: 'アーム台帳', TAPS: 'タップ記録', HOLES: '穴数マスタ',
     CHECK: '要確認', LOG: '取込ログ',
-    STEPS: '工程記録', CHANGES: '変更履歴', PHOTOS: '刻印写真', READLOG: '読取ログ'
+    STEPS: '工程記録', CHANGES: '変更履歴', PHOTOS: '刻印写真', READLOG: '読取ログ', QUEUE: '読取キュー'
   },
 
   // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
@@ -53,6 +53,7 @@ const TAP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '結果', 
 const DATE_COLS = ['着工', '検査完了日', '塗装完了日', '塗装後修正完了日', '出荷日', '納入日'];
 const STEP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '工程', '確認者', '備考', '写真ID', '取消'];
 const CHANGE_COLS = ['日時', 'キー', '項目', '前', '後', '元ファイル'];
+const QUEUE_COLS = ['ID', '日時', '目的', '状態', '元写真ID', '切り出しID', '枠', 'AI読取', 'キー', '候補', 'エラー', '確認'];
 const READLOG_COLS = ['日時', '秒', '結果', 'AI読取', '1位候補', 'ログ'];
 const PHOTO_COLS = ['日時', 'キー', '図番', '号機', '写真ID', 'ファイル名', 'AI読取', '目的'];
 // 現場で記録する工程（名前 → 台帳の対応する日付列）
@@ -125,6 +126,7 @@ function makeSheet_(name) {
   cols[CONFIG.SHEETS.CHANGES] = CHANGE_COLS;
   cols[CONFIG.SHEETS.PHOTOS] = PHOTO_COLS;
   cols[CONFIG.SHEETS.READLOG] = READLOG_COLS;
+  cols[CONFIG.SHEETS.QUEUE] = QUEUE_COLS;
   if (name === CONFIG.SHEETS.SETTINGS) {
     const sh = ss_().insertSheet(name, 0);
     const rows = [['項目', '値', '説明']].concat(SETTINGS.map(d => [d[1], String(Array.isArray(CONFIG[d[0]]) ? CONFIG[d[0]].join(',') : CONFIG[d[0]]), d[2]]));
