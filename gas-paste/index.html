@@ -248,7 +248,9 @@ h1{font-size:1.9rem}
 #scanView[data-p="出荷"] .shoot:not(.alt){background:linear-gradient(180deg,#34C574,#16773F)}
 .shoot b.pl{display:block;font-size:.8rem;letter-spacing:.1em;opacity:.95}
 #meSeg{flex-wrap:wrap}
-#meSeg button.on{background:var(--accent);color:#fff;box-shadow:0 0 10px rgba(0,200,215,.45)}
+#meSeg button.on{background:var(--pc);color:#fff;box-shadow:0 0 10px var(--pc)}
+#scanView{--pc:#00A7B5}#scanView[data-p="塗装後チェック"]{--pc:#D97A00}#scanView[data-p="出荷"]{--pc:#1F9E55}
+#meSeg{border-color:var(--pc)}
 #meRow.need{animation:need 1s 2}#meRow.need>span{color:var(--ng);font-weight:700}
 @keyframes need{50%{background:rgba(255,77,61,.18)}}
 .qbar{display:flex;gap:8px;margin:0 0 8px}
@@ -376,7 +378,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/10-42"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/10-43"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
