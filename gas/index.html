@@ -407,23 +407,42 @@ function renderDayList() {
     <div class="lf">${Object.keys(LIST_FILTERS).map(k => `<button type="button" data-act="lf" data-f="${k}" class="${k === listFilter ? "on" : ""}">${k}<small>${k === "全部" ? rows.length : n(k)}</small></button>`).join("")}</div>
     ${shown.length ? armGroups(shown) : '<p class="muted">該当なし</p>'}`;
 }
-async function renderList() {
-  const el = $("listView");
-  if (!day || !boot.days.some(d => d.date === day)) day = (boot.days[0] || {}).date || boot.today;
-  el.innerHTML = `<div class="days">${boot.days.map(d => `<button type="button" data-act="day" data-d="${d.date}" class="${d.date === day ? "on" : ""} ${d.todo ? "has-todo" : ""}">${md(d.date)}(${wd(d.date)})<small>${d.todo ? "未" + d.todo + " / " : ""}${d.total}本</small></button>`).join("")}</div>
-    <section><h2>${esc(md(day))}(${esc(wd(day))}) 出荷分</h2><div id="dayList" class="muted">読み込み中…</div></section>
+// 一覧はまとめて取得して端末に保存 → 開くと即表示、裏で最新に更新（変わった時だけ描き直す）
+let listData = null;
+try { listData = JSON.parse(ls.get("trace.list") || "null"); } catch (e) {}
+let listFetching = null;
+function fetchList() {
+  if (!listFetching) listFetching = run("apiList").then(d => {
+    const changed = JSON.stringify(d) !== JSON.stringify(listData);
+    listData = d; ls.set("trace.list", JSON.stringify(d));
+    boot.days = d.days; renderHead();
+    return changed;
+  }).finally(() => { listFetching = null; });
+  return listFetching;
+}
+function drawList(keep) {
+  const el = $("listView"), days = listData.days.length ? listData.days : boot.days;
+  if (!day || !days.some(d => d.date === day)) day = (days[0] || {}).date || boot.today;
+  const y = window.scrollY, open = keep ? [...el.querySelectorAll("details.ud[open]")].map(d => d.dataset.d) : [];
+  el.innerHTML = `<div class="days">${days.map(d => `<button type="button" data-act="day" data-d="${d.date}" class="${d.date === day ? "on" : ""} ${d.todo ? "has-todo" : ""}">${md(d.date)}(${wd(d.date)})<small>${d.todo ? "未" + d.todo + " / " : ""}${d.total}本</small></button>`).join("")}</div>
+    <section><h2>${esc(md(day))}(${esc(wd(day))}) 出荷分</h2><div id="dayList"></div></section>
     <section id="uncheckedSec" class="warnbox hidden"></section>`;
-  const on = el.querySelector(".days .on"); if (on) on.scrollIntoView({inline: "center", block: "nearest"});
-  try {
-    const [rows, un] = await Promise.all([run("apiDay", day), run("apiUnchecked")]);
-    listRows = rows; $("dayList").classList.remove("muted"); renderDayList();
-    if (un.length) {
-      const byDay = new Map(); un.forEach(a => { if (!byDay.has(a.ship)) byDay.set(a.ship, []); byDay.get(a.ship).push(a); });
-      $("uncheckedSec").classList.remove("hidden");
-      $("uncheckedSec").innerHTML = `<h2>出荷前で未チェック ${un.length}本</h2>${[...byDay].map(([d, list]) =>
-        `<details class="ud"><summary><span>${esc(md(d))}(${esc(wd(d))}) 出荷</span><b>${list.length}本</b></summary>${armGroups(list)}</details>`).join("")}`;
-    }
-  } catch (e) { $("dayList").textContent = "読み込めませんでした：" + errMsg(e); }
+  listRows = listData.rows.filter(a => a.ship === day); renderDayList();
+  const un = listData.unchecked;
+  if (un.length) {
+    const byDay = new Map(); un.forEach(a => { if (!byDay.has(a.ship)) byDay.set(a.ship, []); byDay.get(a.ship).push(a); });
+    $("uncheckedSec").classList.remove("hidden");
+    $("uncheckedSec").innerHTML = `<h2>出荷前で未チェック ${un.length}本</h2>${[...byDay].map(([d, list]) =>
+      `<details class="ud" data-d="${esc(d)}" ${open.includes(d) ? "open" : ""}><summary><span>${esc(md(d))}(${esc(wd(d))}) 出荷</span><b>${list.length}本</b></summary>${armGroups(list)}</details>`).join("")}`;
+  }
+  if (keep) window.scrollTo(0, y);
+  else { const on = el.querySelector(".days .on"); if (on) on.scrollIntoView({inline: "center", block: "nearest"}); }
+}
+async function renderList(noFetch) {
+  if (listData) { drawList(false); if (noFetch) return; }
+  else $("listView").innerHTML = '<section class="muted">読み込み中…</section>';
+  try { if (await fetchList() && view === "list") drawList(true); }
+  catch (e) { if (!listData) $("listView").innerHTML = `<section>読み込めませんでした：${esc(errMsg(e))}</section>`; }
 }
 
 /* ================= アーム詳細＋記録 ================= */
@@ -832,7 +851,7 @@ document.addEventListener("click", async e => {
   if (act === "purpose") { purpose = b.dataset.v; ls.set("trace.purpose", purpose); syncPurpose(); }
   else if (act === "goal") { const t = document.getElementById("tapForm"); if (t) t.scrollIntoView({behavior: "smooth", block: "start"}); }
   else if (act === "nav") show(b.dataset.v);
-  else if (act === "day") { day = b.dataset.d; renderList(); }
+  else if (act === "day") { day = b.dataset.d; renderList(true); }
   else if (act === "lf") { listFilter = b.dataset.f; ls.set("trace.listFilter", listFilter); renderDayList(); }
   else if (act === "arm") openArm(b.dataset.k, !!b.closest("#cands"));
   else if (act === "back") show(day ? "list" : "scan");
@@ -879,7 +898,7 @@ document.addEventListener("click", async e => {
 
 syncPurpose();
 qBoot();
-run("apiBoot").then(b => { boot = b; renderHead(); run("apiAutoOrganize").catch(() => {}); }).catch(e => toast("起動エラー：" + errMsg(e)));
+run("apiBoot").then(b => { boot = b; renderHead(); fetchList().catch(() => {}); run("apiAutoOrganize").catch(() => {}); }).catch(e => toast("起動エラー：" + errMsg(e)));
 renderHead();
 })();
 </script>

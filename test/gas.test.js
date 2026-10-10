@@ -96,7 +96,7 @@ const calls = [];
 const api = {
   apiBoot: () => ({today: "2026/10/07", me: "", people: ["落合", "田中"], hasKey: true, days: [{date: "2026/10/07", total: 3, todo: 2, ng: 0}, {date: "2026/10/08", total: 5, todo: 5, ng: 0}]}),
   apiDays: () => [{date: "2026/10/07", total: 3, todo: 1, ng: 0}],
-  apiDay: () => [arm], apiUnchecked: () => [arm], apiSearch: () => [arm],
+  apiDay: () => [arm], apiUnchecked: () => [arm], apiList: () => ({days: [{date: "2026/10/07", total: 3, todo: 1, ng: 0}], rows: [arm], unchecked: [arm]}), apiSearch: () => [arm],
   apiArm: () => Object.assign({}, arm, {steps: [
     {name: "着工", date: "2026/09/24", step: "", changes: [], recs: []},
     {name: "塗装完了", date: "2026/10/02", step: "塗装完了", changes: [{at: "2026/10/07 06:00", from: "2026/09/30", to: "2026/10/02"}], recs: []},
@@ -133,7 +133,7 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
   click('[data-act="nav"][data-v="scan"]'); await wait(10);
   click('[data-act="purpose"][data-v="出荷"]');
   t("撮影の目的：選べる", () => assert.ok(w.document.querySelector('[data-act="purpose"][data-v="出荷"]').classList.contains("on")));
-  t("起動：未チェックバッジ", () => assert.strictEqual(w.document.getElementById("todoBadge").textContent, "7"));
+  t("起動：未チェックバッジ", () => assert.strictEqual(w.document.getElementById("todoBadge").textContent, "1")); // 起動後に一覧を先読みして最新の数に更新;
   click('[data-act="nav"][data-v="list"]'); await wait(30);
   t("一覧：出荷日と未チェック", () => {
     assert.ok(w.document.querySelector(".days .on").textContent.includes("10/7"));

@@ -435,6 +435,23 @@ function apiDay(date) {
     .sort((x, y) => (x.to + x.z + x.g.padStart(5, '0')).localeCompare(y.to + y.z + y.g.padStart(5, '0')));
 }
 
+/** 一覧画面用にまとめて1回で返す（出荷日の帯・今日〜21日後の全アーム・出荷前未チェック）。画面側でキャッシュして日付切替は通信なし */
+function apiList() {
+  const today = today_(), to = shiftDate_(today, 21), from = cfg_('TRACK_FROM'), alertTo = shiftDate_(today, cfgNum_('ALERT_DAYS_AHEAD'));
+  const last = latestTaps_(loadTaps_()), st = liveSteps_();
+  const rows = loadArms_().filter(a => a['出荷日'] >= today && a['出荷日'] <= to)
+    .map(a => armView_(a, last[a['キー']], st[a['キー']]))
+    .sort((x, y) => (x.ship + x.to + x.z + x.g.padStart(5, '0')).localeCompare(y.ship + y.to + y.z + y.g.padStart(5, '0')));
+  const m = {};
+  rows.forEach(a => {
+    const s = m[a.ship] || (m[a.ship] = {date: a.ship, total: 0, todo: 0, ng: 0});
+    s.total++;
+    if (!a.status) { if (a.ship >= from) s.todo++; } else if (a.status === '否') s.ng++;
+  });
+  return {days: Object.keys(m).sort().map(k => m[k]), rows: rows,
+    unchecked: rows.filter(a => a.ship >= from && a.ship <= alertTo && a.status !== '良')};
+}
+
 /** 今日〜N日後に出荷するのに、良の記録がないアーム（運用開始日より前の出荷は除く） */
 function apiUnchecked(daysAhead) {
   const today = today_(), to = shiftDate_(today, daysAhead || cfgNum_('ALERT_DAYS_AHEAD'));
