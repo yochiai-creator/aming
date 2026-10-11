@@ -828,13 +828,22 @@ function queueSet_(row, patch) {
   Object.keys(patch).forEach(k => { row[k] = patch[k]; sh.getRange(row._row, QUEUE_COLS.indexOf(k) + 1).setValue(patch[k]); });
   return row;
 }
-function queueView_(r) {
+// st：工程記録（liveSteps_）。同じ号機に同じ工程の記録がもうあれば already に日時を入れる（照合のダブり・撮り直しに気づけるように）
+function queueView_(r, st) {
   let cands = [];
   try { cands = r['候補'] ? JSON.parse(r['候補']) : []; } catch (e) {}
   let box = null;
   try { box = r['枠'] ? JSON.parse(r['枠']) : null; } catch (e) {}
   return {id: r['ID'], at: r['日時'], purpose: r['目的'], state: r['状態'], fullId: r['元写真ID'], cropId: r['切り出しID'],
-    box: box, read: r['AI読取'], key: r['キー'], cands: cands, error: r['エラー'], seen: r['確認'] === '済', rec: r['記録'] || ''};
+    box: box, read: r['AI読取'], key: r['キー'], cands: cands, error: r['エラー'], seen: r['確認'] === '済', rec: r['記録'] || '',
+    already: alreadyStep_(r, st)};
+}
+
+function alreadyStep_(r, st) {
+  const step = r['目的'], key = r['キー'];
+  if (!key || r['記録'] || (step !== '塗装完了' && step !== '出荷')) return '';
+  st = st || liveSteps_();
+  return (st[key] && st[key][step]) || '';
 }
 
 /** 撮った写真（全体・縮小済み）を積む。すぐ返る */
@@ -933,7 +942,8 @@ function apiQueueDone(id) { return queueView_(queueSet_(queueFind_(id), {'確認
 
 /** 未確認のもの（新しい順・最大40件） */
 function apiQueueList() {
-  return queueRows_().filter(r => r['確認'] !== '済').slice(-40).reverse().map(queueView_);
+  const st = liveSteps_();
+  return queueRows_().filter(r => r['確認'] !== '済').slice(-40).reverse().map(r => queueView_(r, st));
 }
 
 /** トリガー用：画面を閉じても残った「待ち」を読む（2分以上前のもの） */

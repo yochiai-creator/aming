@@ -267,6 +267,7 @@ h1{font-size:1.9rem}
 .qbar{display:flex;gap:8px;margin:0 0 8px}
 .qbar button{flex:1}.qbar .go{flex:2}
 .qi.recd{opacity:.75}
+.qw{color:var(--warn);font-size:.78rem;font-weight:700;margin-top:2px}
 .qdone{color:var(--ok);font-weight:700}
 .goal{border-color:var(--accent);box-shadow:inset 0 0 22px rgba(0,200,215,.12)}
 #tapForm.focus{border-color:var(--accent);box-shadow:inset 0 0 22px rgba(0,200,215,.12)}
@@ -399,12 +400,17 @@ function needMe() {
   toast("先に確認者（自分の名前）を選んでください"); show("scan");
   const r = $("meRow"); r.classList.remove("need"); void r.offsetWidth; r.classList.add("need"); r.scrollIntoView({block: "center"});
 }
+// まとめて記録の対象：特定済み・未記録・塗装完了/出荷・記録済みの号機は除く・同じ号機は1枚だけ
+function recordable(live) {
+  const seen = {};
+  return live.filter(q => q.state === "確定" && !q.rec && !q.already && STEP_PURPOSE(q.purpose) && !seen[q.key] && (seen[q.key] = 1));
+}
 const STEP_PURPOSE = p => p === "塗装完了" || p === "出荷";
 let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastRead = "";
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/10-51"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/11-52"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -793,7 +799,10 @@ function renderQueue() {
   $("queueSec").classList.toggle("hidden", !live.length);
   const wait = live.filter(q => ["送信中", "待ち", "処理中"].includes(q.state)).length;
   $("qCount").textContent = wait ? `読み取り中 ${wait}件` : `${live.length}件`;
-  const todo = live.filter(q => q.state === "確定" && !q.rec && STEP_PURPOSE(q.purpose)), recd = live.filter(q => q.rec);
+  // 同じ号機に特定された写真が2枚以上＝どれかが読み違いか、撮り直し
+  const keyCount = {};
+  live.forEach(q => { if (q.state === "確定" && q.key) keyCount[q.key] = (keyCount[q.key] || 0) + 1; });
+  const todo = recordable(live), recd = live.filter(q => q.rec);
   $("qBar").innerHTML = (todo.length >= 2 ? `<button type="button" class="btn go" data-act="qrecAll">特定した${todo.length}本をまとめて記録</button>` : "") +
     (recd.length ? `<button type="button" class="btn sec mini" data-act="qclear">記録済みを片付ける</button>` : "");
   $("qList").innerHTML = live.map(q => {
@@ -806,9 +815,11 @@ function renderQueue() {
     else if (q.state === "候補") acts = (q.cands || []).slice(0, 3).map(a => `<button type="button" class="arm" data-act="qpick" data-id="${esc(q.id)}" data-k="${esc(a.key)}"><span class="az">${esc(a.z)}<b>${esc(a.g)}</b></span></button>`).join("");
     else if (q.state === "刻印なし" || q.state === "失敗") acts = `<button type="button" class="btn sec mini" data-act="qretry" data-id="${esc(q.id)}">もう一度読む</button>`;
     const arm = q.state === "確定" && q.cands && q.cands[0] ? `${q.cands[0].z} ${q.cands[0].g}号機` : (q.read || "");
+    const warn = q.state !== "確定" || q.rec ? "" : (keyCount[q.key] > 1 ? `<div class="qw">⚠ 同じ号機の写真がほかにもあります（読み違い？撮り直し？）</div>` : "") +
+      (q.already ? `<div class="qw">⚠ この号機は「${esc(q.purpose)}」記録済み（${esc(q.already)}）</div>` : "");
     return `<div class="qi ${q.rec ? "recd" : ""}"><div class="qt" ${thumb}></div><div class="qb">
       <div class="qs ${lb[0]}">${lb[0] === "wait" ? '<span class="spin"></span>' : ""}${esc(lb[1])}${q.purpose ? "　" + esc(q.purpose) : ""}</div>
-      <div class="qr">${esc(arm)}</div>${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
+      <div class="qr">${esc(arm)}</div>${warn}${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
       <div class="qa">${acts}</div></div>
       ${["送信中", "処理中"].includes(q.state) ? "" : `<button type="button" class="x" data-act="qdone" data-id="${esc(q.id)}" aria-label="一覧から消す">×</button>`}</div>`;
   }).join("");
@@ -989,7 +1000,12 @@ document.addEventListener("click", async e => {
   }
   if (act === "qrec" || act === "qrecAll") {
     if (!me) { needMe(); return; }
-    const ids = act === "qrec" ? [b.dataset.id] : queue.filter(q => !q.seen && q.state === "確定" && !q.rec && STEP_PURPOSE(q.purpose)).map(q => q.id);
+    if (act === "qrec") {
+      const q = queue.find(x => x.id === b.dataset.id) || {};
+      const dup = queue.some(x => x !== q && !x.seen && x.state === "確定" && x.key === q.key);
+      if ((q.already || dup) && !confirm(q.already ? `この号機は「${q.purpose}」がもう記録されています（${q.already}）。もう一度記録しますか？` : "同じ号機の写真がほかにもあります。読み違いがないか確認しましたか？記録しますか？")) return;
+    }
+    const ids = act === "qrec" ? [b.dataset.id] : recordable(queue.filter(q => !q.seen)).map(q => q.id);
     b.disabled = true;
     try { const vs = await run("apiQueueRecord", ids, me); vs.forEach(qUpdate); toast(`✔ ${vs.length}本 記録しました`); listData && fetchList().catch(() => {}); }
     catch (err) { toast(errMsg(err)); b.disabled = false; }
