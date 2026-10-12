@@ -9,12 +9,16 @@ function importLatest(force) {
   const stamp = f.getId() + '@' + f.getLastUpdated().getTime();
   const props = PropertiesService.getScriptProperties();
   // トリガーから呼ばれると force にイベントが入るので true のときだけ強制
+  // 台帳の列を増やしたら、同じファイルでも1回は取り込み直す
+  const colsVer = String(ARM_COLS.length);
+  if (props.getProperty('ARM_COLS_VER') !== colsVer) force = true;
   if (force !== true && props.getProperty('LAST_IMPORTED') === stamp) {
     console.log('取込済み: %s', f.getName());
     return {file: f.getName(), skipped: true};
   }
   const res = importFile_(f);
   props.setProperty('LAST_IMPORTED', stamp);
+  props.setProperty('ARM_COLS_VER', colsVer);
   return res;
 }
 
@@ -62,6 +66,7 @@ function importFile_(file) {
  * シートの2次元配列 → [{キー, 図番, 号機, ...}]（純粋関数）
  * 同じ図番+号機が複数行ある場合は出荷日が新しい方を採用し、dups に記録する。
  */
+const OPTIONAL_SRC = ['塗装指定', '情報①'];
 function parseShipValues_(values) {
   const hi = values.findIndex(r => String(r[0]).trim() === CONFIG.SRC_HEADER_MARK);
   if (hi < 0) throw new Error('ヘッダー行（' + CONFIG.SRC_HEADER_MARK + '）が見つかりません');
@@ -69,7 +74,7 @@ function parseShipValues_(values) {
   const col = {};
   Object.keys(CONFIG.SRC_COLS).forEach(src => {
     const i = hdr.indexOf(src);
-    if (i < 0) throw new Error('列「' + src + '」が見つかりません');
+    if (i < 0) { if (OPTIONAL_SRC.indexOf(src) >= 0) return; throw new Error('列「' + src + '」が見つかりません'); }  // 塗装指定などは無くても取込む
     col[CONFIG.SRC_COLS[src]] = i;
   });
   const byKey = {}, dups = [];
@@ -132,6 +137,8 @@ function mergeArms_(arms, at, fileName) {
     byKey[a['キー']] = a;
   });
   const rows = Object.keys(byKey).sort().map(k => ARM_COLS.map(c => byKey[k][c] === undefined ? '' : byKey[k][c]));
+  if (sh.getMaxColumns() < ARM_COLS.length) sh.insertColumnsAfter(sh.getMaxColumns(), ARM_COLS.length - sh.getMaxColumns());
+  sh.getRange(1, 1, 1, ARM_COLS.length).setValues([ARM_COLS]).setFontWeight('bold');
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, ARM_COLS.length).clearContent();
   if (rows.length) sh.getRange(2, 1, rows.length, ARM_COLS.length).setNumberFormat('@').setValues(rows);
   clearArmsCache_();

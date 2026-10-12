@@ -19,7 +19,8 @@ const CONFIG = {
     '図番': '図番', '号機': '号機', '機器　機種': '機種', '仕様': '仕様',
     '建機号機': '建機号機', '出荷先': '出荷先', '着工': '着工',
     '検査完了日': '検査完了日', '塗装完了日': '塗装完了日', '塗装後修正完了日': '塗装後修正完了日',
-    '最新出荷日': '出荷日', '納入日': '納入日', '注文番号': '注文番号', '使用製缶ベース情報': '製缶図番'
+    '最新出荷日': '出荷日', '納入日': '納入日', '注文番号': '注文番号', '使用製缶ベース情報': '製缶図番',
+    '塗装指定': '塗装指定', '情報①': '情報①'  // 塗装指定＝色（空欄が多い）、情報①にも色が入ることがある
   },
   ZUBAN_RE: /^[A-Z]{2}\d{2}B\d{5}[FP]\d(G\d)?$/,
   EXCLUDE_KISHU: ['ブームブラケット', 'オプションブロック取り付け図'], // アーム以外
@@ -49,7 +50,7 @@ const CONFIG = {
 };
 
 const ARM_COLS = ['キー', '図番', '号機', '機種', '仕様', '建機号機', '出荷先', '着工', '検査完了日',
-  '塗装完了日', '塗装後修正完了日', '出荷日', '納入日', '注文番号', '製缶図番', '更新日時'];
+  '塗装完了日', '塗装後修正完了日', '出荷日', '納入日', '注文番号', '製缶図番', '更新日時', '塗装指定', '情報①'];  // 後ろ2列は10/12追加
 // 塗装後チェック（紙の「塗装後確認チェックリスト」と同じ項目）。取消までが元の列、後ろに外観・膜厚などを足した
 const TAP_LOOKS = ['ゴミ噛み', 'スパッタ', '毛羽立ち', '錆', 'タレ'];   // 有／無（有＝見つけて修正）
 const TAP_FILM = ['膜厚上', '膜厚下', '膜厚右', '膜厚左'];               // μm
@@ -300,11 +301,18 @@ function stage_(last, steps) {
   if (steps['塗装後修正完了'] || steps['塗装完了']) return '塗装完了';
   return '未';
 }
+// 生産管理Excelの塗装指定（空なら情報①に色名があればそれ）
+function paintSpec_(a) {
+  if (a['塗装指定']) return a['塗装指定'];
+  const i = String(a['情報①'] || '');
+  return /グレー|イエロー|ブルー|ブラック|ホワイト|レッド|シルバー|グリーン/.test(i) ? i : '';
+}
 function armView_(a, last, steps) {
   return {
     key: a['キー'], z: a['図番'], g: a['号機'], kishu: a['機種'], spec: a['仕様'], kenki: a['建機号機'],
     to: a['出荷先'], ship: a['出荷日'], deliv: a['納入日'],
     paintPlan: a['塗装完了日'] || '', fixPlan: a['塗装後修正完了日'] || '', // 生産管理Excelの予定日
+    paintSpec: paintSpec_(a),
     status: last ? last['結果'] : '', by: last ? last['確認者'] : '', at: last ? last['日時'] : '',
     stage: stage_(last, steps),
     // 一覧の絞込み用：塗装済＝塗装完了以降の記録あり、塗装後修正済＝塗装後修正完了・タップ良・出荷のどれか
@@ -1010,12 +1018,16 @@ function importLatest(force) {
   const stamp = f.getId() + '@' + f.getLastUpdated().getTime();
   const props = PropertiesService.getScriptProperties();
   // トリガーから呼ばれると force にイベントが入るので true のときだけ強制
+  // 台帳の列を増やしたら、同じファイルでも1回は取り込み直す
+  const colsVer = String(ARM_COLS.length);
+  if (props.getProperty('ARM_COLS_VER') !== colsVer) force = true;
   if (force !== true && props.getProperty('LAST_IMPORTED') === stamp) {
     console.log('取込済み: %s', f.getName());
     return {file: f.getName(), skipped: true};
   }
   const res = importFile_(f);
   props.setProperty('LAST_IMPORTED', stamp);
+  props.setProperty('ARM_COLS_VER', colsVer);
   return res;
 }
 
@@ -1063,6 +1075,7 @@ function importFile_(file) {
  * シートの2次元配列 → [{キー, 図番, 号機, ...}]（純粋関数）
  * 同じ図番+号機が複数行ある場合は出荷日が新しい方を採用し、dups に記録する。
  */
+const OPTIONAL_SRC = ['塗装指定', '情報①'];
 function parseShipValues_(values) {
   const hi = values.findIndex(r => String(r[0]).trim() === CONFIG.SRC_HEADER_MARK);
   if (hi < 0) throw new Error('ヘッダー行（' + CONFIG.SRC_HEADER_MARK + '）が見つかりません');
@@ -1070,7 +1083,7 @@ function parseShipValues_(values) {
   const col = {};
   Object.keys(CONFIG.SRC_COLS).forEach(src => {
     const i = hdr.indexOf(src);
-    if (i < 0) throw new Error('列「' + src + '」が見つかりません');
+    if (i < 0) { if (OPTIONAL_SRC.indexOf(src) >= 0) return; throw new Error('列「' + src + '」が見つかりません'); }  // 塗装指定などは無くても取込む
     col[CONFIG.SRC_COLS[src]] = i;
   });
   const byKey = {}, dups = [];
@@ -1133,6 +1146,8 @@ function mergeArms_(arms, at, fileName) {
     byKey[a['キー']] = a;
   });
   const rows = Object.keys(byKey).sort().map(k => ARM_COLS.map(c => byKey[k][c] === undefined ? '' : byKey[k][c]));
+  if (sh.getMaxColumns() < ARM_COLS.length) sh.insertColumnsAfter(sh.getMaxColumns(), ARM_COLS.length - sh.getMaxColumns());
+  sh.getRange(1, 1, 1, ARM_COLS.length).setValues([ARM_COLS]).setFontWeight('bold');
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, ARM_COLS.length).clearContent();
   if (rows.length) sh.getRange(2, 1, rows.length, ARM_COLS.length).setNumberFormat('@').setValues(rows);
   clearArmsCache_();

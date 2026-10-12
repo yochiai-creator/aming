@@ -148,11 +148,18 @@ function stage_(last, steps) {
   if (steps['塗装後修正完了'] || steps['塗装完了']) return '塗装完了';
   return '未';
 }
+// 生産管理Excelの塗装指定（空なら情報①に色名があればそれ）
+function paintSpec_(a) {
+  if (a['塗装指定']) return a['塗装指定'];
+  const i = String(a['情報①'] || '');
+  return /グレー|イエロー|ブルー|ブラック|ホワイト|レッド|シルバー|グリーン/.test(i) ? i : '';
+}
 function armView_(a, last, steps) {
   return {
     key: a['キー'], z: a['図番'], g: a['号機'], kishu: a['機種'], spec: a['仕様'], kenki: a['建機号機'],
     to: a['出荷先'], ship: a['出荷日'], deliv: a['納入日'],
     paintPlan: a['塗装完了日'] || '', fixPlan: a['塗装後修正完了日'] || '', // 生産管理Excelの予定日
+    paintSpec: paintSpec_(a),
     status: last ? last['結果'] : '', by: last ? last['確認者'] : '', at: last ? last['日時'] : '',
     stage: stage_(last, steps),
     // 一覧の絞込み用：塗装済＝塗装完了以降の記録あり、塗装後修正済＝塗装後修正完了・タップ良・出荷のどれか

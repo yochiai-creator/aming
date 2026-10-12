@@ -432,7 +432,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-60"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-61"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -576,7 +576,7 @@ function renderArm(keep) {
   const a = armData;
   if (keep) Object.assign(form, keep, {holes: keep.holes || a.holes || "", color: keep.color || a.lastColor || ""});
   else Object.assign(form, {result: "", holes: a.holes || "", treated: "", person: me, note: "", looks: {}, spots: {}, film: ["", "", "", ""],
-    color: a.lastColor || ls.get("trace.color") || "", fixer: [], measurer: "", touch: false, fixed: false});
+    color: (a.paintSpec && a.paintSpec !== "下塗りのみで出荷" ? a.paintSpec : "") || a.lastColor || ls.get("trace.color") || "", fixer: [], measurer: "", touch: false, fixed: false});
   $("armView").innerHTML = `
   <div class="row" style="margin:0 0 10px"><button type="button" class="btn sec mini" data-act="back">← 戻る</button></div>
   <section>
@@ -587,6 +587,7 @@ function renderArm(keep) {
       <dt>建機号機</dt><dd class="mono">${esc(a.kenki || "-")}</dd>
       <dt>注文番号</dt><dd class="mono">${esc(a.order || "-")}</dd>
       <dt>製缶図番</dt><dd class="mono">${esc(a.base || "-")}</dd>
+      <dt>塗装指定</dt><dd>${esc(a.paintSpec || "指定なし")}</dd>
     </dl>
   </section>
   ${goalHtml(a)}
@@ -604,7 +605,7 @@ function renderArm(keep) {
     <div class="field"><label>処置数</label><input type="number" inputmode="numeric" min="0" id="fTreated" value="${esc(form.treated)}"></div>
     <div class="field"><label>膜厚 μm</label><div class="film">${FILM.map((k, i) => `<label>${k}<input type="number" inputmode="decimal" min="0" id="fFilm${i}" data-film="${i}" value="${esc(form.film[i])}"></label>`).join("")}</div></div>
     <!-- 膜厚計の画面を撮って入れる機能は今は使わない（手入力でOK・ユーザー 10/12）。戻すときは apiReadFilm と filmCam のボタンを復活 -->
-    <div class="field"><label>色</label><input type="text" id="fColor" list="colorList" value="${esc(form.color)}" placeholder="例：グレー"><datalist id="colorList"><option value="グレー"><option value="イエロー"><option value="ブラック"></datalist></div>
+    <div class="field"><label>色</label><input type="text" id="fColor" list="colorList" value="${esc(form.color)}" placeholder="例：グレー">${a.paintSpec ? `<span class="muted">Excel：${esc(a.paintSpec)}</span>` : ""}<datalist id="colorList"><option value="グレー"><option value="イエロー"><option value="ブラック"></datalist></div>
     <div class="field"><label>測定者</label><div class="names" data-role="measurer">${roleBtns("measurer")}</div></div>
     <div class="field"><label>確認</label><div class="chks"><button type="button" data-act="chk" data-k="touch"><i></i>タッチアップ済</button><button type="button" data-act="chk" data-k="fixed"><i></i>修正確認済</button></div></div>
     <div class="field"><label>確認者</label><div class="names" id="fPeople">${peopleBtns()}</div></div>
