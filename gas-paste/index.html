@@ -46,6 +46,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 #paintNow em{font-style:normal;font-size:.68rem;color:var(--warn)}
 #paintNow.all em{color:var(--ok)}
 #paintNow.all b{color:var(--ok)}
+@media (max-width:420px){[data-act="allok"]{font-size:.92rem!important;padding-left:6px;padding-right:6px}.looks button{font-size:.88rem}}
+@media (min-width:1100px){main{max-width:960px}}
 @media (max-width:380px){#paintNow small{font-size:.58rem}#paintNow{gap:4px;padding:3px 6px;right:10px}#paintNow b{font-size:1.15rem}}
 #today{font-family:"Share Tech Mono",monospace;font-size:1.1rem;color:var(--cyan);text-shadow:0 0 8px rgba(63,208,255,.45);
   background:#060909;border:1px solid var(--edge);padding:2px 10px;letter-spacing:.06em}
@@ -283,8 +285,8 @@ h1{font-size:1.9rem}
 .chks button i{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:2px solid var(--sub);font-style:normal;font-size:.9rem}
 .chks button.on{border-color:var(--ok);background:rgba(56,224,138,.15);color:#fff}
 .chks button.on i{border-color:var(--ok);background:var(--ok);color:#06210F}
-.looks{display:flex;flex-wrap:wrap;gap:6px}
-.looks button{padding:6px 10px;background:#0A0D0F;border:1px solid var(--edge-hi);color:var(--ink);font-weight:700;line-height:1.1}
+.looks{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;flex:1 1 260px;max-width:480px}
+.looks button{padding:6px 2px;white-space:nowrap;background:#0A0D0F;border:1px solid var(--edge-hi);color:var(--ink);font-weight:700;line-height:1.1}
 .looks button small{display:block;font-size:.7rem;color:var(--ok);font-weight:400}
 .looks button.on{border-color:var(--warn);background:rgba(255,176,32,.15)}.looks button.on small{color:var(--warn);font-weight:700}
 .film{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;flex:1 1 100%;min-width:0}
@@ -433,7 +435,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-65"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-66"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -599,10 +601,10 @@ function renderArm(keep) {
   ${goalHtml(a)}
   <section id="tapForm" class="${scanPurpose === "塗装後チェック" ? "focus" : ""}">
     <h2>塗装後チェック${photoId ? '<span class="chip">刻印写真つき</span>' : ""}</h2>
-    <button type="button" class="btn ok" style="width:100%;min-height:56px;font-size:1.05rem" data-act="allok">外観OK・タップ全数OKで記録${a.holes ? `（${a.holes}穴）` : ""}</button>
+    <button type="button" class="btn ok" style="width:100%;min-height:56px;font-size:1.05rem" data-act="allok">外観OK・タップ全数OKで記録${a.holes ? `<span style="white-space:nowrap">（${a.holes}穴）</span>` : ""}</button>
     <p class="muted" style="margin:4px 0 0">膜厚・色・修正者を入れてから押すと一緒に記録されます</p>
     <div class="field"><label>外観</label><div class="looks">${LOOKS.map(k => `<button type="button" data-act="look" data-k="${k}">${k}<small></small></button>`).join("")}</div></div>
-    <p class="muted" style="margin:-4px 0 6px">タップで 無 ⇄ 有（有＝見つけて修正したもの）。有にすると下で箇所を選べます</p>
+    <p class="muted" style="margin:6px 0 6px">タップで 無 ⇄ 有（有＝見つけて修正したもの）。有にすると下で箇所を選べます</p>
     <div id="spots"></div>
     <div class="field"><label>修正者</label><div class="names" data-role="fixer">${roleBtns("fixer")}</div></div>
     <p class="muted" style="margin:6px 0 6px">修正者は何人でも選べます（もう一度タップで外す）</p>
