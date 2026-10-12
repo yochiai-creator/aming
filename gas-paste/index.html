@@ -432,7 +432,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-61"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-62"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -572,11 +572,13 @@ const LOOKS = ["ゴミ噛み", "スパッタ", "毛羽立ち", "錆", "タレ"],
 const FACES = ["上面", "下面", "右面", "左面"], POS = ["根元", "中央", "先端"];
 const ARM_MINI = `<svg viewBox="0 0 300 40" class="armmini" aria-hidden="true"><path d="M4 10 Q10 4 30 6 L250 14 Q280 15 292 24 Q296 34 284 36 L30 34 Q8 36 4 28 Z"/><circle cx="22" cy="20" r="7"/><circle cx="276" cy="26" r="5"/><path d="M100 4 V38 M200 4 V38" class="div"/></svg>`;
 const form = {result: "", holes: "", treated: "", person: "", note: "", looks: {}, spots: {}, film: ["", "", "", ""], color: "", fixer: [], measurer: "", touch: false, fixed: false};
+// Excelの塗装指定 → 色。下塗りはグレー（ユーザー 10/12）
+function specColor(spec) { return !spec ? "" : /下塗り/.test(spec) ? "グレー" : spec; }
 function renderArm(keep) {
   const a = armData;
   if (keep) Object.assign(form, keep, {holes: keep.holes || a.holes || "", color: keep.color || a.lastColor || ""});
   else Object.assign(form, {result: "", holes: a.holes || "", treated: "", person: me, note: "", looks: {}, spots: {}, film: ["", "", "", ""],
-    color: (a.paintSpec && a.paintSpec !== "下塗りのみで出荷" ? a.paintSpec : "") || a.lastColor || ls.get("trace.color") || "", fixer: [], measurer: "", touch: false, fixed: false});
+    color: specColor(a.paintSpec) || a.lastColor || ls.get("trace.color") || "", fixer: [], measurer: "", touch: false, fixed: false});
   $("armView").innerHTML = `
   <div class="row" style="margin:0 0 10px"><button type="button" class="btn sec mini" data-act="back">← 戻る</button></div>
   <section>
@@ -587,7 +589,7 @@ function renderArm(keep) {
       <dt>建機号機</dt><dd class="mono">${esc(a.kenki || "-")}</dd>
       <dt>注文番号</dt><dd class="mono">${esc(a.order || "-")}</dd>
       <dt>製缶図番</dt><dd class="mono">${esc(a.base || "-")}</dd>
-      <dt>塗装指定</dt><dd>${esc(a.paintSpec || "指定なし")}</dd>
+      <dt>塗装指定</dt><dd>${esc(a.paintSpec || "指定なし")}${/下塗り/.test(a.paintSpec || "") ? "（グレー）" : ""}</dd>
     </dl>
   </section>
   ${goalHtml(a)}
