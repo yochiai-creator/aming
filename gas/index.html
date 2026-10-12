@@ -432,7 +432,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-59"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-60"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -603,8 +603,7 @@ function renderArm(keep) {
     <div class="field"><label>ねじ穴数</label><input type="number" inputmode="numeric" min="0" id="fHoles" value="${esc(form.holes)}"><span class="muted">${a.holes ? "図番の記憶値" : (a._partial ? "読み込み中…" : "初回は入力（次から自動）")}</span></div>
     <div class="field"><label>処置数</label><input type="number" inputmode="numeric" min="0" id="fTreated" value="${esc(form.treated)}"></div>
     <div class="field"><label>膜厚 μm</label><div class="film">${FILM.map((k, i) => `<label>${k}<input type="number" inputmode="decimal" min="0" id="fFilm${i}" data-film="${i}" value="${esc(form.film[i])}"></label>`).join("")}</div></div>
-    <div class="row" style="margin-top:6px"><button type="button" class="btn sec mini" data-act="filmcam">📷 膜厚計の画面を撮って入れる</button><span class="muted" id="filmMsg">選んだ欄（なければ次の空き欄）に入ります</span></div>
-    <input type="file" id="filmCam" accept="image/*" capture="environment" class="hidden">
+    <!-- 膜厚計の画面を撮って入れる機能は今は使わない（手入力でOK・ユーザー 10/12）。戻すときは apiReadFilm と filmCam のボタンを復活 -->
     <div class="field"><label>色</label><input type="text" id="fColor" list="colorList" value="${esc(form.color)}" placeholder="例：グレー"><datalist id="colorList"><option value="グレー"><option value="イエロー"><option value="ブラック"></datalist></div>
     <div class="field"><label>測定者</label><div class="names" data-role="measurer">${roleBtns("measurer")}</div></div>
     <div class="field"><label>確認</label><div class="chks"><button type="button" data-act="chk" data-k="touch"><i></i>タッチアップ済</button><button type="button" data-act="chk" data-k="fixed"><i></i>修正確認済</button></div></div>
