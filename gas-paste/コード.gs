@@ -54,7 +54,7 @@ const ARM_COLS = ['キー', '図番', '号機', '機種', '仕様', '建機号�
 const TAP_LOOKS = ['ゴミ噛み', 'スパッタ', '毛羽立ち', '錆', 'タレ'];   // 有／無（有＝見つけて修正）
 const TAP_FILM = ['膜厚上', '膜厚下', '膜厚右', '膜厚左'];               // μm
 const TAP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '結果', 'ねじ穴数', '処置数', '確認者', '備考', '写真ID', '取消']
-  .concat(TAP_LOOKS, TAP_FILM, ['色', '修正者', '測定者', 'タッチアップ', '修正確認']);
+  .concat(TAP_LOOKS, TAP_FILM, ['色', '修正者', '測定者', 'タッチアップ', '修正確認', '外観箇所']);  // 外観箇所＝「タレ:右面先端,上面中央；ゴミ噛み:…」
 const DATE_COLS = ['着工', '検査完了日', '塗装完了日', '塗装後修正完了日', '出荷日', '納入日'];
 const STEP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '工程', '確認者', '備考', '写真ID', '取消'];
 const CHANGE_COLS = ['日時', 'キー', '項目', '前', '後', '元ファイル'];
@@ -363,7 +363,7 @@ function apiArm(key) {
   view.taps = taps.map(t => ({id: t['記録ID'], at: t['日時'], result: t['結果'], holes: t['ねじ穴数'], treated: t['処置数'],
     by: t['確認者'], note: t['備考'], photo: t['写真ID'] ? 'https://drive.google.com/file/d/' + t['写真ID'] + '/view' : '', canceled: t['取消'] === '1',
     looks: TAP_LOOKS.filter(k => t[k] === '有'), film: TAP_FILM.map(k => t[k] || ''), color: t['色'] || '', fixer: t['修正者'] || '', measurer: t['測定者'] || '',
-    touch: t['タッチアップ'] || '', fixed: t['修正確認'] || ''})).reverse();
+    touch: t['タッチアップ'] || '', fixed: t['修正確認'] || '', spots: t['外観箇所'] || ''})).reverse();
   view.lastColor = (taps.filter(t => t['色']).pop() || {})['色'] || '';
   view.holes = loadHoles_()[a['図番']] || '';
   view.photos = readTable_(sheet_(CONFIG.SHEETS.PHOTOS)).filter(r => r['キー'] === key)
@@ -394,7 +394,8 @@ function apiSaveTap(rec) {
     const looks = rec.looks || {}, film = rec.film || [];
     appendRows_(CONFIG.SHEETS.TAPS, [[id, now, a['キー'], a['図番'], a['号機'], rec.result, holes || '', treated, rec.person, rec.note || '', rec.photoId || '', '']
       .concat(TAP_LOOKS.map(k => looks[k] === '有' ? '有' : '無'), TAP_FILM.map((k, i) => film[i] !== undefined && film[i] !== '' ? +film[i] : ''),
-        [rec.color || '', rec.fixer || '', rec.measurer || '', rec.touch ? '済' : '', rec.fixed ? '済' : ''])]);
+        [rec.color || '', rec.fixer || '', rec.measurer || '', rec.touch ? '済' : '', rec.fixed ? '済' : '',
+          TAP_LOOKS.filter(k => looks[k] === '有' && rec.spots && rec.spots[k] && rec.spots[k].length).map(k => k + ':' + rec.spots[k].join(',')).join('；')])]);
     if (holes) saveHoles_(a['図番'], holes, now);
   } finally { lock.releaseLock(); }
   return apiArm(rec.key);
@@ -504,7 +505,7 @@ function nextShipDate_() {
 function apiCsv(from, to) {
   const arms = {};
   loadArms_().forEach(a => { arms[a['キー']] = a; });
-  const extra = TAP_LOOKS.concat(TAP_FILM, ['色', '修正者', '測定者', 'タッチアップ', '修正確認']);
+  const extra = TAP_LOOKS.concat(TAP_FILM, ['色', '修正者', '測定者', 'タッチアップ', '修正確認', '外観箇所']);
   const head = ['出荷日', '出荷先', '図番', '号機', '建機号機', '結果', 'ねじ穴数', '処置数', '確認者', '記録日時', '備考'].concat(extra);
   const rows = loadTaps_().filter(t => t['取消'] !== '1').map(t => {
     const a = arms[t['キー']] || {};
