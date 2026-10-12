@@ -427,12 +427,11 @@ function syncPurpose() {
   $("scanView").dataset.p = purpose; $("shootPurpose").textContent = "【" + purpose + "】";
   if ($("meSeg")) renderMe();
 }
-// 担当者（台帳の「担当者」シートで役割ごとに登録）。読取の名前は 目的が塗装完了なら塗装完了の人、それ以外は確認者
+// 担当者（台帳の「担当者」シートで役割ごとに登録）。読取の確認者ボタンは 目的が塗装完了なら「塗装完了」列の人、それ以外は「確認者」列の人
 const ROLES = ["塗装完了", "修正者", "測定者", "確認者"];
 function roleList(r) { return (boot.roles && boot.roles[r]) || boot.people || []; }
 function renderMe() {
   const r = purpose === "塗装完了" ? "塗装完了" : "確認者", list = roleList(r);
-  $("meLab").textContent = r === "塗装完了" ? "塗装した人" : "確認者";
   $("meSeg").innerHTML = list.map(n => `<button type="button" data-act="me" data-n="${esc(n)}" class="${n === me ? "on" : ""}">${esc(n)}</button>`).join("") || '<span class="muted">台帳の「担当者」シートに名前を入れてください</span>';
 }
 function needMe() {
@@ -449,7 +448,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-69"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-70"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
