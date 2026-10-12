@@ -163,6 +163,11 @@ ul.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--edge);margi
 .redto{color:var(--ng);font-weight:700}
 .tile i.plan{display:block;font-style:normal;font-size:.66rem;color:var(--sub);font-family:"Share Tech Mono","BIZ UDPGothic",monospace}
 .tile i.plan.late{color:var(--ng);font-weight:700}
+.sub{margin-top:8px}
+.sub>em{display:flex;align-items:center;gap:6px;font-style:normal;font-size:.74rem;font-weight:700;margin:0 0 4px;letter-spacing:.05em}
+.sub>em::before{content:"";width:4px;height:12px;background:currentColor}
+.sub>em b{font-family:"Share Tech Mono",monospace;font-size:.85rem}
+.sub.todo>em{color:#FFB020}.sub.mid>em{color:#3FD0FF}.sub.done>em{color:var(--ok)}
 .tile:active{background:rgba(0,167,181,.15)}
 .prog{position:relative;height:22px;background:#0A0D0F;border:1px solid var(--edge);margin-bottom:8px}
 .prog i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#00848F,#22C3D0)}
@@ -435,7 +440,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-66"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-67"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -487,6 +492,12 @@ function planHtml(a) {
 function stOf(a) { return a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未"); }
 // 一覧で赤字にする出荷先（ユーザー 10/12）
 const RED_TO = ["東条"];
+// 図番の中を 未塗装／塗装済／塗装後修正済 の段に分ける（ユーザー 10/12：混ざると見にくい）
+const TILE_BUCKETS = [["未塗装", a => !isPainted(a), "todo"], ["塗装済", a => isPainted(a) && !isFixed(a), "mid"], ["塗装後修正済", isFixed, "done"]];
+function tileHtml(a, bucket) {
+  const st = stOf(a), cls = STAGE_CLS[st] === "bad" ? "bad" : bucket, lab = cls === "bad" ? (TILE_LABEL[st] || st) : "";
+  return `<button type="button" class="tile ${cls}" data-act="arm" data-k="${esc(a.key)}"><b>${esc(a.g)}</b>${lab || a.by ? `<small>${esc([lab, a.by].filter(Boolean).join("・"))}</small>` : ""}${planHtml(a)}</button>`;
+}
 // 図番（＋出荷先）ごとにまとめて、号機をタイルで並べる
 function armGroups(rows, withShip) {
   const g = new Map();
@@ -496,7 +507,7 @@ function armGroups(rows, withShip) {
     list.sort((x, y) => String(x.g).localeCompare(String(y.g), "ja", {numeric: true}));
     return `<div class="grp"><div class="gh"><span class="gz">${esc(a0.z)}</span><span class="gc">${ok}/${list.length}</span>
       <span class="gm">${withShip ? "出荷 " + esc(md(a0.ship || "-")) + "　" : ""}<span class="${RED_TO.some(t => (a0.to || "").includes(t)) ? "redto" : ""}">${esc(a0.to || "")}</span>　${esc(a0.kishu || "")}</span></div>
-      <div class="tiles">${list.map(a => { const st = stOf(a); return `<button type="button" class="tile ${STAGE_CLS[st] || "todo"}" data-act="arm" data-k="${esc(a.key)}"><b>${esc(a.g)}</b><small>${esc(TILE_LABEL[st] || st)}${a.by ? "・" + esc(a.by) : ""}</small>${planHtml(a)}</button>`; }).join("")}</div></div>`;
+      ${TILE_BUCKETS.map(([name, f, cls]) => { const sub = list.filter(f); return sub.length ? `<div class="sub ${cls}"><em>${name}<b>${sub.length}</b></em><div class="tiles">${sub.map(a => tileHtml(a, cls)).join("")}</div></div>` : ""; }).join("")}</div>`;
   }).join("");
 }
 function renderDayList() {
