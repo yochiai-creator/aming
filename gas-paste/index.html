@@ -432,7 +432,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-58"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-59"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -768,6 +768,14 @@ async function prepare(cv) {
 /* ---------- 膜厚計の画面を撮って数値を入れる ---------- */
 let filmSlot = -1;
 document.addEventListener("focusin", e => { if (e.target.dataset && e.target.dataset.film !== undefined) filmSlot = +e.target.dataset.film; });
+// Bluetoothキーボードとして数値を打ち込む膜厚計（PosiTector Advanced 等）用：Enterで次の膜厚欄へ
+document.addEventListener("keydown", e => {
+  const i = e.target.dataset ? e.target.dataset.film : undefined;
+  if (i === undefined || e.key !== "Enter") return;
+  e.preventDefault();
+  const next = document.getElementById("fFilm" + (+i + 1));
+  if (next) { next.focus(); next.select && next.select(); } else e.target.blur();
+});
 document.addEventListener("change", async e => {
   if (e.target.id !== "filmCam" || !e.target.files[0]) return;
   const f = e.target.files[0]; e.target.value = "";
