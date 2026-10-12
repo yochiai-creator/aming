@@ -368,6 +368,12 @@ function apiArm(key) {
     }));
   view.otherChanges = changes.filter(c => DATE_COLS.indexOf(c['項目']) < 0).map(c => ({at: c['日時'], col: c['項目'], from: c['前'], to: c['後']}));
   view.order = a['注文番号']; view.base = a['製缶図番']; view.updated = a['更新日時'];
+  // テレスコ（特機）は建機号機が空。号機＝テレスコ号機で、同じ号機のアーム・サポートがセット
+  if (/ﾃﾚｽｺ|テレスコ/.test(a['仕様'] || '')) {
+    view.tele = a['号機'];
+    view.teleSet = loadArms_().filter(r => r['号機'] === a['号機'] && r['キー'] !== key && /ﾃﾚｽｺ|テレスコ/.test(r['仕様'] || ''))
+      .map(r => ({key: r['キー'], z: r['図番'], spec: r['仕様'], ship: r['出荷日']}));
+  }
   view.taps = taps.map(t => ({id: t['記録ID'], at: t['日時'], result: t['結果'], holes: t['ねじ穴数'], treated: t['処置数'],
     by: t['確認者'], note: t['備考'], photo: t['写真ID'] ? 'https://drive.google.com/file/d/' + t['写真ID'] + '/view' : '', canceled: t['取消'] === '1',
     looks: TAP_LOOKS.filter(k => t[k] === '有'), film: TAP_FILM.map(k => t[k] || ''), color: t['色'] || '', fixer: t['修正者'] || '', measurer: t['測定者'] || '',

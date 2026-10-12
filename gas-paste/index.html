@@ -433,7 +433,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-63"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-64"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -550,7 +550,7 @@ const armCache = new Map();
 let armToken = 0;
 function quickArm(key) {
   const r = (listData && listData.rows.find(a => a.key === key)) || (listData && listData.unchecked.find(a => a.key === key));
-  return r ? Object.assign({steps: [], taps: [], photos: [], otherChanges: [], holes: "", _partial: true}, r) : null;
+  return r ? Object.assign({steps: [], taps: [], photos: [], otherChanges: [], holes: "", _partial: true}, r, /ﾃﾚｽｺ|テレスコ/.test(r.spec || r.kishu || "") ? {tele: r.g} : {}) : null;
 }
 async function openArm(key, fromScan, qPurpose) {
   show("arm");
@@ -589,7 +589,8 @@ function renderArm(keep) {
     <dl class="kv" style="margin-top:8px">
       <dt>機種</dt><dd>${esc(a.kishu)}　${esc(a.spec)}</dd>
       <dt>出荷先</dt><dd>${esc(a.to || "-")}</dd>
-      <dt>建機号機</dt><dd class="mono">${esc(a.kenki || "-")}</dd>
+      <dt>${a.tele && !a.kenki ? "テレスコ号機" : "建機号機"}</dt><dd class="mono">${esc(a.kenki || (a.tele ? a.tele + "号機" : "-"))}</dd>
+      ${a.teleSet && a.teleSet.length ? `<dt>セット</dt><dd>${a.teleSet.map(t => `<button type="button" class="link" data-act="arm" data-k="${esc(t.key)}">${esc(t.z)}（${esc(t.spec)}）</button>`).join("<br>")}</dd>` : ""}
       <dt>注文番号</dt><dd class="mono">${esc(a.order || "-")}</dd>
       <dt>製缶図番</dt><dd class="mono">${esc(a.base || "-")}</dd>
       <dt>塗装指定</dt><dd>${esc(a.paintSpec || "指定なし")}${/下塗り/.test(a.paintSpec || "") ? "（グレー）" : ""}</dd>
