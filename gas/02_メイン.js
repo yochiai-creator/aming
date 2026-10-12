@@ -172,9 +172,10 @@ function armView_(a, last, steps) {
 // 役割ごとの名前（ユーザー 10/12）。「担当者」シート：1行目が役割、その下に1行1人。シートが無い役割は設定シートの確認者を使う
 function rolesRead_() {
   const sh = ss_().getSheetByName(CONFIG.SHEETS.ROLES);
-  return rolesFromRows_(sh ? sh.getDataRange().getDisplayValues() : [], cfgList_('PEOPLE'));
+  const roles = rolesFromRows_(sh ? sh.getDataRange().getDisplayValues() : [], cfgList_('PEOPLE'));
+  return sh ? roles : apiSaveRoles(roles);  // 無ければ確認者を全部の役割に入れて作る（あとはシートで編集）
 }
-function apiSaveRoles(roles) {
+function apiSaveRoles(roles) {  // 「担当者」シートを書き直す（シートが無い時に作る用）
   const clean = {};
   ROLES.forEach(r => { const seen = {}; clean[r] = (roles && roles[r] || []).map(n => String(n).trim().slice(0, 40)).filter(n => n && !seen[n] && (seen[n] = 1)); });
   const lock = LockService.getScriptLock(); lock.waitLock(20000);

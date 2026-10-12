@@ -163,9 +163,6 @@ ul.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--edge);margi
 .redto{color:var(--ng);font-weight:700}
 .tile i.plan{display:block;font-style:normal;font-size:.66rem;color:var(--sub);font-family:"Share Tech Mono","BIZ UDPGothic",monospace}
 .tile i.plan.late{color:var(--ng);font-weight:700}
-.rolebox{margin-top:12px;padding-top:10px;border-top:1px dashed var(--edge)}.rolebox h3{margin:0 0 6px;font-size:.9rem;color:var(--cyan)}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
-.pchip{padding:6px 10px;background:#0A0D0F;border:1px solid var(--edge-hi);color:var(--ink)}.pchip i{font-style:normal;color:var(--sub);margin-left:6px}
 .sub{margin-top:8px}
 .sub>em{display:flex;align-items:center;gap:6px;font-style:normal;font-size:.74rem;font-weight:700;margin:0 0 4px;letter-spacing:.05em}
 .sub>em::before{content:"";width:4px;height:12px;background:currentColor}
@@ -430,18 +427,13 @@ function syncPurpose() {
   $("scanView").dataset.p = purpose; $("shootPurpose").textContent = "【" + purpose + "】";
   if ($("meSeg")) renderMe();
 }
-// 担当者（設定タブで役割ごとに登録）。読取の名前は 目的が塗装完了なら塗装完了の人、それ以外は確認者
+// 担当者（台帳の「担当者」シートで役割ごとに登録）。読取の名前は 目的が塗装完了なら塗装完了の人、それ以外は確認者
 const ROLES = ["塗装完了", "修正者", "測定者", "確認者"];
 function roleList(r) { return (boot.roles && boot.roles[r]) || boot.people || []; }
 function renderMe() {
   const r = purpose === "塗装完了" ? "塗装完了" : "確認者", list = roleList(r);
   $("meLab").textContent = r === "塗装完了" ? "塗装した人" : "確認者";
-  $("meSeg").innerHTML = list.map(n => `<button type="button" data-act="me" data-n="${esc(n)}" class="${n === me ? "on" : ""}">${esc(n)}</button>`).join("") || '<span class="muted">設定タブの担当者に名前を入れてください</span>';
-}
-function saveRoles(roles) {
-  boot.roles = roles; ls.set("trace.boot", JSON.stringify({people: boot.people, roles: boot.roles, days: boot.days}));
-  renderSettings(); renderMe();
-  run("apiSaveRoles", roles).then(r => { boot.roles = r; ls.set("trace.boot", JSON.stringify({people: boot.people, roles: r, days: boot.days})); }).catch(err => toast("担当者の保存エラー：" + errMsg(err)));
+  $("meSeg").innerHTML = list.map(n => `<button type="button" data-act="me" data-n="${esc(n)}" class="${n === me ? "on" : ""}">${esc(n)}</button>`).join("") || '<span class="muted">台帳の「担当者」シートに名前を入れてください</span>';
 }
 function needMe() {
   toast("先に確認者（自分の名前）を選んでください"); show("scan");
@@ -457,7 +449,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-68"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-69"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -690,7 +682,7 @@ function stepHtml(st) {
   </li>`;
 }
 function peopleBtns() {
-  if (!roleList("確認者").length) return '<span class="muted">設定タブの担当者（確認者）に名前を入れてください</span>';
+  if (!roleList("確認者").length) return '<span class="muted">台帳の「担当者」シート（確認者）に名前を入れてください</span>';
   return roleList("確認者").map(n => `<button type="button" data-act="person" data-n="${esc(n)}">${esc(n)}</button>`).join("");
 }
 function roleBtns(role) { return roleList(role === "fixer" ? "修正者" : "測定者").map(n => `<button type="button" data-act="role" data-r="${role}" data-n="${esc(n)}">${esc(n)}</button>`).join(""); }
@@ -741,11 +733,7 @@ async function refreshDays() { try { boot.days = await run("apiDays"); renderHea
 /* ================= 設定 ================= */
 function renderSettings() {
   $("settingsView").innerHTML = `
-  <section><h2>担当者</h2>
-    <p class="muted">名前をタップすると外せます。追加は名前を入れて「追加」。塗装完了の人は目的「塗装完了」のとき読取画面に出ます</p>
-    ${ROLES.map((r, i) => `<div class="rolebox"><h3>${r}</h3><div class="chips">${roleList(r).map(n => `<button type="button" class="pchip" data-act="rdel" data-r="${r}" data-n="${esc(n)}">${esc(n)}<i>×</i></button>`).join("") || '<span class="muted">まだいません</span>'}</div>
-      <div class="row"><input type="text" id="radd${i}" placeholder="名前を追加"><button type="button" class="btn sec" data-act="radd" data-r="${r}" data-i="${i}">追加</button></div></div>`).join("")}
-  </section>
+  <p class="muted">担当者（塗装完了・修正者・測定者・確認者）は台帳スプレッドシートの「担当者」シートで。1行目が役割、その下に1行1人</p>
   <section><h2>CSV出力（タップ記録）</h2>
     <div class="row"><input type="text" id="csvFrom" placeholder="出荷日 から 例 2026/10/01"><input type="text" id="csvTo" placeholder="出荷日 まで"></div>
     <div class="row"><button type="button" class="btn sec" data-act="csv">ダウンロード</button></div>
@@ -1237,17 +1225,6 @@ document.addEventListener("click", async e => {
   else if (act === "cancel") {
     if (!confirm("この記録を取り消しますか？（記録は残り、取消線が付きます）")) return;
     try { armData = await run("apiCancelTap", b.dataset.id, armData.key); renderArm(); refreshDays(); } catch (err) { toast(errMsg(err)); }
-  }
-  else if (act === "radd") {
-    const n = $("radd" + b.dataset.i).value.trim(), r = b.dataset.r;
-    if (!n) return;
-    if (roleList(r).includes(n)) { toast(n + " はもういます"); return; }
-    const roles = {}; ROLES.forEach(k => roles[k] = roleList(k).slice()); roles[r].push(n); saveRoles(roles); toast(r + "に " + n + " を追加しました");
-  }
-  else if (act === "rdel") {
-    const n = b.dataset.n, r = b.dataset.r;
-    if (!confirm(n + " を「" + r + "」から外しますか？")) return;
-    const roles = {}; ROLES.forEach(k => roles[k] = roleList(k).filter(x => k !== r || x !== n)); saveRoles(roles);
   }
   else if (act === "me") { me = b.dataset.n; ls.set("trace.me", me); renderHead(); renderSettings(); }
   else if (act === "csv") {

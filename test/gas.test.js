@@ -109,7 +109,6 @@ const api = {
   apiQueueDone: id => ({id, seen: true}),
   apiQueuePick: (id, key) => ({id, state: "確定", key, cands: [arm]}),
   apiQueueRecord: (ids, person) => ids.map(id => ({id, state: "確定", key: arm.key, purpose: "塗装完了", cands: [arm], rec: "r-" + id, by: person})),
-  apiSaveRoles: roles => roles,
   apiQueueUnrecord: id => ({id, state: "確定", key: arm.key, purpose: "塗装完了", cands: [arm], rec: ""}),
   apiDeletePhoto: () => Object.assign(api.apiArm(), {photos: []}),
   apiPhoto: () => "data:image/jpeg;base64,AAAA",
@@ -176,11 +175,6 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
   t("撮るだけ：一覧から記録→記録済み", () => { assert.ok(calls.includes("apiQueueRecord")); assert.ok(w.document.querySelector("#qList").textContent.includes("記録済み")); assert.ok(w.document.querySelector('[data-act="qclear"]')); });
   click('[data-act="qunrec"][data-id="q2"]'); await wait(30);
   t("撮るだけ：記録の取消", () => { assert.ok(calls.includes("apiQueueUnrecord")); assert.ok(w.document.querySelector('[data-act="qrec"][data-id="q2"]')); });
-  click('[data-act="nav"][data-v="settings"]'); await wait(10);
-  w.document.getElementById("radd2").value = "佐藤"; click('[data-act="radd"][data-r="測定者"]'); await wait(30);
-  t("担当者：測定者に追加", () => { assert.ok(calls.includes("apiSaveRoles")); assert.ok(w.document.querySelector('[data-act="rdel"][data-r="測定者"][data-n="佐藤"]')); assert.ok(!w.document.querySelector('[data-act="rdel"][data-r="確認者"][data-n="佐藤"]')); });
-  click('[data-act="rdel"][data-r="測定者"][data-n="佐藤"]'); await wait(30);
-  t("担当者：外す", () => assert.ok(!w.document.querySelector('[data-act="rdel"][data-r="測定者"][data-n="佐藤"]')));
   console.log("errors", JSON.stringify(errors));
   process.exitCode = errors.length ? 1 : 0;
   w.close(); // 画面の定期更新タイマーを止めて終了させる
