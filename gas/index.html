@@ -289,7 +289,7 @@ h1{font-size:1.9rem}
 .looks button.on{border-color:var(--warn);background:rgba(255,176,32,.15)}.looks button.on small{color:var(--warn);font-weight:700}
 .film{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;flex:1 1 100%;min-width:0}
 .film label{display:flex;flex-direction:column;font-size:.72rem;color:var(--sub);gap:2px}
-.field .film input[type=number]{width:100%;min-width:0;padding:8px 6px;font-size:1.05rem}
+.field .film input{width:100%;min-width:0;padding:8px 6px;font-size:1.05rem;text-align:right;color:var(--cyan)}
 .qw{color:var(--warn);font-size:.78rem;font-weight:700;margin-top:2px}
 .qdone{color:var(--ok);font-weight:700}
 .goal{border-color:var(--accent);box-shadow:inset 0 0 22px rgba(0,200,215,.12)}
@@ -433,7 +433,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-64"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-65"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -609,7 +609,7 @@ function renderArm(keep) {
     <div class="field"><label>ねじ穴タップ</label><div class="seg"><button type="button" data-act="res" data-v="良" class="good">良</button><button type="button" data-act="res" data-v="否" class="bad">否</button></div></div>
     <div class="field"><label>ねじ穴数</label><input type="number" inputmode="numeric" min="0" id="fHoles" value="${esc(form.holes)}"><span class="muted">${a.holes ? "図番の記憶値" : (a._partial ? "読み込み中…" : "初回は入力（次から自動）")}</span></div>
     <div class="field"><label>処置数</label><input type="number" inputmode="numeric" min="0" id="fTreated" value="${esc(form.treated)}"></div>
-    <div class="field"><label>膜厚 μm</label><div class="film">${FILM.map((k, i) => `<label>${k}<input type="number" inputmode="decimal" min="0" id="fFilm${i}" data-film="${i}" value="${esc(form.film[i])}"></label>`).join("")}</div></div>
+    <div class="field"><label>膜厚 μm</label><div class="film">${FILM.map((k, i) => `<label>${k}<input type="text" inputmode="decimal" autocomplete="off" id="fFilm${i}" data-film="${i}" value="${esc(form.film[i])}"></label>`).join("")}</div></div>
     <!-- 膜厚計の画面を撮って入れる機能は今は使わない（手入力でOK・ユーザー 10/12）。戻すときは apiReadFilm と filmCam のボタンを復活 -->
     <div class="field"><label>色</label><input type="text" id="fColor" list="colorList" value="${esc(form.color)}" placeholder="例：グレー">${a.paintSpec ? `<span class="muted">Excel：${esc(a.paintSpec)}</span>` : ""}<datalist id="colorList"><option value="グレー"><option value="イエロー"><option value="ブラック"></datalist></div>
     <div class="field"><label>測定者</label><div class="names" data-role="measurer">${roleBtns("measurer")}</div></div>
@@ -773,14 +773,22 @@ async function prepare(cv) {
 
 /* ---------- 膜厚計の画面を撮って数値を入れる ---------- */
 let filmSlot = -1;
-document.addEventListener("focusin", e => { if (e.target.dataset && e.target.dataset.film !== undefined) filmSlot = +e.target.dataset.film; });
+document.addEventListener("focusin", e => { if (e.target.dataset && e.target.dataset.film !== undefined) { filmSlot = +e.target.dataset.film; caretEnd(e.target); } });
+// 膜厚欄はタップしても常にカーソルを数字の後ろへ（すぐ消して打ち直せるように）
+function caretEnd(el) { const go = () => { try { const n = el.value.length; el.setSelectionRange(n, n); } catch (_) {} }; go(); setTimeout(go, 0); setTimeout(go, 60); }
+document.addEventListener("click", e => { if (e.target.dataset && e.target.dataset.film !== undefined) caretEnd(e.target); });
+document.addEventListener("input", e => {
+  if (!e.target.dataset || e.target.dataset.film === undefined) return;
+  const v = e.target.value.replace(/[０-９．]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9.]/g, "");
+  if (v !== e.target.value) { e.target.value = v; caretEnd(e.target); }
+});
 // Bluetoothキーボードとして数値を打ち込む膜厚計（PosiTector Advanced 等）用：Enterで次の膜厚欄へ
 document.addEventListener("keydown", e => {
   const i = e.target.dataset ? e.target.dataset.film : undefined;
   if (i === undefined || e.key !== "Enter") return;
   e.preventDefault();
   const next = document.getElementById("fFilm" + (+i + 1));
-  if (next) { next.focus(); next.select && next.select(); } else e.target.blur();
+  if (next) next.focus(); else e.target.blur();
 });
 document.addEventListener("change", async e => {
   if (e.target.id !== "filmCam" || !e.target.files[0]) return;
