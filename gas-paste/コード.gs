@@ -325,7 +325,8 @@ function armView_(a, last, steps) {
     stage: stage_(last, steps),
     // 一覧の絞込み用：塗装済＝塗装完了以降の記録あり、塗装後修正済＝塗装後修正完了・タップ良・出荷のどれか
     painted: !!(steps && (steps['塗装完了'] || steps['塗装後修正完了'] || steps['出荷'])) || !!last,
-    fixed: !!(steps && (steps['塗装後修正完了'] || steps['出荷'])) || !!(last && last['結果'] === '良')
+    // 最新のタップが否なら塗装後修正済に数えない（ユーザー 10/12）
+    fixed: !(last && last['結果'] === '否') && (!!(steps && (steps['塗装後修正完了'] || steps['出荷'])) || !!(last && last['結果'] === '良'))
   };
 }
 
