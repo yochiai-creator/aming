@@ -432,7 +432,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-56"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-57"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -571,12 +571,12 @@ const LOOKS = ["ゴミ噛み", "スパッタ", "毛羽立ち", "錆", "タレ"],
 // 外観不良の箇所：面 × 位置（根元＝ブーム側／先端＝バケット側）
 const FACES = ["上面", "下面", "右面", "左面"], POS = ["根元", "中央", "先端"];
 const ARM_MINI = `<svg viewBox="0 0 300 40" class="armmini" aria-hidden="true"><path d="M4 10 Q10 4 30 6 L250 14 Q280 15 292 24 Q296 34 284 36 L30 34 Q8 36 4 28 Z"/><circle cx="22" cy="20" r="7"/><circle cx="276" cy="26" r="5"/><path d="M100 4 V38 M200 4 V38" class="div"/></svg>`;
-const form = {result: "", holes: "", treated: "", person: "", note: "", looks: {}, spots: {}, film: ["", "", "", ""], color: "", fixer: "", measurer: "", touch: false, fixed: false};
+const form = {result: "", holes: "", treated: "", person: "", note: "", looks: {}, spots: {}, film: ["", "", "", ""], color: "", fixer: [], measurer: "", touch: false, fixed: false};
 function renderArm(keep) {
   const a = armData;
   if (keep) Object.assign(form, keep, {holes: keep.holes || a.holes || "", color: keep.color || a.lastColor || ""});
   else Object.assign(form, {result: "", holes: a.holes || "", treated: "", person: me, note: "", looks: {}, spots: {}, film: ["", "", "", ""],
-    color: a.lastColor || ls.get("trace.color") || "", fixer: "", measurer: "", touch: false, fixed: false});
+    color: a.lastColor || ls.get("trace.color") || "", fixer: [], measurer: "", touch: false, fixed: false});
   $("armView").innerHTML = `
   <div class="row" style="margin:0 0 10px"><button type="button" class="btn sec mini" data-act="back">← 戻る</button></div>
   <section>
@@ -597,12 +597,13 @@ function renderArm(keep) {
     <div class="field"><label>外観</label><div class="looks">${LOOKS.map(k => `<button type="button" data-act="look" data-k="${k}">${k}<small></small></button>`).join("")}</div></div>
     <p class="muted" style="margin:-4px 0 6px">タップで 無 ⇄ 有（有＝見つけて修正したもの）。有にすると下で箇所を選べます</p>
     <div id="spots"></div>
+    <div class="field"><label>修正者</label><div class="names" data-role="fixer">${roleBtns("fixer")}</div></div>
+    <p class="muted" style="margin:6px 0 6px">修正者は何人でも選べます（もう一度タップで外す）</p>
     <div class="field"><label>ねじ穴タップ</label><div class="seg"><button type="button" data-act="res" data-v="良" class="good">良</button><button type="button" data-act="res" data-v="否" class="bad">否</button></div></div>
     <div class="field"><label>ねじ穴数</label><input type="number" inputmode="numeric" min="0" id="fHoles" value="${esc(form.holes)}"><span class="muted">${a.holes ? "図番の記憶値" : (a._partial ? "読み込み中…" : "初回は入力（次から自動）")}</span></div>
     <div class="field"><label>処置数</label><input type="number" inputmode="numeric" min="0" id="fTreated" value="${esc(form.treated)}"></div>
     <div class="field"><label>膜厚 μm</label><div class="film">${FILM.map((k, i) => `<label>${k}<input type="number" inputmode="decimal" min="0" id="fFilm${i}" value="${esc(form.film[i])}"></label>`).join("")}</div></div>
     <div class="field"><label>色</label><input type="text" id="fColor" list="colorList" value="${esc(form.color)}" placeholder="例：グレー"><datalist id="colorList"><option value="グレー"><option value="イエロー"><option value="ブラック"></datalist></div>
-    <div class="field"><label>修正者</label><div class="names" data-role="fixer">${roleBtns("fixer")}</div></div>
     <div class="field"><label>測定者</label><div class="names" data-role="measurer">${roleBtns("measurer")}</div></div>
     <div class="field"><label>確認</label><div class="chks"><button type="button" data-act="chk" data-k="touch"><i></i>タッチアップ済</button><button type="button" data-act="chk" data-k="fixed"><i></i>修正確認済</button></div></div>
     <div class="field"><label>確認者</label><div class="names" id="fPeople">${peopleBtns()}</div></div>
@@ -667,7 +668,7 @@ function spotsHtml() {
 function syncForm() {
   if ($("spots")) $("spots").innerHTML = spotsHtml();
   document.querySelectorAll('#tapForm [data-act="look"]').forEach(b => { const on = form.looks[b.dataset.k] === "有"; b.classList.toggle("on", on); b.querySelector("small").textContent = on ? "有" : "無"; });
-  document.querySelectorAll('#tapForm [data-act="role"]').forEach(b => b.classList.toggle("on", form[b.dataset.r] === b.dataset.n));
+  document.querySelectorAll('#tapForm [data-act="role"]').forEach(b => b.classList.toggle("on", b.dataset.r === "fixer" ? form.fixer.includes(b.dataset.n) : form[b.dataset.r] === b.dataset.n));
   document.querySelectorAll('#tapForm [data-act="chk"]').forEach(b => { b.classList.toggle("on", !!form[b.dataset.k]); b.querySelector("i").textContent = form[b.dataset.k] ? "✔" : ""; });
   document.querySelectorAll('#tapForm [data-act="res"]').forEach(b => b.classList.toggle("on", b.dataset.v === form.result));
   document.querySelectorAll('#tapForm [data-act="person"]').forEach(b => b.classList.toggle("on", b.dataset.n === form.person));
@@ -683,7 +684,7 @@ async function saveTap(rec) {
   document.querySelectorAll("#tapForm button").forEach(b => b.disabled = true);
   $("formMsg").textContent = "記録中…";
   try {
-    rec = Object.assign({looks: form.looks, spots: form.spots, film: form.film, color: form.color, fixer: form.fixer, measurer: form.measurer, touch: form.touch, fixed: form.fixed}, rec);
+    rec = Object.assign({looks: form.looks, spots: form.spots, film: form.film, color: form.color, fixer: form.fixer.join("・"), measurer: form.measurer, touch: form.touch, fixed: form.fixed}, rec);
     if (rec.color) ls.set("trace.color", rec.color);
     armData = await run("apiSaveTap", Object.assign({key: armData.key, photoId}, rec)); armCache.set(armData.key, armData);
     lastArm = {z: armData.z, g: armData.g}; ls.set("trace.last", JSON.stringify(lastArm));
@@ -1127,7 +1128,12 @@ document.addEventListener("click", async e => {
   }
   else if (act === "look") { readForm(); const k = b.dataset.k; form.looks[k] = form.looks[k] === "有" ? "無" : "有"; if (form.looks[k] !== "有") delete form.spots[k]; syncForm(); }
   else if (act === "spot") { const k = b.dataset.k, v = b.dataset.v, a = form.spots[k] || (form.spots[k] = []); const i = a.indexOf(v); if (i >= 0) a.splice(i, 1); else a.push(v); syncForm(); }
-  else if (act === "role") { form[b.dataset.r] = form[b.dataset.r] === b.dataset.n ? "" : b.dataset.n; syncForm(); }
+  else if (act === "role") {
+    const r = b.dataset.r, n = b.dataset.n;
+    if (r === "fixer") { const i = form.fixer.indexOf(n); if (i >= 0) form.fixer.splice(i, 1); else form.fixer.push(n); }  // 修正者は複数
+    else form[r] = form[r] === n ? "" : n;
+    syncForm();
+  }
   else if (act === "chk") { form[b.dataset.k] = !form[b.dataset.k]; syncForm(); }
   else if (act === "save") { readForm(); saveTap({result: form.result, holes: form.holes, treated: form.treated, person: form.person, note: form.note}); }
   else if (act === "step") {
