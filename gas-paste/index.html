@@ -449,7 +449,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-71"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-72"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1209,6 +1209,9 @@ document.addEventListener("click", async e => {
   else if (act === "save") { readForm(); saveTap({result: form.result, holes: form.holes, treated: form.treated, person: form.person, note: form.note}); }
   else if (act === "step") {
     if (!me) { toast("読取画面の「確認者」で自分の名前を選んでください"); return; }
+    // 同じ工程がもう記録されていたら確認（撮り直しで二重に入らないように）
+    const done = (armData.steps || []).filter(x => x.step === b.dataset.s).flatMap(x => x.recs || []).filter(r => !r.canceled);
+    if (done.length && !confirm(`この号機は「${b.dataset.s}」がもう記録されています（${done[0].at} ${done[0].by}）。もう一度記録しますか？`)) return;
     const note = prompt(`${b.dataset.s}を記録します（${me}）。メモがあれば入力`, "");
     if (note === null) return;
     b.disabled = true;
