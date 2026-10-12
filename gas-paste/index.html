@@ -267,6 +267,13 @@ h1{font-size:1.9rem}
 .qbar{display:flex;gap:8px;margin:0 0 8px}
 .qbar button{flex:1}.qbar .go{flex:2}
 .qi.recd{opacity:.75}
+.looks{display:flex;flex-wrap:wrap;gap:6px}
+.looks button{padding:6px 10px;background:#0A0D0F;border:1px solid var(--edge-hi);color:var(--ink);font-weight:700;line-height:1.1}
+.looks button small{display:block;font-size:.7rem;color:var(--ok);font-weight:400}
+.looks button.on{border-color:var(--warn);background:rgba(255,176,32,.15)}.looks button.on small{color:var(--warn);font-weight:700}
+.film{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;flex:1 1 100%;min-width:0}
+.film label{display:flex;flex-direction:column;font-size:.72rem;color:var(--sub);gap:2px}
+.field .film input[type=number]{width:100%;min-width:0;padding:8px 6px;font-size:1.05rem}
 .qw{color:var(--warn);font-size:.78rem;font-weight:700;margin-top:2px}
 .qdone{color:var(--ok);font-weight:700}
 .goal{border-color:var(--accent);box-shadow:inset 0 0 22px rgba(0,200,215,.12)}
@@ -410,7 +417,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/11-52"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-53"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -520,22 +527,38 @@ async function renderList(noFetch) {
 }
 
 /* ================= アーム詳細＋記録 ================= */
+// 開いたらまず手元の情報（一覧・前回開いた内容）ですぐ表示 → 工程ログ・記録などはサーバーから届いたら差し替え（入力中の内容は残す）
+const armCache = new Map();
+let armToken = 0;
+function quickArm(key) {
+  const r = (listData && listData.rows.find(a => a.key === key)) || (listData && listData.unchecked.find(a => a.key === key));
+  return r ? Object.assign({steps: [], taps: [], photos: [], otherChanges: [], holes: "", _partial: true}, r) : null;
+}
 async function openArm(key, fromScan, qPurpose) {
   show("arm");
-  $("armView").innerHTML = '<section class="muted">読み込み中…</section>';
-  try { armData = await run("apiArm", key); } catch (e) { $("armView").innerHTML = `<section>読み込めませんでした：${esc(errMsg(e))}</section>`; return; }
-  if (!armData) { $("armView").innerHTML = "<section>台帳にありません</section>"; return; }
   scanPurpose = qPurpose || (fromScan ? purpose : "");
   if (!fromScan) photoId = "";
-  else if (photoId) {
-    try { await run("apiLinkPhoto", photoId, key, lastRead, purpose); armData = await run("apiArm", key); } catch (e) { toast("写真のひも付けに失敗：" + errMsg(e)); }
-  }
-  renderArm();
+  const token = ++armToken, quick = armCache.get(key) || quickArm(key);
+  if (quick) { armData = Object.assign({}, quick, {_partial: true}); renderArm(); }
+  else $("armView").innerHTML = '<section class="muted">読み込み中…</section>';
+  let full;
+  try {
+    if (fromScan && photoId) { try { await run("apiLinkPhoto", photoId, key, lastRead, purpose); } catch (e) { toast("写真のひも付けに失敗：" + errMsg(e)); } }
+    full = await run("apiArm", key);
+  } catch (e) { if (token === armToken && !quick) $("armView").innerHTML = `<section>読み込めませんでした：${esc(errMsg(e))}</section>`; return; }
+  if (token !== armToken || view !== "arm") return; // 別の画面に移っていたら何もしない
+  if (!full) { $("armView").innerHTML = "<section>台帳にありません</section>"; return; }
+  armCache.set(key, full);
+  const keep = quick && document.getElementById("tapForm") ? (readForm(), JSON.parse(JSON.stringify(form))) : null;
+  armData = full; renderArm(keep);
 }
-const form = {result: "", holes: "", treated: "", person: "", note: ""};
-function renderArm() {
+const LOOKS = ["ゴミ噛み", "スパッタ", "毛羽立ち", "錆", "タレ"], FILM = ["上部", "下部", "右", "左"];
+const form = {result: "", holes: "", treated: "", person: "", note: "", looks: {}, film: ["", "", "", ""], color: "", fixer: "", measurer: "", touch: false, fixed: false};
+function renderArm(keep) {
   const a = armData;
-  Object.assign(form, {result: "", holes: a.holes || "", treated: "", person: me, note: ""});
+  if (keep) Object.assign(form, keep, {holes: keep.holes || a.holes || "", color: keep.color || a.lastColor || ""});
+  else Object.assign(form, {result: "", holes: a.holes || "", treated: "", person: me, note: "", looks: {}, film: ["", "", "", ""],
+    color: a.lastColor || ls.get("trace.color") || "", fixer: "", measurer: "", touch: false, fixed: false});
   $("armView").innerHTML = `
   <div class="row" style="margin:0 0 10px"><button type="button" class="btn sec mini" data-act="back">← 戻る</button></div>
   <section>
@@ -550,25 +573,33 @@ function renderArm() {
   </section>
   ${goalHtml(a)}
   <section id="tapForm" class="${scanPurpose === "塗装後チェック" ? "focus" : ""}">
-    <h2>塗装後チェック（ねじ穴タップ）${photoId ? '<span class="chip">刻印写真つき</span>' : ""}</h2>
-    <button type="button" class="btn ok" style="width:100%;min-height:56px;font-size:1.05rem" data-act="allok">全数OKで記録${a.holes ? `（${a.holes}穴）` : ""}</button>
-    <div class="field"><label>結果</label><div class="seg"><button type="button" data-act="res" data-v="良" class="good">良</button><button type="button" data-act="res" data-v="否" class="bad">否</button></div></div>
-    <div class="field"><label>ねじ穴数</label><input type="number" inputmode="numeric" min="0" id="fHoles" value="${esc(form.holes)}"><span class="muted">${a.holes ? "図番の記憶値" : "初回は入力（次から自動）"}</span></div>
-    <div class="field"><label>処置数</label><input type="number" inputmode="numeric" min="0" id="fTreated"></div>
+    <h2>塗装後チェック${photoId ? '<span class="chip">刻印写真つき</span>' : ""}</h2>
+    <button type="button" class="btn ok" style="width:100%;min-height:56px;font-size:1.05rem" data-act="allok">外観OK・タップ全数OKで記録${a.holes ? `（${a.holes}穴）` : ""}</button>
+    <p class="muted" style="margin:4px 0 0">膜厚・色・修正者を入れてから押すと一緒に記録されます</p>
+    <div class="field"><label>外観</label><div class="looks">${LOOKS.map(k => `<button type="button" data-act="look" data-k="${k}">${k}<small></small></button>`).join("")}</div></div>
+    <p class="muted" style="margin:-4px 0 6px">タップで 無 ⇄ 有（有＝見つけて修正したもの）</p>
+    <div class="field"><label>ねじ穴タップ</label><div class="seg"><button type="button" data-act="res" data-v="良" class="good">良</button><button type="button" data-act="res" data-v="否" class="bad">否</button></div></div>
+    <div class="field"><label>ねじ穴数</label><input type="number" inputmode="numeric" min="0" id="fHoles" value="${esc(form.holes)}"><span class="muted">${a.holes ? "図番の記憶値" : (a._partial ? "読み込み中…" : "初回は入力（次から自動）")}</span></div>
+    <div class="field"><label>処置数</label><input type="number" inputmode="numeric" min="0" id="fTreated" value="${esc(form.treated)}"></div>
+    <div class="field"><label>膜厚 μm</label><div class="film">${FILM.map((k, i) => `<label>${k}<input type="number" inputmode="decimal" min="0" id="fFilm${i}" value="${esc(form.film[i])}"></label>`).join("")}</div></div>
+    <div class="field"><label>色</label><input type="text" id="fColor" list="colorList" value="${esc(form.color)}" placeholder="例：グレー"><datalist id="colorList"><option value="グレー"><option value="イエロー"><option value="ブラック"></datalist></div>
+    <div class="field"><label>修正者</label><div class="names" data-role="fixer">${roleBtns("fixer")}</div></div>
+    <div class="field"><label>測定者</label><div class="names" data-role="measurer">${roleBtns("measurer")}</div></div>
+    <div class="field"><label>確認</label><div class="seg"><button type="button" data-act="chk" data-k="touch">タッチアップ 済</button><button type="button" data-act="chk" data-k="fixed">修正確認 済</button></div></div>
     <div class="field"><label>確認者</label><div class="names" id="fPeople">${peopleBtns()}</div></div>
-    <div class="field"><label>備考</label><textarea id="fNote" placeholder="否のとき：どの穴・どう処置したか"></textarea></div>
+    <div class="field"><label>備考</label><textarea id="fNote" placeholder="否・有のとき：どこをどう修正したか">${esc(form.note)}</textarea></div>
     <div class="row"><button type="button" class="btn go" data-act="save">この内容で記録</button></div>
     <div id="formMsg" class="muted"></div>
   </section>
   <section>
     ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${esc(p.at)}${p.purpose ? " " + esc(p.purpose) : ""}<button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
     <h2>工程ログ</h2>
-    <ul class="tl steps">${a.steps.map(stepHtml).join("")}</ul>
+    ${a._partial ? '<p class="muted">読み込み中…</p>' : `<ul class="tl steps">${a.steps.map(stepHtml).join("")}</ul>`}
     ${a.otherChanges.length ? `<p class="muted">${a.otherChanges.map(c => `${esc(c.col)}：${esc(c.from || "空")} → ${esc(c.to || "空")}（${esc(c.at)} 取込）`).join("<br>")}</p>` : ""}
-    <h2 style="margin-top:14px">タップ記録</h2>
-    ${a.taps.length ? `<ul class="hist">${a.taps.map(t => `<li class="${t.canceled ? "cx" : ""}">
+    <h2 style="margin-top:14px">塗装後チェックの記録</h2>
+    ${a._partial ? '<p class="muted">読み込み中…</p>' : a.taps.length ? `<ul class="hist">${a.taps.map(t => `<li class="${t.canceled ? "cx" : ""}">
       <b class="${t.result === "否" ? "" : ""}">${esc(t.result)}</b>　${esc(t.at)}　${esc(t.by)}<br>
-      <span class="muted">ねじ穴 ${esc(t.holes || "-")} / 処置 ${esc(t.treated || 0)}${t.note ? "　" + esc(t.note) : ""}</span>
+      <span class="muted">ねじ穴 ${esc(t.holes || "-")} / 処置 ${esc(t.treated || 0)}${t.looks && t.looks.length ? "　外観 有：" + esc(t.looks.join("・")) : ""}${t.film && t.film.some(v => v) ? "　膜厚 " + esc(t.film.map(v => v || "-").join("/")) : ""}${t.color ? "　" + esc(t.color) : ""}${t.fixer ? "　修正 " + esc(t.fixer) : ""}${t.measurer ? "　測定 " + esc(t.measurer) : ""}${t.touch ? "　TU済" : ""}${t.fixed ? "　修正確認済" : ""}${t.note ? "　" + esc(t.note) : ""}</span>
       ${t.photo ? `<a class="link" href="${esc(t.photo)}" target="_blank" rel="noopener">写真</a>` : ""}
       ${t.canceled ? "（取消）" : `<button type="button" class="link" data-act="cancel" data-id="${esc(t.id)}">取消</button>`}
     </li>`).join("")}</ul>` : '<p class="muted">まだ記録はありません</p>'}
@@ -604,12 +635,17 @@ function peopleBtns() {
   if (!boot.people.length) return '<span class="muted">台帳の「設定」シートの確認者に名前を入れてください</span>';
   return boot.people.map(n => `<button type="button" data-act="person" data-n="${esc(n)}">${esc(n)}</button>`).join("");
 }
+function roleBtns(role) { return boot.people.map(n => `<button type="button" data-act="role" data-r="${role}" data-n="${esc(n)}">${esc(n)}</button>`).join(""); }
 function syncForm() {
+  document.querySelectorAll('#tapForm [data-act="look"]').forEach(b => { const on = form.looks[b.dataset.k] === "有"; b.classList.toggle("on", on); b.querySelector("small").textContent = on ? "有" : "無"; });
+  document.querySelectorAll('#tapForm [data-act="role"]').forEach(b => b.classList.toggle("on", form[b.dataset.r] === b.dataset.n));
+  document.querySelectorAll('#tapForm [data-act="chk"]').forEach(b => b.classList.toggle("on", !!form[b.dataset.k]));
   document.querySelectorAll('#tapForm [data-act="res"]').forEach(b => b.classList.toggle("on", b.dataset.v === form.result));
   document.querySelectorAll('#tapForm [data-act="person"]').forEach(b => b.classList.toggle("on", b.dataset.n === form.person));
 }
 function readForm() {
   form.holes = $("fHoles").value; form.treated = $("fTreated").value; form.note = $("fNote").value;
+  form.film = FILM.map((k, i) => $("fFilm" + i).value); form.color = $("fColor").value.trim();
 }
 async function saveTap(rec) {
   if (!rec.person) { $("formMsg").textContent = "確認者を選んでください"; return; }
@@ -618,13 +654,15 @@ async function saveTap(rec) {
   document.querySelectorAll("#tapForm button").forEach(b => b.disabled = true);
   $("formMsg").textContent = "記録中…";
   try {
-    armData = await run("apiSaveTap", Object.assign({key: armData.key, photoId}, rec));
+    rec = Object.assign({looks: form.looks, film: form.film, color: form.color, fixer: form.fixer, measurer: form.measurer, touch: form.touch, fixed: form.fixed}, rec);
+    if (rec.color) ls.set("trace.color", rec.color);
+    armData = await run("apiSaveTap", Object.assign({key: armData.key, photoId}, rec)); armCache.set(armData.key, armData);
     lastArm = {z: armData.z, g: armData.g}; ls.set("trace.last", JSON.stringify(lastArm));
     photoId = "";
     toast(`${armData.z} ${armData.g}号機：${rec.result} を記録しました`);
     scanPurpose = "";
     renderArm();
-    refreshDays();
+    refreshDays(); fetchList().catch(() => {});
   } catch (e) {
     $("formMsg").textContent = "記録できませんでした：" + errMsg(e);
     document.querySelectorAll("#tapForm button").forEach(b => b.disabled = false);
@@ -1031,8 +1069,11 @@ document.addEventListener("click", async e => {
   else if (act === "allok") {
     readForm();
     if (!form.holes) { $("formMsg").textContent = "ねじ穴数を入れてください（次からは自動で入ります）"; $("fHoles").focus(); return; }
-    saveTap({result: "良", holes: form.holes, treated: form.holes, person: form.person, note: form.note});
+    saveTap({result: "良", holes: form.holes, treated: form.holes, person: form.person, note: form.note, looks: {}, touch: true, fixed: true});
   }
+  else if (act === "look") { readForm(); form.looks[b.dataset.k] = form.looks[b.dataset.k] === "有" ? "無" : "有"; syncForm(); }
+  else if (act === "role") { form[b.dataset.r] = form[b.dataset.r] === b.dataset.n ? "" : b.dataset.n; syncForm(); }
+  else if (act === "chk") { form[b.dataset.k] = !form[b.dataset.k]; syncForm(); }
   else if (act === "save") { readForm(); saveTap({result: form.result, holes: form.holes, treated: form.treated, person: form.person, note: form.note}); }
   else if (act === "step") {
     if (!me) { toast("読取画面の「確認者」で自分の名前を選んでください"); return; }

@@ -191,9 +191,12 @@ function apiArm(key) {
   if (!a) return null;
   const taps = loadTaps_().filter(t => t['キー'] === key);
   const live = taps.filter(t => t['取消'] !== '1');
-  const view = armView_(a, live[live.length - 1], liveSteps_()[key]);
-  const changes = readTable_(sheet_(CONFIG.SHEETS.CHANGES)).filter(c => c['キー'] === key);
+  // 工程記録は1回だけ読む（以前は2回読んでいた）
   const recs = readTable_(sheet_(CONFIG.SHEETS.STEPS)).filter(r => r['キー'] === key);
+  const stepNow = {};
+  recs.forEach(r => { if (r['取消'] !== '1') stepNow[r['工程']] = r['日時']; });
+  const view = armView_(a, live[live.length - 1], stepNow);
+  const changes = readTable_(sheet_(CONFIG.SHEETS.CHANGES)).filter(c => c['キー'] === key);
   const fieldStep = {};
   STEPS.forEach(s => { fieldStep[s[1]] = s[0]; });
   // 工程ごと：Excelの日付・その変更履歴・現場の記録
@@ -206,14 +209,23 @@ function apiArm(key) {
   view.otherChanges = changes.filter(c => DATE_COLS.indexOf(c['項目']) < 0).map(c => ({at: c['日時'], col: c['項目'], from: c['前'], to: c['後']}));
   view.order = a['注文番号']; view.base = a['製缶図番']; view.updated = a['更新日時'];
   view.taps = taps.map(t => ({id: t['記録ID'], at: t['日時'], result: t['結果'], holes: t['ねじ穴数'], treated: t['処置数'],
-    by: t['確認者'], note: t['備考'], photo: t['写真ID'] ? 'https://drive.google.com/file/d/' + t['写真ID'] + '/view' : '', canceled: t['取消'] === '1'})).reverse();
+    by: t['確認者'], note: t['備考'], photo: t['写真ID'] ? 'https://drive.google.com/file/d/' + t['写真ID'] + '/view' : '', canceled: t['取消'] === '1',
+    looks: TAP_LOOKS.filter(k => t[k] === '有'), film: TAP_FILM.map(k => t[k] || ''), color: t['色'] || '', fixer: t['修正者'] || '', measurer: t['測定者'] || '',
+    touch: t['タッチアップ'] || '', fixed: t['修正確認'] || ''})).reverse();
+  view.lastColor = (taps.filter(t => t['色']).pop() || {})['色'] || '';
   view.holes = loadHoles_()[a['図番']] || '';
   view.photos = readTable_(sheet_(CONFIG.SHEETS.PHOTOS)).filter(r => r['キー'] === key)
     .map(r => ({id: r['写真ID'], at: r['日時'], name: r['ファイル名'], purpose: r['目的'] || ''})).reverse();
   return view;
 }
 
-/** タップチェックを記録（追記のみ。訂正は取消→再記録） */
+// タップ記録シートに外観・膜厚などの列が無ければ足す（列数も増やす）
+function tapHeader_() {
+  const sh = sheet_(CONFIG.SHEETS.TAPS);
+  if (sh.getMaxColumns() < TAP_COLS.length) sh.insertColumnsAfter(sh.getMaxColumns(), TAP_COLS.length - sh.getMaxColumns());
+  if (sh.getRange(1, TAP_COLS.length).getValue() !== TAP_COLS[TAP_COLS.length - 1]) sh.getRange(1, 1, 1, TAP_COLS.length).setValues([TAP_COLS]).setFontWeight('bold');
+}
+/** 塗装後チェック（タップ・外観・膜厚）を記録（追記のみ。訂正は取消→再記録） */
 function apiSaveTap(rec) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -226,7 +238,11 @@ function apiSaveTap(rec) {
     if (holes && treated > holes) throw new Error('処置数がねじ穴数より多いです');
     const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
     const id = Utilities.getUuid().slice(0, 8);
-    appendRows_(CONFIG.SHEETS.TAPS, [[id, now, a['キー'], a['図番'], a['号機'], rec.result, holes || '', treated, rec.person, rec.note || '', rec.photoId || '', '']]);
+    tapHeader_();
+    const looks = rec.looks || {}, film = rec.film || [];
+    appendRows_(CONFIG.SHEETS.TAPS, [[id, now, a['キー'], a['図番'], a['号機'], rec.result, holes || '', treated, rec.person, rec.note || '', rec.photoId || '', '']
+      .concat(TAP_LOOKS.map(k => looks[k] === '有' ? '有' : '無'), TAP_FILM.map((k, i) => film[i] !== undefined && film[i] !== '' ? +film[i] : ''),
+        [rec.color || '', rec.fixer || '', rec.measurer || '', rec.touch ? '済' : '', rec.fixed ? '済' : ''])]);
     if (holes) saveHoles_(a['図番'], holes, now);
   } finally { lock.releaseLock(); }
   return apiArm(rec.key);
@@ -336,10 +352,11 @@ function nextShipDate_() {
 function apiCsv(from, to) {
   const arms = {};
   loadArms_().forEach(a => { arms[a['キー']] = a; });
-  const head = ['出荷日', '出荷先', '図番', '号機', '建機号機', '結果', 'ねじ穴数', '処置数', '確認者', '記録日時', '備考'];
+  const extra = TAP_LOOKS.concat(TAP_FILM, ['色', '修正者', '測定者', 'タッチアップ', '修正確認']);
+  const head = ['出荷日', '出荷先', '図番', '号機', '建機号機', '結果', 'ねじ穴数', '処置数', '確認者', '記録日時', '備考'].concat(extra);
   const rows = loadTaps_().filter(t => t['取消'] !== '1').map(t => {
     const a = arms[t['キー']] || {};
-    return [a['出荷日'] || '', a['出荷先'] || '', t['図番'], t['号機'], a['建機号機'] || '', t['結果'], t['ねじ穴数'], t['処置数'], t['確認者'], t['日時'], t['備考']];
+    return [a['出荷日'] || '', a['出荷先'] || '', t['図番'], t['号機'], a['建機号機'] || '', t['結果'], t['ねじ穴数'], t['処置数'], t['確認者'], t['日時'], t['備考']].concat(extra.map(k => t[k] || ''));
   }).filter(r => (!from || r[0] >= from) && (!to || r[0] <= to));
   const esc = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
   return '﻿' + [head].concat(rows).map(r => r.map(esc).join(',')).join('\r\n');
