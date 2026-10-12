@@ -168,12 +168,34 @@ function armView_(a, last, steps) {
   };
 }
 
+/* ---------------- 担当者 ---------------- */
+// 役割ごとの名前（ユーザー 10/12）。「担当者」シート：1行目が役割、その下に1行1人。シートが無い役割は設定シートの確認者を使う
+function rolesRead_() {
+  const sh = ss_().getSheetByName(CONFIG.SHEETS.ROLES);
+  return rolesFromRows_(sh ? sh.getDataRange().getDisplayValues() : [], cfgList_('PEOPLE'));
+}
+function apiSaveRoles(roles) {
+  const clean = {};
+  ROLES.forEach(r => { const seen = {}; clean[r] = (roles && roles[r] || []).map(n => String(n).trim().slice(0, 40)).filter(n => n && !seen[n] && (seen[n] = 1)); });
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const ss = ss_(), sh = ss.getSheetByName(CONFIG.SHEETS.ROLES) || ss.insertSheet(CONFIG.SHEETS.ROLES);
+    const n = Math.max(1, ...ROLES.map(r => clean[r].length));
+    const rows = [ROLES].concat(Array.from({length: n}, (_, i) => ROLES.map(r => clean[r][i] || '')));
+    sh.clearContents();
+    sh.getRange(1, 1, rows.length, ROLES.length).setNumberFormat('@').setValues(rows);
+    sh.getRange(1, 1, 1, ROLES.length).setFontWeight('bold');
+  } finally { lock.releaseLock(); }
+  return rolesRead_();
+}
+
 /* ---------------- API ---------------- */
 function apiBoot() {
   return {
     today: today_(),
     me: Session.getActiveUser().getEmail(),
     people: cfgList_('PEOPLE'),
+    roles: rolesRead_(),
     days: apiDays(),
     hasKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_())
   };

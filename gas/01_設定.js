@@ -28,7 +28,7 @@ const CONFIG = {
     SETTINGS: '設定',
     ARMS: 'アーム台帳', TAPS: 'タップ記録', HOLES: '穴数マスタ',
     CHECK: '要確認', LOG: '取込ログ',
-    STEPS: '工程記録', CHANGES: '変更履歴', PHOTOS: '刻印写真', READLOG: '読取ログ', QUEUE: '読取キュー'
+    STEPS: '工程記録', CHANGES: '変更履歴', PHOTOS: '刻印写真', READLOG: '読取ログ', QUEUE: '読取キュー', ROLES: '担当者'
   },
 
   // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
@@ -86,6 +86,16 @@ const SETTINGS = [
   // 確認者は一番下。B列に1行1人で下に足していく（A列は空でOK）
   ['PEOPLE', '確認者', '1行に1人。下の行のB列に続けて入れる']
 ];
+// 担当者の役割（「担当者」シートの1行目）。読むのは 02_メイン.js の rolesRead_
+const ROLES = ['塗装完了', '修正者', '測定者', '確認者'];
+function rolesFromRows_(v, base) {
+  const head = (v[0] || []).map(x => String(x).trim()), out = {};
+  ROLES.forEach(r => {
+    const c = head.indexOf(r);
+    out[r] = c < 0 ? base.slice() : v.slice(1).map(x => String(x[c] || '').trim()).filter(Boolean);
+  });
+  return out;
+}
 let SETTINGS_MEMO = null;
 function sheetSettings_() {
   if (SETTINGS_MEMO) return SETTINGS_MEMO;

@@ -29,7 +29,7 @@ const CONFIG = {
     SETTINGS: '設定',
     ARMS: 'アーム台帳', TAPS: 'タップ記録', HOLES: '穴数マスタ',
     CHECK: '要確認', LOG: '取込ログ',
-    STEPS: '工程記録', CHANGES: '変更履歴', PHOTOS: '刻印写真', READLOG: '読取ログ', QUEUE: '読取キュー'
+    STEPS: '工程記録', CHANGES: '変更履歴', PHOTOS: '刻印写真', READLOG: '読取ログ', QUEUE: '読取キュー', ROLES: '担当者'
   },
 
   // AI読取：'gemini'（スクリプトプロパティ GEMINI_API_KEY）か 'claude'（ANTHROPIC_API_KEY）
@@ -87,6 +87,16 @@ const SETTINGS = [
   // 確認者は一番下。B列に1行1人で下に足していく（A列は空でOK）
   ['PEOPLE', '確認者', '1行に1人。下の行のB列に続けて入れる']
 ];
+// 担当者の役割（「担当者」シートの1行目）。読むのは 02_メイン.js の rolesRead_
+const ROLES = ['塗装完了', '修正者', '測定者', '確認者'];
+function rolesFromRows_(v, base) {
+  const head = (v[0] || []).map(x => String(x).trim()), out = {};
+  ROLES.forEach(r => {
+    const c = head.indexOf(r);
+    out[r] = c < 0 ? base.slice() : v.slice(1).map(x => String(x[c] || '').trim()).filter(Boolean);
+  });
+  return out;
+}
 let SETTINGS_MEMO = null;
 function sheetSettings_() {
   if (SETTINGS_MEMO) return SETTINGS_MEMO;
@@ -321,12 +331,34 @@ function armView_(a, last, steps) {
   };
 }
 
+/* ---------------- 担当者 ---------------- */
+// 役割ごとの名前（ユーザー 10/12）。「担当者」シート：1行目が役割、その下に1行1人。シートが無い役割は設定シートの確認者を使う
+function rolesRead_() {
+  const sh = ss_().getSheetByName(CONFIG.SHEETS.ROLES);
+  return rolesFromRows_(sh ? sh.getDataRange().getDisplayValues() : [], cfgList_('PEOPLE'));
+}
+function apiSaveRoles(roles) {
+  const clean = {};
+  ROLES.forEach(r => { const seen = {}; clean[r] = (roles && roles[r] || []).map(n => String(n).trim().slice(0, 40)).filter(n => n && !seen[n] && (seen[n] = 1)); });
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const ss = ss_(), sh = ss.getSheetByName(CONFIG.SHEETS.ROLES) || ss.insertSheet(CONFIG.SHEETS.ROLES);
+    const n = Math.max(1, ...ROLES.map(r => clean[r].length));
+    const rows = [ROLES].concat(Array.from({length: n}, (_, i) => ROLES.map(r => clean[r][i] || '')));
+    sh.clearContents();
+    sh.getRange(1, 1, rows.length, ROLES.length).setNumberFormat('@').setValues(rows);
+    sh.getRange(1, 1, 1, ROLES.length).setFontWeight('bold');
+  } finally { lock.releaseLock(); }
+  return rolesRead_();
+}
+
 /* ---------------- API ---------------- */
 function apiBoot() {
   return {
     today: today_(),
     me: Session.getActiveUser().getEmail(),
     people: cfgList_('PEOPLE'),
+    roles: rolesRead_(),
     days: apiDays(),
     hasKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_())
   };
