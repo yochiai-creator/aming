@@ -34,7 +34,7 @@
 - AI読取は `AI_PROVIDER`（既定 gemini / `gemini-3.6-flash`、予備 `GEMINI_FALLBACK`＝3.5-flash-lite→3.8-flash。**読取ログ実測(10/9)：3.8-flashは503高負荷と無料枠429が多発、1回の503に最大30秒**。なので503/429/404は即次モデル＋CacheServiceで冷却（503=2分・429=10分・404=1時間）、500系だけ1回再試行。エラー文は画面に出す）。凹凸強調は小ぼかしでノイズ除去→大ぼかし背景との差→周りの影の強さで割ってならす（日なた/日陰が混ざる写真用）→2/98%で伸長＋smoothstep。`prepare` は light={clip 白飛び率, relief 影の強さ} も返し、`lightAdvice`（白飛び15%以上／影2.5未満）で「日陰にしてライトを真横から」と警告（キューの行・単発読取のトースト）。**iPhone Safariは canvas filter 非対応**なので、ぼかしは縮小→拡大で作る（`blurred()`）。画像は幅1100・JPEG0.85。サーバー読取は50秒締切（毎回「読取ログ」シートに 秒・結果・Gemini応答コードを記録＝Sheetsコネクタで原因調査できる）、Geminiは `thinkingLevel:low`（400なら外して再送）。キーはスクリプトプロパティ `GEMINI_API_KEY`（claude なら `ANTHROPIC_API_KEY`）。ID類は空なら `setup()` がスクリプトプロパティに保存
 
 ### 作成済みのGoogle側（2026-10-07、Driveコネクタで作成。IDは `01_設定.js` に埋め込み済み → `setup()` 不要）
-- フォルダ「aming」 https://drive.google.com/drive/folders/1qEAxXRBG7y0edZhMCNvVLe4QjBjlIZw8（Apps Scriptプロジェクト「aming」もここ）
+- フォルダ「aming」 https://drive.google.com/drive/folders/1qEAxXRBG7y0edZhMCNvVLe4QjBjlIZw8（Apps Scriptプロジェクト「aming」もここ）。**10/12 共有ドライブへ移動**（親 `1nIxwUdUot4D8Q9jLSdZm1enfAmDun60Y`＝取込元と同じ場所。IDは変わらず）。Advanced Drive（`Drive.Files.*`）には `supportsAllDrives:true` が必須
   - 「aming 台帳」スプレッドシート `13Fj89c-17Ec0YsUUuKdIykSkZV2442SrA35UNoMHUd8`（設定・アーム台帳・タップ記録・穴数マスタ・要確認・取込ログ＋工程記録・変更履歴は自動作成。確認者は設定シート最下部の「確認者」行から下へB列1行1人。A列が空の行は直前項目の続き＝`parseSettingRows_`）
   - 「aming 作業用（取込の一時ファイル）」`14XGF3BnMr2-fdt4wiqFMejk7UD5RxSuW` ／「aming 刻印写真」`1g82k8Y4gCAlBVXAWbeSTkvlHUvcNJ1_0`
 - 取込元：既存フォルダ「'001_アーム出荷明細」`1NS4WoClO0xlGWSxvFimFcqFGUT0jOKQL`（`出荷予定　日程表変更A(26年10月7日).xlsm` が随時たまる）。ファイル名の日付で最新1本だけ取込、取込済みは `LAST_IMPORTED`（スクリプトプロパティ）で判定。元ファイルは動かさない

@@ -45,7 +45,8 @@ function importFile_(file) {
   // xlsm → Googleスプレッドシート（一時ファイル）
   const tmp = Drive.Files.create(
     {name: '_tmp_' + file.getName(), mimeType: MimeType.GOOGLE_SHEETS, parents: [cfg_('DONE_FOLDER_ID')]},
-    file.getBlob()
+    file.getBlob(),
+    {supportsAllDrives: true}  // 共有ドライブのフォルダに作るのに必要
   );
   try {
     const sh = SpreadsheetApp.openById(tmp.id).getSheetByName(cfg_('SRC_SHEET'));
