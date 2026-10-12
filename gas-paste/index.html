@@ -267,6 +267,11 @@ h1{font-size:1.9rem}
 .qbar{display:flex;gap:8px;margin:0 0 8px}
 .qbar button{flex:1}.qbar .go{flex:2}
 .qi.recd{opacity:.75}
+.chks{display:flex;gap:8px;flex-wrap:wrap}
+.chks button{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0A0D0F;border:1px solid var(--edge-hi);color:var(--ink);font-weight:700}
+.chks button i{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:2px solid var(--sub);font-style:normal;font-size:.9rem}
+.chks button.on{border-color:var(--ok);background:rgba(56,224,138,.15);color:#fff}
+.chks button.on i{border-color:var(--ok);background:var(--ok);color:#06210F}
 .looks{display:flex;flex-wrap:wrap;gap:6px}
 .looks button{padding:6px 10px;background:#0A0D0F;border:1px solid var(--edge-hi);color:var(--ink);font-weight:700;line-height:1.1}
 .looks button small{display:block;font-size:.7rem;color:var(--ok);font-weight:400}
@@ -417,7 +422,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-53"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-54"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -585,7 +590,7 @@ function renderArm(keep) {
     <div class="field"><label>色</label><input type="text" id="fColor" list="colorList" value="${esc(form.color)}" placeholder="例：グレー"><datalist id="colorList"><option value="グレー"><option value="イエロー"><option value="ブラック"></datalist></div>
     <div class="field"><label>修正者</label><div class="names" data-role="fixer">${roleBtns("fixer")}</div></div>
     <div class="field"><label>測定者</label><div class="names" data-role="measurer">${roleBtns("measurer")}</div></div>
-    <div class="field"><label>確認</label><div class="seg"><button type="button" data-act="chk" data-k="touch">タッチアップ 済</button><button type="button" data-act="chk" data-k="fixed">修正確認 済</button></div></div>
+    <div class="field"><label>確認</label><div class="chks"><button type="button" data-act="chk" data-k="touch"><i></i>タッチアップ済</button><button type="button" data-act="chk" data-k="fixed"><i></i>修正確認済</button></div></div>
     <div class="field"><label>確認者</label><div class="names" id="fPeople">${peopleBtns()}</div></div>
     <div class="field"><label>備考</label><textarea id="fNote" placeholder="否・有のとき：どこをどう修正したか">${esc(form.note)}</textarea></div>
     <div class="row"><button type="button" class="btn go" data-act="save">この内容で記録</button></div>
@@ -639,7 +644,7 @@ function roleBtns(role) { return boot.people.map(n => `<button type="button" dat
 function syncForm() {
   document.querySelectorAll('#tapForm [data-act="look"]').forEach(b => { const on = form.looks[b.dataset.k] === "有"; b.classList.toggle("on", on); b.querySelector("small").textContent = on ? "有" : "無"; });
   document.querySelectorAll('#tapForm [data-act="role"]').forEach(b => b.classList.toggle("on", form[b.dataset.r] === b.dataset.n));
-  document.querySelectorAll('#tapForm [data-act="chk"]').forEach(b => b.classList.toggle("on", !!form[b.dataset.k]));
+  document.querySelectorAll('#tapForm [data-act="chk"]').forEach(b => { b.classList.toggle("on", !!form[b.dataset.k]); b.querySelector("i").textContent = form[b.dataset.k] ? "✔" : ""; });
   document.querySelectorAll('#tapForm [data-act="res"]').forEach(b => b.classList.toggle("on", b.dataset.v === form.result));
   document.querySelectorAll('#tapForm [data-act="person"]').forEach(b => b.classList.toggle("on", b.dataset.n === form.person));
 }
