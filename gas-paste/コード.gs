@@ -557,6 +557,16 @@ let READ_DEADLINE = 0, READ_LOG = [];
 function rlog_(m) { READ_LOG.push(Utilities.formatDate(new Date(), 'Asia/Tokyo', 'HH:mm:ss') + ' ' + m); console.log(m); }
 function timeLeft_() { return READ_DEADLINE ? READ_DEADLINE - Date.now() : 1e9; }
 
+/** 膜厚計（Kett LZ-990 など）の画面写真から数値を読む。直結はできないので写真で拾う */
+function apiReadFilm(b64) {
+  READ_DEADLINE = Date.now() + 40000; READ_LOG = [];
+  const r = callAI_('膜厚計（塗膜の厚さを測る計測器）の液晶画面の写真です。画面に大きく表示されている測定値（単位 μm）を読んでください。' +
+    '日付・時刻・メモリ番号などの小さい数字は無視。読めなければ readable を false にしてください。',
+    [b64], {type: 'object', required: ['readable', 'value', 'note'], properties: {readable: {type: 'boolean'}, value: {type: 'number'}, note: {type: 'string'}}});
+  const ok = r.readable && typeof r.value === 'number' && r.value > 0;
+  return {value: ok ? Math.round(r.value * 10) / 10 : null, note: r.note || ''};
+}
+
 function apiRead(orig, enh, last) {
   READ_DEADLINE = Date.now() + 50000; READ_LOG = [];
   const t0 = Date.now();

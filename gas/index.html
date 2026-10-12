@@ -432,7 +432,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-57"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-58"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -602,7 +602,9 @@ function renderArm(keep) {
     <div class="field"><label>ねじ穴タップ</label><div class="seg"><button type="button" data-act="res" data-v="良" class="good">良</button><button type="button" data-act="res" data-v="否" class="bad">否</button></div></div>
     <div class="field"><label>ねじ穴数</label><input type="number" inputmode="numeric" min="0" id="fHoles" value="${esc(form.holes)}"><span class="muted">${a.holes ? "図番の記憶値" : (a._partial ? "読み込み中…" : "初回は入力（次から自動）")}</span></div>
     <div class="field"><label>処置数</label><input type="number" inputmode="numeric" min="0" id="fTreated" value="${esc(form.treated)}"></div>
-    <div class="field"><label>膜厚 μm</label><div class="film">${FILM.map((k, i) => `<label>${k}<input type="number" inputmode="decimal" min="0" id="fFilm${i}" value="${esc(form.film[i])}"></label>`).join("")}</div></div>
+    <div class="field"><label>膜厚 μm</label><div class="film">${FILM.map((k, i) => `<label>${k}<input type="number" inputmode="decimal" min="0" id="fFilm${i}" data-film="${i}" value="${esc(form.film[i])}"></label>`).join("")}</div></div>
+    <div class="row" style="margin-top:6px"><button type="button" class="btn sec mini" data-act="filmcam">📷 膜厚計の画面を撮って入れる</button><span class="muted" id="filmMsg">選んだ欄（なければ次の空き欄）に入ります</span></div>
+    <input type="file" id="filmCam" accept="image/*" capture="environment" class="hidden">
     <div class="field"><label>色</label><input type="text" id="fColor" list="colorList" value="${esc(form.color)}" placeholder="例：グレー"><datalist id="colorList"><option value="グレー"><option value="イエロー"><option value="ブラック"></datalist></div>
     <div class="field"><label>測定者</label><div class="names" data-role="measurer">${roleBtns("measurer")}</div></div>
     <div class="field"><label>確認</label><div class="chks"><button type="button" data-act="chk" data-k="touch"><i></i>タッチアップ済</button><button type="button" data-act="chk" data-k="fixed"><i></i>修正確認済</button></div></div>
@@ -762,6 +764,27 @@ async function prepare(cv) {
   const light = {clip: Math.round(clip / (w * h) * 100) / 100, relief: raw[Math.floor(raw.length * 0.995)]};
   return {orig, enh: await toBlob(c, 0.85), light};
 }
+
+/* ---------- 膜厚計の画面を撮って数値を入れる ---------- */
+let filmSlot = -1;
+document.addEventListener("focusin", e => { if (e.target.dataset && e.target.dataset.film !== undefined) filmSlot = +e.target.dataset.film; });
+document.addEventListener("change", async e => {
+  if (e.target.id !== "filmCam" || !e.target.files[0]) return;
+  const f = e.target.files[0]; e.target.value = "";
+  readForm();
+  const i = filmSlot >= 0 && !form.film[filmSlot] ? filmSlot : form.film.findIndex(v => !v);
+  if (i < 0) { toast("膜厚の4欄が埋まっています。入れ直す欄を空にしてください"); return; }
+  $("filmMsg").textContent = `${FILM[i]}を読み取り中…`;
+  try {
+    const img = await loadImg(URL.createObjectURL(f)), k = Math.min(1, 1200 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    const r = await run("apiReadFilm", await b64(await toBlob(c, 0.85)));
+    if (r.value === null) { $("filmMsg").textContent = "読めませんでした。画面に近づいて、反射しないように撮ってください"; return; }
+    form.film[i] = String(r.value); $("fFilm" + i).value = r.value; filmSlot = -1;
+    $("filmMsg").textContent = `${FILM[i]}に ${r.value} μm を入れました（違っていたら直してください）`;
+  } catch (err) { $("filmMsg").textContent = "読み取りエラー：" + errMsg(err); }
+});
 
 /* ---------- ファインダー（枠つきカメラ） ---------- */
 let stream = null;
@@ -1126,6 +1149,7 @@ document.addEventListener("click", async e => {
     if (!form.holes) { $("formMsg").textContent = "ねじ穴数を入れてください（次からは自動で入ります）"; $("fHoles").focus(); return; }
     saveTap({result: "良", holes: form.holes, treated: form.holes, person: form.person, note: form.note, looks: {}, touch: true, fixed: true});
   }
+  else if (act === "filmcam") { $("filmCam").click(); }
   else if (act === "look") { readForm(); const k = b.dataset.k; form.looks[k] = form.looks[k] === "有" ? "無" : "有"; if (form.looks[k] !== "有") delete form.spots[k]; syncForm(); }
   else if (act === "spot") { const k = b.dataset.k, v = b.dataset.v, a = form.spots[k] || (form.spots[k] = []); const i = a.indexOf(v); if (i >= 0) a.splice(i, 1); else a.push(v); syncForm(); }
   else if (act === "role") {
