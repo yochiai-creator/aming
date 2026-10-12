@@ -44,7 +44,6 @@ const CONFIG = {
   ALERT_DAYS_AHEAD: 3,   // 画面の「出荷前で未チェック」：今日〜N日後に出荷するアーム
   IMPORT_HOUR: 6,        // 毎朝の取込トリガーの時（setupTriggers）
   NOTIFY_HOUR: 7,        // 毎朝の通知トリガーの時（setupTriggers）
-  PEOPLE: '',            // 確認者（カンマ区切り）
   TRACK_FROM: '2026/10/08' // 運用開始日。これより前に出荷したアームは未チェック扱いにしない
 };
 
@@ -82,9 +81,8 @@ const SETTINGS = [
   ['SRC_SHEET', 'Excelのシート名', '生産管理Excelで読むシート'],
   ['INBOX_FOLDER_ID', '取込元フォルダID', '生産管理Excelがたまるフォルダ'],
   ['PHOTO_FOLDER_ID', '刻印写真フォルダID', '撮った刻印写真の保存先'],
-  ['DONE_FOLDER_ID', '作業用フォルダID', '取込時の一時ファイル置き場'],
-  // 確認者は一番下。B列に1行1人で下に足していく（A列は空でOK）
-  ['PEOPLE', '確認者', '1行に1人。下の行のB列に続けて入れる']
+  ['DONE_FOLDER_ID', '作業用フォルダID', '取込時の一時ファイル置き場']
+  // 人の名前は「担当者」シート（ROLES）
 ];
 // 担当者の役割（「担当者」シートの1行目）。読むのは 02_メイン.js の rolesRead_
 const ROLES = ['塗装完了', '修正者', '測定者', '確認者'];
@@ -106,7 +104,7 @@ function sheetSettings_() {
   SETTINGS.forEach(d => { if (byLabel[d[1]]) SETTINGS_MEMO[d[0]] = byLabel[d[1]]; });
   return SETTINGS_MEMO;
 }
-// [[項目, 値, 説明], ...] → {項目: 値}。A列が空の行は直前の項目の続き（確認者を1行1人で書ける）（純粋関数）
+// [[項目, 値, 説明], ...] → {項目: 値}。A列が空の行は直前の項目の続き（1項目に複数行書ける）（純粋関数）
 function parseSettingRows_(rows) {
   const out = {};
   let label = '';

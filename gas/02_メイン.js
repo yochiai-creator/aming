@@ -169,11 +169,11 @@ function armView_(a, last, steps) {
 }
 
 /* ---------------- 担当者 ---------------- */
-// 役割ごとの名前（ユーザー 10/12）。「担当者」シート：1行目が役割、その下に1行1人。シートが無い役割は設定シートの確認者を使う
+// 役割ごとの名前（ユーザー 10/12）。「担当者」シート：1行目が役割、その下に1行1人。列が無い役割は空
 function rolesRead_() {
   const sh = ss_().getSheetByName(CONFIG.SHEETS.ROLES);
-  const roles = rolesFromRows_(sh ? sh.getDataRange().getDisplayValues() : [], cfgList_('PEOPLE'));
-  return sh ? roles : apiSaveRoles(roles);  // 無ければ確認者を全部の役割に入れて作る（あとはシートで編集）
+  const roles = rolesFromRows_(sh ? sh.getDataRange().getDisplayValues() : [], []);
+  return sh ? roles : apiSaveRoles(roles);  // 無ければ見出しだけのシートを作る（名前はシートで入れる）
 }
 function apiSaveRoles(roles) {  // 「担当者」シートを書き直す（シートが無い時に作る用）
   const clean = {};
@@ -192,11 +192,12 @@ function apiSaveRoles(roles) {  // 「担当者」シートを書き直す（シ
 
 /* ---------------- API ---------------- */
 function apiBoot() {
+  const roles = rolesRead_();
   return {
     today: today_(),
     me: Session.getActiveUser().getEmail(),
-    people: cfgList_('PEOPLE'),
-    roles: rolesRead_(),
+    roles: roles,
+    people: ROLES.reduce((a, r) => a.concat(roles[r].filter(n => !a.includes(n))), []),  // 全役割の名前（古い画面用）
     days: apiDays(),
     hasKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_())
   };
