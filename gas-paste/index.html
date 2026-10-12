@@ -158,6 +158,7 @@ ul.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--edge);margi
 .tile.mid{border-left-color:#3FD0FF}.tile.mid small{color:#3FD0FF}
 .tile.good,.tile.done{border-left-color:var(--ok);opacity:.7}.tile.good small,.tile.done small{color:var(--ok)}
 .tile.bad{border-left-color:var(--ng);background:rgba(255,77,61,.1)}.tile.bad small{color:var(--ng);font-weight:700}
+.redto{color:var(--ng);font-weight:700}
 .tile i.plan{display:block;font-style:normal;font-size:.66rem;color:var(--sub);font-family:"Share Tech Mono","BIZ UDPGothic",monospace}
 .tile i.plan.late{color:var(--ng);font-weight:700}
 .tile:active{background:rgba(0,167,181,.15)}
@@ -432,7 +433,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-62"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-63"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -482,15 +483,17 @@ function planHtml(a) {
   return `<i class="plan ${p[1] < boot.today ? "late" : ""}">${p[0]}${esc(md(p[1]))}</i>`;
 }
 function stOf(a) { return a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未"); }
-// 図番ごとにまとめて、号機をタイルで並べる
+// 一覧で赤字にする出荷先（ユーザー 10/12）
+const RED_TO = ["東条"];
+// 図番（＋出荷先）ごとにまとめて、号機をタイルで並べる
 function armGroups(rows, withShip) {
   const g = new Map();
-  rows.forEach(a => { const k = a.z + "|" + (withShip ? a.ship : ""); if (!g.has(k)) g.set(k, []); g.get(k).push(a); });
+  rows.forEach(a => { const k = a.z + "|" + (a.to || "") + "|" + (withShip ? a.ship : ""); if (!g.has(k)) g.set(k, []); g.get(k).push(a); });
   return [...g.values()].map(list => {
     const a0 = list[0], ok = list.filter(isFixed).length;
     list.sort((x, y) => String(x.g).localeCompare(String(y.g), "ja", {numeric: true}));
     return `<div class="grp"><div class="gh"><span class="gz">${esc(a0.z)}</span><span class="gc">${ok}/${list.length}</span>
-      <span class="gm">${withShip ? "出荷 " + esc(md(a0.ship || "-")) + "　" : ""}${esc(a0.to || "")}　${esc(a0.kishu || "")}</span></div>
+      <span class="gm">${withShip ? "出荷 " + esc(md(a0.ship || "-")) + "　" : ""}<span class="${RED_TO.some(t => (a0.to || "").includes(t)) ? "redto" : ""}">${esc(a0.to || "")}</span>　${esc(a0.kishu || "")}</span></div>
       <div class="tiles">${list.map(a => { const st = stOf(a); return `<button type="button" class="tile ${STAGE_CLS[st] || "todo"}" data-act="arm" data-k="${esc(a.key)}"><b>${esc(a.g)}</b><small>${esc(TILE_LABEL[st] || st)}${a.by ? "・" + esc(a.by) : ""}</small>${planHtml(a)}</button>`; }).join("")}</div></div>`;
   }).join("");
 }
