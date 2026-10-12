@@ -119,7 +119,12 @@ function apiQueuePick(id, key) {
 }
 /** 特定済みの写真から、目的の工程（塗装完了・出荷）をまとめて記録。詳細を開かずに一覧から押せる */
 function apiQueueRecord(ids, person) {
-  if (!person) throw new Error('設定タブで自分の名前を選んでください');
+  if (!person) throw new Error('読取画面の「確認者」で自分の名前を選んでください');
+  // 2台が同時に「まとめて記録」しても二重に記録しないように、読むところから鍵をかける
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try { return queueRecord_(ids, person); } finally { lock.releaseLock(); }
+}
+function queueRecord_(ids, person) {
   const sh = queueSheet_();
   if (sh.getRange(1, QUEUE_COLS.length).getValue() !== '記録') sh.getRange(1, QUEUE_COLS.length).setValue('記録').setFontWeight('bold');
   const rows = queueRows_(), arms = {};

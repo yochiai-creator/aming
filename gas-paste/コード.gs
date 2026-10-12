@@ -334,9 +334,9 @@ function armView_(a, last, steps) {
 function rolesRead_() {
   const sh = ss_().getSheetByName(CONFIG.SHEETS.ROLES);
   const roles = rolesFromRows_(sh ? sh.getDataRange().getDisplayValues() : [], []);
-  return sh ? roles : apiSaveRoles(roles);  // 無ければ見出しだけのシートを作る（名前はシートで入れる）
+  return sh ? roles : saveRoles_(roles);  // 無ければ見出しだけのシートを作る（名前はシートで入れる）
 }
-function apiSaveRoles(roles) {  // 「担当者」シートを書き直す（シートが無い時に作る用）
+function saveRoles_(roles) {  // 「担当者」シートを書き直す（シートが無い時に作る用）
   const clean = {};
   ROLES.forEach(r => { const seen = {}; clean[r] = (roles && roles[r] || []).map(n => String(n).trim().slice(0, 40)).filter(n => n && !seen[n] && (seen[n] = 1)); });
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
@@ -368,7 +368,7 @@ function apiBoot() {
 function apiSearch(q) {
   const words = String(q || '').toUpperCase().split(/[\s　]+/).filter(Boolean);
   if (!words.length) return [];
-  const last = latestTaps_(loadTaps_()), st = liveSteps_();
+  const last = latestTaps_(loadTaps_());
   const hits = loadArms_().filter(a => {
     const hay = [a['図番'], a['建機号機'], a['注文番号'], a['製缶図番']].join(' ').toUpperCase();
     return words.every(w => /^\d{1,4}$/.test(w) ? (a['号機'] === String(+w) || hay.indexOf(w) >= 0) : hay.indexOf(w) >= 0);
@@ -403,7 +403,9 @@ function apiArm(key) {
   // テレスコ（特機）は建機号機が空。号機＝テレスコ号機で、同じ号機のアーム・サポートがセット
   if (/ﾃﾚｽｺ|テレスコ/.test(a['仕様'] || '')) {
     view.tele = a['号機'];
-    view.teleSet = loadArms_().filter(r => r['号機'] === a['号機'] && r['キー'] !== key && /ﾃﾚｽｺ|テレスコ/.test(r['仕様'] || ''))
+    // 号機は図番ごとの連番なので、出荷先が同じで出荷日が近い（±45日）ものだけをセットとみなす
+    const near = r => !a['出荷日'] || !r['出荷日'] || Math.abs(new Date(r['出荷日']) - new Date(a['出荷日'])) <= 45 * 864e5;
+    view.teleSet = loadArms_().filter(r => r['号機'] === a['号機'] && r['キー'] !== key && /ﾃﾚｽｺ|テレスコ/.test(r['仕様'] || '') && r['出荷先'] === a['出荷先'] && near(r))
       .map(r => ({key: r['キー'], z: r['図番'], spec: r['仕様'], ship: r['出荷日']}));
   }
   view.taps = taps.map(t => ({id: t['記録ID'], at: t['日時'], result: t['結果'], holes: t['ねじ穴数'], treated: t['処置数'],
@@ -439,7 +441,7 @@ function apiSaveTap(rec) {
     tapHeader_();
     const looks = rec.looks || {}, film = rec.film || [];
     appendRows_(CONFIG.SHEETS.TAPS, [[id, now, a['キー'], a['図番'], a['号機'], rec.result, holes || '', treated, rec.person, rec.note || '', rec.photoId || '', '']
-      .concat(TAP_LOOKS.map(k => looks[k] === '有' ? '有' : '無'), TAP_FILM.map((k, i) => film[i] !== undefined && film[i] !== '' ? +film[i] : ''),
+      .concat(TAP_LOOKS.map(k => looks[k] === '有' ? '有' : '無'), TAP_FILM.map((k, i) => film[i] !== undefined && film[i] !== '' && isFinite(+film[i]) ? +film[i] : ''),
         [rec.color || '', rec.fixer || '', rec.measurer || '', rec.touch ? '済' : '', rec.fixed ? '済' : '',
           TAP_LOOKS.filter(k => looks[k] === '有' && rec.spots && rec.spots[k] && rec.spots[k].length).map(k => k + ':' + rec.spots[k].join(',')).join('；')])]);
     if (holes) saveHoles_(a['図番'], holes, now);
@@ -991,7 +993,12 @@ function apiQueuePick(id, key) {
 }
 /** 特定済みの写真から、目的の工程（塗装完了・出荷）をまとめて記録。詳細を開かずに一覧から押せる */
 function apiQueueRecord(ids, person) {
-  if (!person) throw new Error('設定タブで自分の名前を選んでください');
+  if (!person) throw new Error('読取画面の「確認者」で自分の名前を選んでください');
+  // 2台が同時に「まとめて記録」しても二重に記録しないように、読むところから鍵をかける
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try { return queueRecord_(ids, person); } finally { lock.releaseLock(); }
+}
+function queueRecord_(ids, person) {
   const sh = queueSheet_();
   if (sh.getRange(1, QUEUE_COLS.length).getValue() !== '記録') sh.getRange(1, QUEUE_COLS.length).setValue('記録').setFontWeight('bold');
   const rows = queueRows_(), arms = {};
