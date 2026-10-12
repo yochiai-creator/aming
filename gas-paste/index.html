@@ -342,7 +342,7 @@ h1{font-size:1.9rem}
     <input id="cam" type="file" accept="image/*" capture="environment" class="hidden">
     <input id="camMulti" type="file" accept="image/*" multiple class="hidden">
     <input id="pick" type="file" accept="image/*" class="hidden">
-    <p class="tip" id="tip">ライトを真横から当てて、打刻の影がはっきり出る角度で撮ると読み取りが安定します。</p>
+    <p class="tip" id="tip">打刻の<b>影</b>が出るように撮ると読み取れます。<br>☀ 日なたや反射で白っぽいときは、体や手で刻印を<b>日陰</b>にして、スマホのライトを<b>真横（低い角度）</b>から当ててください。画面をタップして刻印にピントと明るさを合わせると、さらに安定します。</p>
     <section id="queueSec" class="hidden">
       <h2>撮った刻印 <span id="qCount" class="muted"></span></h2>
       <div class="qbar" id="qBar"></div>
@@ -432,7 +432,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-55"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/12-56"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -734,7 +734,20 @@ async function prepare(cv) {
   // 凹凸強調：小さいぼかし（ノイズ除去）− 大きいぼかし（背景）＝打刻の影 → 伸ばす
   const f = blurred(c, w, h, Math.max(2.5, h / 70)), bl = blurred(c, w, h, Math.max(14, h / 8));
   const out = x.createImageData(w, h), o = out.data, diff = new Float32Array(w * h), vals = [];
-  for (let i = 0, p = 0; i < f.length; i += 4, p++) { const v = gray(f, i) - gray(bl, i); diff[p] = v; if (p % 5 === 0) vals.push(v); }
+  const od = x.getImageData(0, 0, w, h).data, raw = [];
+  for (let i = 0, p = 0; i < f.length; i += 4, p++) { diff[p] = gray(f, i) - gray(bl, i); if (p % 5 === 0) raw.push(Math.abs(diff[p])); }
+  raw.sort((a, b) => a - b);
+  // 日なた・日陰が混ざる写真用：影の強さを周りの平均でならす（明るい所の薄い影も同じくらい濃く出す）
+  const amp = document.createElement("canvas"); amp.width = w; amp.height = h;
+  const ax = amp.getContext("2d"), ad = ax.createImageData(w, h);
+  for (let p = 0; p < diff.length; p++) { const v = Math.min(255, Math.abs(diff[p]) * 8); ad.data[p * 4] = ad.data[p * 4 + 1] = ad.data[p * 4 + 2] = v; ad.data[p * 4 + 3] = 255; }
+  ax.putImageData(ad, 0, 0);
+  const loc = blurred(amp, w, h, Math.max(10, h / 6));
+  let clip = 0;
+  for (let i = 0, p = 0; i < f.length; i += 4, p++) {
+    if (gray(od, i) >= 250) clip++;
+    const v = diff[p] / (loc[i] / 8 + 3); diff[p] = v; if (p % 5 === 0) vals.push(v);
+  }
   vals.sort((a, b) => a - b);
   const lo = vals[Math.floor(vals.length * 0.02)], hi = vals[Math.floor(vals.length * 0.98)];
   const span = Math.max(4, hi - lo); // 差がほぼ無い写真でも真っ黒にしない
@@ -744,7 +757,9 @@ async function prepare(cv) {
     o[i] = o[i+1] = o[i+2] = v; o[i+3] = 255;
   }
   x.putImageData(out, 0, 0);
-  return {orig, enh: await toBlob(c, 0.85)};
+  // 光の具合（撮影のアドバイス用）：白飛びの割合・影の強さ
+  const light = {clip: Math.round(clip / (w * h) * 100) / 100, relief: raw[Math.floor(raw.length * 0.995)]};
+  return {orig, enh: await toBlob(c, 0.85), light};
 }
 
 /* ---------- ファインダー（枠つきカメラ） ---------- */
@@ -821,12 +836,20 @@ async function cropFromFile(file) {
 
 /* ================= 読み取り ================= */
 function setBusy(b) { ["shootBtn", "pickBtn"].forEach(id => $(id).disabled = b); }
+// 撮影のアドバイス：白飛び（日なた・反射）や影が弱いとき
+function lightAdvice(l) {
+  if (!l) return "";
+  if (l.clip >= 0.15) return "白飛びしています。体や手で影を作って刻印を日陰にしてから撮ってください";
+  if (l.relief < 2.5) return "打刻の影が弱いです。日陰にして、スマホのライトを真横（低い角度）から当てて撮ってください";
+  return "";
+}
 async function readCanvas(cv) {
   $("resultSec").classList.remove("hidden");
   $("cands").innerHTML = ""; $("readout").innerHTML = "";
   $("status").textContent = "画像を準備中…";
   const imgs = await prepare(cv);
   $("pv1").src = URL.createObjectURL(imgs.orig); $("pv2").src = URL.createObjectURL(imgs.enh);
+  const adv = lightAdvice(imgs.light); if (adv) toast("⚠ " + adv);
   $("preview").style.display = "flex";
   $("resultSec").scrollIntoView({behavior: "smooth", block: "start"});
   setBusy(true);
@@ -884,9 +907,10 @@ function renderQueue() {
     const arm = q.state === "確定" && q.cands && q.cands[0] ? `${q.cands[0].z} ${q.cands[0].g}号機` : (q.read || "");
     const warn = q.state !== "確定" || q.rec ? "" : (keyCount[q.key] > 1 ? `<div class="qw">⚠ 同じ号機の写真がほかにもあります（読み違い？撮り直し？）</div>` : "") +
       (q.already ? `<div class="qw">⚠ この号機は「${esc(q.purpose)}」記録済み（${esc(q.already)}）</div>` : "");
+    const lightW = q.light && q.state !== "確定" ? `<div class="qw">☀ ${esc(q.light)}</div>` : "";
     return `<div class="qi ${q.rec ? "recd" : ""}"><div class="qt" ${thumb}></div><div class="qb">
       <div class="qs ${lb[0]}">${lb[0] === "wait" ? '<span class="spin"></span>' : ""}${esc(lb[1])}${q.purpose ? "　" + esc(q.purpose) : ""}</div>
-      <div class="qr">${esc(arm)}</div>${warn}${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
+      <div class="qr">${esc(arm)}</div>${warn}${lightW}${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
       <div class="qa">${acts}</div></div>
       ${["送信中", "処理中"].includes(q.state) ? "" : `<button type="button" class="x" data-act="qdone" data-id="${esc(q.id)}" aria-label="一覧から消す">×</button>`}</div>`;
   }).join("");
@@ -1009,6 +1033,7 @@ async function qAfter(q) {
   try { cv = straightCrop(src, q.box); } catch (e) { cv = cropByBox(src, q.box); }
   q.thumb = cv.toDataURL("image/jpeg", .7); renderQueue();
   const imgs = await prepare(cv);
+  q.light = lightAdvice(imgs.light); if (q.light) renderQueue();
   try {
     const v = await run("apiQueueCrop", q.id, await b64(imgs.orig), q.state === "候補" ? await b64(imgs.enh) : "");
     qUpdate(v);
