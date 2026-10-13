@@ -2,7 +2,7 @@
 const fs = require("fs"), path = require("path"), vm = require("vm"), assert = require("assert");
 const G = path.join(__dirname, "..", "gas");
 const ctx = vm.createContext({console});
-["01_設定.js", "03_照合.js", "03_取込.js"].forEach(f => vm.runInContext(fs.readFileSync(path.join(G, f), "utf8").replace(/^if \(typeof module.*$/m, ""), ctx, {filename: f}));
+["01_設定.js", "03_照合.js", "03_取込.js", "03_キュー.js"].forEach(f => vm.runInContext(fs.readFileSync(path.join(G, f), "utf8").replace(/^if \(typeof module.*$/m, ""), ctx, {filename: f}));
 const run = s => vm.runInContext(s, ctx);
 const errors = [];
 function t(name, fn) { try { fn(); console.log("ok  ", name); } catch (e) { errors.push(name); console.log("NG  ", name, e.message); } }
@@ -77,6 +77,11 @@ t("parseSettingRows 確認者を1行1人で", () => {
 t("rolesFromRows 担当者シート", () => {
   const o = JSON.parse(JSON.stringify(run("rolesFromRows_")([["塗装完了", "確認者"], ["A", "B"], ["", "C"]], ["X"])));
   assert.deepStrictEqual(o, {"塗装完了": ["A"], "修正者": ["X"], "測定者": ["X"], "確認者": ["B", "C"]});
+});
+t("queueKeepRows 済で30日たった行だけ消す", () => {
+  const row = (d, c) => { const r = ["id", d, "塗装完了", "確定", "", "", "", "", "", "", "", c, ""]; return r; };
+  const keep = run("queueKeepRows_")([row("2026/09/01 10:00:00", "済"), row("2026/09/01 10:00:00", ""), row("2026/10/10 10:00:00", "済")], new Date("2026/09/12"));
+  assert.strictEqual(keep.length, 2); assert.strictEqual(keep[0][11], "");
 });
 t("fileDateKey ファイル名の日付", () => {
   assert.strictEqual(run("fileDateKey_")("出荷予定　日程表変更A(26年10月7日).xlsm"), "20261007");

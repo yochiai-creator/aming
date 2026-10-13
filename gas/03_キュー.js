@@ -28,6 +28,31 @@ function queueRows_() {
   return sh.getRange(2, 1, sh.getLastRow() - 1, QUEUE_COLS.length).getValues()
     .map((r, i) => { const o = {_row: i + 2}; QUEUE_COLS.forEach((c, j) => { o[c] = isDate_(r[j]) ? Utilities.formatDate(r[j], 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss') : String(r[j]); }); return o; });
 }
+// 読取キューの掃除：「済」になって日数（既定30日）たった行は消す（一覧を開くたびに全行読むので、たまると遅くなる）
+// rows は [[ID, 日時, …], …]（見出し除く）。残す行だけ返す（純粋関数）
+function queueKeepRows_(rows, cutoff) {
+  const iT = QUEUE_COLS.indexOf('日時'), iC = QUEUE_COLS.indexOf('確認');
+  return rows.filter(r => {
+    if (String(r[iC]) !== '済') return true;
+    const t = r[iT] instanceof Date ? r[iT] : new Date(String(r[iT]).replace(/-/g, '/'));
+    return isNaN(t) || t >= cutoff;
+  });
+}
+function cleanupQueue_(days) {
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const sh = queueSheet_(), n = sh.getLastRow() - 1;
+    if (n < 1) return 0;
+    const w = Math.max(QUEUE_COLS.length, sh.getLastColumn());
+    const rows = sh.getRange(2, 1, n, w).getValues();
+    const keep = queueKeepRows_(rows, new Date(Date.now() - (days || 30) * 864e5));
+    if (keep.length === rows.length) return 0;
+    sh.getRange(2, 1, n, w).clearContent();
+    if (keep.length) sh.getRange(2, 1, keep.length, w).setValues(keep);
+    console.log('読取キュー掃除: %s 行削除（残り %s 行）', rows.length - keep.length, keep.length);
+    return rows.length - keep.length;
+  } finally { lock.releaseLock(); }
+}
 function queueFind_(id) { const r = queueRows_().find(x => x['ID'] === id); if (!r) throw new Error('キューにありません: ' + id); return r; }
 function queueSet_(row, patch) {
   const sh = queueSheet_();

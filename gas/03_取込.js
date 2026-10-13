@@ -4,6 +4,8 @@
  * 元ファイルは動かさない。台帳はExcel由来のマスタ。タップ記録は別シートなので取込で消えることはない。
  */
 function importLatest(force) {
+  // 毎朝のついでに、済んで30日たった読取キューの行を消す
+  try { cleanupQueue_(30); } catch (e) { console.warn('読取キュー掃除に失敗: ' + e.message); }
   const f = latestSourceFile_();
   if (!f) { console.log('取込対象なし'); return null; }
   const stamp = f.getId() + '@' + f.getLastUpdated().getTime();
