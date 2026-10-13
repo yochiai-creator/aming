@@ -369,7 +369,7 @@ function apiBoot() {
 function apiSearch(q) {
   const words = String(q || '').toUpperCase().split(/[\s　]+/).filter(Boolean);
   if (!words.length) return [];
-  const last = latestTaps_(loadTaps_());
+  const last = latestTaps_(loadTaps_()), st = liveSteps_();
   const hits = loadArms_().filter(a => {
     const hay = [a['図番'], a['建機号機'], a['注文番号'], a['製缶図番']].join(' ').toUpperCase();
     return words.every(w => /^\d{1,4}$/.test(w) ? (a['号機'] === String(+w) || hay.indexOf(w) >= 0) : hay.indexOf(w) >= 0);
