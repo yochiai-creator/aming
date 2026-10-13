@@ -209,11 +209,16 @@ function apiSearch(q) {
   const words = String(q || '').toUpperCase().split(/[\s　]+/).filter(Boolean);
   if (!words.length) return [];
   const last = latestTaps_(loadTaps_()), st = liveSteps_();
-  const hits = loadArms_().filter(a => {
+  // 4桁までの数字は号機として完全一致で探す（注文番号などの途中に含まれる数字は拾わない）。号機で1本も無い時だけ部分一致
+  const match = loose => a => {
     const hay = [a['図番'], a['建機号機'], a['注文番号'], a['製缶図番']].join(' ').toUpperCase();
-    return words.every(w => /^\d{1,4}$/.test(w) ? (a['号機'] === String(+w) || hay.indexOf(w) >= 0) : hay.indexOf(w) >= 0);
-  });
-  hits.sort((x, y) => (y['出荷日'] || '').localeCompare(x['出荷日'] || ''));
+    return words.every(w => /^\d{1,4}$/.test(w) ? (a['号機'] === String(+w) || (loose && hay.indexOf(w) >= 0)) : hay.indexOf(w) >= 0);
+  };
+  let hits = loadArms_().filter(match(false));
+  if (!hits.length) hits = loadArms_().filter(match(true));
+  // 今日に近い出荷日の順（これから出荷する分を先に）
+  const today = today_(), dist = a => { const d = a['出荷日'] || ''; return d >= today ? '0' + d : '1' + String(99999999 - +d.replace(/\D/g, '')); };
+  hits.sort((x, y) => dist(x).localeCompare(dist(y)));
   return hits.slice(0, 40).map(a => armView_(a, last[a['キー']], st[a['キー']]));
 }
 
