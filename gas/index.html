@@ -450,7 +450,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/13-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/13-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -573,7 +573,7 @@ const armCache = new Map();
 let armToken = 0;
 function quickArm(key) {
   const r = (listData && listData.rows.find(a => a.key === key)) || (listData && listData.unchecked.find(a => a.key === key));
-  return r ? Object.assign({steps: [], taps: [], photos: [], otherChanges: [], holes: "", _partial: true}, r, /ﾃﾚｽｺ|テレスコ/.test(r.spec || r.kishu || "") ? {tele: r.g} : {}) : null;
+  return r ? Object.assign({steps: [], taps: [], photos: [], otherChanges: [], _partial: true}, r, {holes: r.holes || ""}, /ﾃﾚｽｺ|テレスコ/.test(r.spec || r.kishu || "") ? {tele: r.g} : {}) : null;
 }
 async function openArm(key, fromScan, qPurpose) {
   show("arm");
@@ -633,7 +633,7 @@ function renderArm(keep) {
     <div class="field"><label>修正者</label><div class="names" data-role="fixer">${roleBtns("fixer")}</div></div>
     <p class="muted" style="margin:6px 0 6px">修正者は何人でも選べます（もう一度タップで外す）</p>
     <div class="field"><label>ねじ穴タップ</label><div class="seg"><button type="button" data-act="res" data-v="良" class="good">良</button><button type="button" data-act="res" data-v="否" class="bad">否</button></div></div>
-    <div class="field"><label>ねじ穴数</label><input type="number" inputmode="numeric" min="0" id="fHoles" value="${esc(form.holes)}"><span class="muted">${a.holes ? "図番の記憶値" : (a._partial ? "読み込み中…" : "初回は入力（次から自動）")}</span></div>
+    <div class="field"><label>ねじ穴数</label><input type="number" inputmode="numeric" min="0" id="fHoles" value="${esc(form.holes)}"><span class="muted">${a.holes ? "図番の記憶値" : (a._partial && listData && !("holes" in (listData.rows[0] || {})) ? "読み込み中…" : "初回は入力（次から自動）")}</span></div>
     <div class="field"><label>処置数</label><input type="number" inputmode="numeric" min="0" id="fTreated" value="${esc(form.treated)}"></div>
     <div class="field"><label>膜厚 μm</label><div class="film">${FILM.map((k, i) => `<label>${k}<input type="text" inputmode="decimal" autocomplete="off" id="fFilm${i}" data-film="${i}" value="${esc(form.film[i])}"></label>`).join("")}</div></div>
     <!-- 膜厚計の画面を撮って入れる機能は今は使わない（手入力でOK・ユーザー 10/12）。戻すときは apiReadFilm と filmCam のボタンを復活 -->

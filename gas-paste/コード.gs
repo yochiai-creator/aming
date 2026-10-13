@@ -512,9 +512,10 @@ function apiDay(date) {
 /** 一覧画面用にまとめて1回で返す（出荷日の帯・今日〜21日後の全アーム・出荷前未チェック）。画面側でキャッシュして日付切替は通信なし */
 function apiList() {
   const today = today_(), to = shiftDate_(today, 21), from = cfg_('TRACK_FROM'), alertTo = shiftDate_(today, cfgNum_('ALERT_DAYS_AHEAD'));
-  const last = latestTaps_(loadTaps_()), st = liveSteps_();
+  const last = latestTaps_(loadTaps_()), st = liveSteps_(), holes = loadHoles_();
+  // ねじ穴数も一覧に入れておく：詳細を開いた瞬間から「全数OK」が押せるように
   const rows = loadArms_().filter(a => a['出荷日'] >= today && a['出荷日'] <= to)
-    .map(a => armView_(a, last[a['キー']], st[a['キー']]))
+    .map(a => Object.assign(armView_(a, last[a['キー']], st[a['キー']]), {holes: holes[a['図番']] || ''}))
     .sort((x, y) => (x.ship + x.to + x.z + x.g.padStart(5, '0')).localeCompare(y.ship + y.to + y.z + y.g.padStart(5, '0')));
   const m = {};
   rows.forEach(a => {
