@@ -363,7 +363,9 @@ function apiList() {
   });
   // 本日の塗装完了予定（Excelの塗装完了日＝今日）と、そのうち塗装済の数
   const pt = loadArms_().filter(a => a['塗装完了日'] === today).map(a => armView_(a, last[a['キー']], st[a['キー']]));
-  return {paint: {date: today, total: pt.length, done: pt.filter(a => a.painted).length},
+  // 予定に関係なく今日「塗装完了」を記録した本数（Excelの予定より先に塗った分も数える）
+  const rec = Object.keys(st).filter(k => String(st[k]['塗装完了'] || '').indexOf(today) === 0).length;
+  return {paint: {date: today, total: pt.length, done: pt.filter(a => a.painted).length, rec: rec},
     days: Object.keys(m).sort().map(k => m[k]), rows: rows,
     unchecked: rows.filter(a => a.ship >= from && a.ship <= alertTo && a.status !== '良')};
 }

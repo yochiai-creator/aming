@@ -45,6 +45,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 #paintNow b i{font-style:normal;font-size:.95rem;color:var(--sub)}
 #paintNow em{font-style:normal;font-size:.68rem;color:var(--warn)}
 #paintNow.all em{color:var(--ok)}
+#paintNow{display:grid;grid-template-columns:auto auto auto;column-gap:6px}#paintNow s{grid-column:1/-1;text-decoration:none;font-size:.66rem;color:var(--cyan);text-align:right}
 #paintNow.all b{color:var(--ok)}
 @media (max-width:420px){[data-act="allok"]{font-size:.92rem!important;padding-left:6px;padding-right:6px}.looks button{font-size:.88rem}}
 @media (min-width:1100px){main{max-width:960px}}
@@ -315,7 +316,7 @@ h1{font-size:1.9rem}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (min-width:520px){
   /* タブレット：ショベルの左隣（AMINGとショベルの間）に縦並びで置く */
-  #paintNow{position:static;order:1;margin:auto;flex-direction:column;align-items:center;gap:2px;padding:6px 12px;white-space:nowrap}
+  #paintNow{position:static;order:1;margin:auto;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 12px;white-space:nowrap}
   .hero .exc{position:static;order:2;flex:0 1 330px;width:auto;min-width:0;align-self:flex-end}
   #paintNow b{font-size:1.8rem}
 }
@@ -449,7 +450,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/12-72"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/13-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -477,7 +478,7 @@ function renderHead() {
   const pn = listData && listData.paint;
   if (pn && pn.date === boot.today) {
     $("paintNow").classList.remove("hidden"); $("paintNow").classList.toggle("all", pn.total > 0 && pn.done >= pn.total);
-    $("paintNow").innerHTML = `<small>本日塗装予定</small><b>${pn.total}<i>本</i></b><em>${pn.total - pn.done > 0 ? "残り " + (pn.total - pn.done) : "完了"}</em>`;
+    $("paintNow").innerHTML = `<small>本日塗装予定</small><b>${pn.total}<i>本</i></b><em>${pn.total - pn.done > 0 ? "残り " + (pn.total - pn.done) : "完了"}</em>${pn.rec !== undefined ? `<s>今日の記録 ${pn.rec}本</s>` : ""}`;
   } else $("paintNow").classList.add("hidden");  // 日付が変わって前日の分が残らないように
   renderMe();
   $("today").textContent = boot.today ? md(boot.today) + "(" + wd(boot.today) + ")" : "";
