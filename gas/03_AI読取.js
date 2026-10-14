@@ -210,7 +210,7 @@ function callClaude_(prompt, imgsB64, schema) {
  * 撮った刻印写真（枠で切り出した画像）をアームにひも付ける。
  * ファイル名を 図番_号機_工程_日時.jpg に付け直して 年-月 フォルダへ移し、「刻印写真」シートに記録（同じ写真を別のアームに付け直したら上書き）
  */
-function apiLinkPhoto(photoId, key, readText, purpose) {
+function apiLinkPhoto(photoId, key, readText, purpose, sharp) {
   if (!photoId) return null;
   const a = loadArms_().find(r => r['キー'] === key);
   if (!a) throw new Error('台帳にないアームです: ' + key);
@@ -221,7 +221,7 @@ function apiLinkPhoto(photoId, key, readText, purpose) {
   const sh = sheet_(CONFIG.SHEETS.PHOTOS);
   const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
   if (sh.getLastColumn() < PHOTO_COLS.length) sh.getRange(1, 1, 1, PHOTO_COLS.length).setValues([PHOTO_COLS]).setFontWeight('bold');
-  const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || '', purpose || ''];
+  const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || '', purpose || '', sharp === undefined || sharp === null ? '' : sharp];
   const ids = sh.getLastRow() > 1 ? sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]) : [];
   const i = ids.indexOf(photoId);
   if (i < 0) appendRows_(CONFIG.SHEETS.PHOTOS, [row]);

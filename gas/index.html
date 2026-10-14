@@ -258,6 +258,7 @@ h1{font-size:1.9rem}
 .photos figure{margin:0;flex:0 0 auto;width:240px;border:1px solid var(--edge);background:#060909}
 .photos img{display:block;width:100%;min-height:60px;filter:contrast(1.1)}
 .photos figcaption{display:flex;justify-content:space-between;align-items:center;font-family:"Share Tech Mono",monospace;font-size:.72rem;color:var(--sub);padding:2px 6px}
+.photos figure.alt{width:150px;opacity:.6}.photos .adopt{color:#fff;background:var(--accent);padding:0 5px;margin-right:4px;font-weight:700}
 .photos .del{color:var(--ng);font-size:.78rem}
 .purpose{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
 .purpose>span{font-family:"Share Tech Mono","BIZ UDPGothic",monospace;font-size:.8rem;color:var(--sub)}
@@ -446,11 +447,11 @@ function recordable(live) {
   return live.filter(q => q.state === "確定" && !q.rec && !q.already && STEP_PURPOSE(q.purpose) && !seen[q.key] && (seen[q.key] = 1));
 }
 const STEP_PURPOSE = p => p === "塗装完了" || p === "出荷";
-let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastRead = "";
+let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastRead = "", lastSharp = null;
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/13-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/14-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -584,7 +585,7 @@ async function openArm(key, fromScan, qPurpose) {
   else $("armView").innerHTML = '<section class="muted">読み込み中…</section>';
   let full;
   try {
-    if (fromScan && photoId) { try { await run("apiLinkPhoto", photoId, key, lastRead, purpose); } catch (e) { toast("写真のひも付けに失敗：" + errMsg(e)); } }
+    if (fromScan && photoId) { try { await run("apiLinkPhoto", photoId, key, lastRead, purpose, lastSharp); } catch (e) { toast("写真のひも付けに失敗：" + errMsg(e)); } }
     full = await run("apiArm", key);
   } catch (e) { if (token === armToken && !quick) $("armView").innerHTML = `<section>読み込めませんでした：${esc(errMsg(e))}</section>`; return; }
   if (token !== armToken || view !== "arm") return; // 別の画面に移っていたら何もしない
@@ -646,7 +647,7 @@ function renderArm(keep) {
     <div id="formMsg" class="muted"></div>
   </section>
   <section>
-    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${esc(p.at)}${p.purpose ? " " + esc(p.purpose) : ""}<button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
+    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure class="${p.many && !p.best ? "alt" : ""}"><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${p.many && p.best ? '<b class="adopt">採用</b>' : ""}${esc(p.at)}${p.purpose ? " " + esc(p.purpose) : ""}<button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
     <h2>工程ログ</h2>
     ${a._partial ? '<p class="muted">読み込み中…</p>' : `<ul class="tl steps">${a.steps.map(stepHtml).join("")}</ul>`}
     ${a.otherChanges.length ? `<p class="muted">${a.otherChanges.map(c => `${esc(c.col)}：${esc(c.from || "空")} → ${esc(c.to || "空")}（${esc(c.at)} 取込）`).join("<br>")}</p>` : ""}
@@ -793,7 +794,16 @@ async function prepare(cv) {
   }
   x.putImageData(out, 0, 0);
   // 光の具合（撮影のアドバイス用）：白飛びの割合・影の強さ
-  const light = {clip: Math.round(clip / (w * h) * 100) / 100, relief: raw[Math.floor(raw.length * 0.995)]};
+  // 鮮明度：元画像の明るさの段差（隣の画素との差）の上位10%の平均。ピンぼけ・手ぶれ・影が薄いと小さくなる
+  const gr = [];
+  for (let yy = 1; yy < h - 1; yy += 2) for (let xx = 1; xx < w - 1; xx += 2) {
+    const i = (yy * w + xx) * 4;
+    gr.push(Math.abs(gray(od, i + 4) - gray(od, i - 4)) + Math.abs(gray(od, i + w * 4) - gray(od, i - w * 4)));
+  }
+  gr.sort((a, b) => b - a);
+  const top = gr.slice(0, Math.max(1, Math.floor(gr.length * 0.1)));
+  const sharp = Math.round(top.reduce((s, v) => s + v, 0) / top.length * 10) / 10;
+  const light = {clip: Math.round(clip / (w * h) * 100) / 100, relief: raw[Math.floor(raw.length * 0.995)], sharp};
   return {orig, enh: await toBlob(c, 0.85), light};
 }
 
@@ -920,6 +930,7 @@ async function readCanvas(cv) {
   $("cands").innerHTML = ""; $("readout").innerHTML = "";
   $("status").textContent = "画像を準備中…";
   const imgs = await prepare(cv);
+  lastSharp = imgs.light.sharp;
   $("pv1").src = URL.createObjectURL(imgs.orig); $("pv2").src = URL.createObjectURL(imgs.enh);
   const adv = lightAdvice(imgs.light); if (adv) toast("⚠ " + adv);
   $("preview").style.display = "flex";
@@ -1107,7 +1118,7 @@ async function qAfter(q) {
   const imgs = await prepare(cv);
   q.light = lightAdvice(imgs.light); if (q.light) renderQueue();
   try {
-    const v = await run("apiQueueCrop", q.id, await b64(imgs.orig), q.state === "候補" ? await b64(imgs.enh) : "");
+    const v = await run("apiQueueCrop", q.id, await b64(imgs.orig), q.state === "候補" ? await b64(imgs.enh) : "", imgs.light.sharp);
     qUpdate(v);
   } catch (e) { console.warn(e); }
   qNotify(queue.find(x => x.id === q.id));

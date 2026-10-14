@@ -83,6 +83,12 @@ t("queueKeepRows 済で30日たった行だけ消す", () => {
   const keep = run("queueKeepRows_")([row("2026/09/01 10:00:00", "済"), row("2026/09/01 10:00:00", ""), row("2026/10/10 10:00:00", "済")], new Date("2026/09/12"));
   assert.strictEqual(keep.length, 2); assert.strictEqual(keep[0][11], "");
 });
+t("photoScore 鮮明度とAIの読めた度合いで採用写真を選ぶ", () => {
+  const a = {"図番": "YY12B10196F1", "号機": "308"}, f = run("photoScore_");
+  const blur = f({"AI読取": "YY12B10196F1 / ?-3?8", "鮮明度": "20"}, a), clear = f({"AI読取": "YY12B10196F1 / 2610-308 UM", "鮮明度": "35"}, a);
+  assert.ok(clear > blur);
+  assert.ok(f({"AI読取": "YY12B10196F1 / 2510-308 UM"}, a) > f({"AI読取": "YY12B10196F1 / ?-?"}, a));  // 鮮明度が無い古い写真はAIの読みで比べる
+});
 t("fileDateKey ファイル名の日付", () => {
   assert.strictEqual(run("fileDateKey_")("出荷予定　日程表変更A(26年10月7日).xlsm"), "20261007");
   assert.ok(run("fileDateKey_")("出荷予定　日程表変更A(26年10月7日).xlsm") > run("fileDateKey_")("出荷予定　日程表変更A(26年9月24日).xlsm"));

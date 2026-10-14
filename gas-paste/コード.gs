@@ -58,9 +58,9 @@ const TAP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '結果', 
 const DATE_COLS = ['着工', '検査完了日', '塗装完了日', '塗装後修正完了日', '出荷日', '納入日'];
 const STEP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '工程', '確認者', '備考', '写真ID', '取消'];
 const CHANGE_COLS = ['日時', 'キー', '項目', '前', '後', '元ファイル'];
-const QUEUE_COLS = ['ID', '日時', '目的', '状態', '元写真ID', '切り出しID', '枠', 'AI読取', 'キー', '候補', 'エラー', '確認', '記録'];
+const QUEUE_COLS = ['ID', '日時', '目的', '状態', '元写真ID', '切り出しID', '枠', 'AI読取', 'キー', '候補', 'エラー', '確認', '記録', '鮮明度'];
 const READLOG_COLS = ['日時', '秒', '結果', 'AI読取', '1位候補', 'ログ'];
-const PHOTO_COLS = ['日時', 'キー', '図番', '号機', '写真ID', 'ファイル名', 'AI読取', '目的'];
+const PHOTO_COLS = ['日時', 'キー', '図番', '号機', '写真ID', 'ファイル名', 'AI読取', '目的', '鮮明度'];
 // 現場で記録する工程（名前 → 台帳の対応する日付列）
 const STEPS = [['塗装完了', '塗装完了日'], ['塗装後修正完了', '塗装後修正完了日'], ['出荷', '出荷日']];
 // 取込で値が変わったら変更履歴に残す列
@@ -420,8 +420,13 @@ function apiArm(key) {
     touch: t['タッチアップ'] || '', fixed: t['修正確認'] || '', spots: t['外観箇所'] || ''})).reverse();
   view.lastColor = (taps.filter(t => t['色']).pop() || {})['色'] || '';
   view.holes = loadHoles_()[a['図番']] || '';
-  view.photos = readTable_(sheet_(CONFIG.SHEETS.PHOTOS)).filter(r => r['キー'] === key)
-    .map(r => ({id: r['写真ID'], at: r['日時'], name: r['ファイル名'], purpose: r['目的'] || ''})).reverse();
+  // 同じ目的（塗装完了など）の写真が何枚もある時は、一番鮮明なものを「採用」にして先頭へ
+  const ph = readTable_(sheet_(CONFIG.SHEETS.PHOTOS)).filter(r => r['キー'] === key)
+    .map(r => ({id: r['写真ID'], at: r['日時'], name: r['ファイル名'], purpose: r['目的'] || '', score: photoScore_(r, a)})).reverse();
+  const best = {};
+  ph.forEach(p => { if (!best[p.purpose] || p.score > best[p.purpose].score) best[p.purpose] = p; });
+  ph.forEach(p => { p.best = best[p.purpose] === p; p.many = ph.filter(x => x.purpose === p.purpose).length > 1; });
+  view.photos = ph.filter(p => p.best).concat(ph.filter(p => !p.best));
   return view;
 }
 
@@ -786,7 +791,7 @@ function callClaude_(prompt, imgsB64, schema) {
  * 撮った刻印写真（枠で切り出した画像）をアームにひも付ける。
  * ファイル名を 図番_号機_工程_日時.jpg に付け直して 年-月 フォルダへ移し、「刻印写真」シートに記録（同じ写真を別のアームに付け直したら上書き）
  */
-function apiLinkPhoto(photoId, key, readText, purpose) {
+function apiLinkPhoto(photoId, key, readText, purpose, sharp) {
   if (!photoId) return null;
   const a = loadArms_().find(r => r['キー'] === key);
   if (!a) throw new Error('台帳にないアームです: ' + key);
@@ -797,7 +802,7 @@ function apiLinkPhoto(photoId, key, readText, purpose) {
   const sh = sheet_(CONFIG.SHEETS.PHOTOS);
   const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
   if (sh.getLastColumn() < PHOTO_COLS.length) sh.getRange(1, 1, 1, PHOTO_COLS.length).setValues([PHOTO_COLS]).setFontWeight('bold');
-  const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || '', purpose || ''];
+  const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || '', purpose || '', sharp === undefined || sharp === null ? '' : sharp];
   const ids = sh.getLastRow() > 1 ? sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]) : [];
   const i = ids.indexOf(photoId);
   if (i < 0) appendRows_(CONFIG.SHEETS.PHOTOS, [row]);
@@ -999,9 +1004,14 @@ function apiQueueProcess(id) {
 }
 
 /** 画面が枠で切り出した画像を受け取る。確定ならひも付け、まだなら切り出し画像（＋強調）で読み直し */
-function apiQueueCrop(id, cropB64, enhB64) {
+function apiQueueCrop(id, cropB64, enhB64, sharp) {
   let row = queueFind_(id);
   if (!row['切り出しID']) row = queueSet_(row, {'切り出しID': savePhoto_(cropB64, 'kokuin')});
+  if (sharp !== undefined && sharp !== null) {
+    const sh = queueSheet_(), c = QUEUE_COLS.indexOf('鮮明度') + 1;
+    if (sh.getRange(1, c).getValue() !== '鮮明度') sh.getRange(1, c).setValue('鮮明度').setFontWeight('bold');
+    row = queueSet_(row, {'鮮明度': sharp});
+  }
   if (row['状態'] === '候補' && enhB64) {
     READ_DEADLINE = Date.now() + 40000; READ_LOG = [];
     const t0 = Date.now();
@@ -1014,7 +1024,7 @@ function apiQueueCrop(id, cropB64, enhB64) {
     } catch (e) { rlog_('キュー ' + id + ' 読み直し失敗 ' + e); }
     writeReadLog_(t0, row);
   }
-  if (row['状態'] === '確定' && row['キー']) apiLinkPhoto(row['切り出しID'], row['キー'], row['AI読取'], row['目的']);
+  if (row['状態'] === '確定' && row['キー']) apiLinkPhoto(row['切り出しID'], row['キー'], row['AI読取'], row['目的'], row['鮮明度']);
   return queueView_(row);
 }
 
@@ -1022,7 +1032,7 @@ function apiQueueCrop(id, cropB64, enhB64) {
 function apiQueuePick(id, key) {
   const row = queueSet_(queueFind_(id), {'キー': key, '状態': '確定'});
   const photo = row['切り出しID'] || row['元写真ID'];
-  if (photo) apiLinkPhoto(photo, key, row['AI読取'], row['目的']);
+  if (photo) apiLinkPhoto(photo, key, row['AI読取'], row['目的'], row['切り出しID'] ? row['鮮明度'] : '');
   return queueView_(row);
 }
 /** 特定済みの写真から、目的の工程（塗装完了・出荷）をまとめて記録。詳細を開かずに一覧から押せる */
@@ -1329,6 +1339,16 @@ function rankArms_(z, g, arms, opts) {
 }
 // 1位が完全一致で、2位以下がはっきり離れていれば確認（2回目の読取）を省く
 function isSure_(top) { return !!top.length && top[0].cost === 0 && (!top[1] || top[1].cost >= 2); }
+
+// 写真の鮮明さの点数：撮影時に測った鮮明度（輪郭のくっきり具合）＋AIが図番・号機を?なしで読めたか（読めた写真＝はっきり写っている）（純粋関数）
+function photoScore_(r, a) {
+  const read = String(r['AI読取'] || ''), g = String(a['号機']);
+  let s = +r['鮮明度'] || 0;
+  if (read.indexOf(a['図番']) >= 0) s += 15;
+  if (new RegExp('-[A-Z]?0*' + g + '(\\D|$)').test(read)) s += 15;
+  s -= (read.match(/\?/g) || []).length * 5;
+  return s;
+}
 
 // AIが読んだ図番・号機が台帳のアームと1文字も違わず一致（? なし）なら確定扱い
 function isExact_(z, g, arm) { return !!arm && !!z && !!g && !/\?/.test(z + g) && z === arm.z && String(+g) === String(arm.g); }

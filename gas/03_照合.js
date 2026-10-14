@@ -73,6 +73,16 @@ function rankArms_(z, g, arms, opts) {
 // 1位が完全一致で、2位以下がはっきり離れていれば確認（2回目の読取）を省く
 function isSure_(top) { return !!top.length && top[0].cost === 0 && (!top[1] || top[1].cost >= 2); }
 
+// 写真の鮮明さの点数：撮影時に測った鮮明度（輪郭のくっきり具合）＋AIが図番・号機を?なしで読めたか（読めた写真＝はっきり写っている）（純粋関数）
+function photoScore_(r, a) {
+  const read = String(r['AI読取'] || ''), g = String(a['号機']);
+  let s = +r['鮮明度'] || 0;
+  if (read.indexOf(a['図番']) >= 0) s += 15;
+  if (new RegExp('-[A-Z]?0*' + g + '(\\D|$)').test(read)) s += 15;
+  s -= (read.match(/\?/g) || []).length * 5;
+  return s;
+}
+
 // AIが読んだ図番・号機が台帳のアームと1文字も違わず一致（? なし）なら確定扱い
 function isExact_(z, g, arm) { return !!arm && !!z && !!g && !/\?/.test(z + g) && z === arm.z && String(+g) === String(arm.g); }
 

@@ -116,9 +116,14 @@ function apiQueueProcess(id) {
 }
 
 /** 画面が枠で切り出した画像を受け取る。確定ならひも付け、まだなら切り出し画像（＋強調）で読み直し */
-function apiQueueCrop(id, cropB64, enhB64) {
+function apiQueueCrop(id, cropB64, enhB64, sharp) {
   let row = queueFind_(id);
   if (!row['切り出しID']) row = queueSet_(row, {'切り出しID': savePhoto_(cropB64, 'kokuin')});
+  if (sharp !== undefined && sharp !== null) {
+    const sh = queueSheet_(), c = QUEUE_COLS.indexOf('鮮明度') + 1;
+    if (sh.getRange(1, c).getValue() !== '鮮明度') sh.getRange(1, c).setValue('鮮明度').setFontWeight('bold');
+    row = queueSet_(row, {'鮮明度': sharp});
+  }
   if (row['状態'] === '候補' && enhB64) {
     READ_DEADLINE = Date.now() + 40000; READ_LOG = [];
     const t0 = Date.now();
@@ -131,7 +136,7 @@ function apiQueueCrop(id, cropB64, enhB64) {
     } catch (e) { rlog_('キュー ' + id + ' 読み直し失敗 ' + e); }
     writeReadLog_(t0, row);
   }
-  if (row['状態'] === '確定' && row['キー']) apiLinkPhoto(row['切り出しID'], row['キー'], row['AI読取'], row['目的']);
+  if (row['状態'] === '確定' && row['キー']) apiLinkPhoto(row['切り出しID'], row['キー'], row['AI読取'], row['目的'], row['鮮明度']);
   return queueView_(row);
 }
 
@@ -139,7 +144,7 @@ function apiQueueCrop(id, cropB64, enhB64) {
 function apiQueuePick(id, key) {
   const row = queueSet_(queueFind_(id), {'キー': key, '状態': '確定'});
   const photo = row['切り出しID'] || row['元写真ID'];
-  if (photo) apiLinkPhoto(photo, key, row['AI読取'], row['目的']);
+  if (photo) apiLinkPhoto(photo, key, row['AI読取'], row['目的'], row['切り出しID'] ? row['鮮明度'] : '');
   return queueView_(row);
 }
 /** 特定済みの写真から、目的の工程（塗装完了・出荷）をまとめて記録。詳細を開かずに一覧から押せる */
