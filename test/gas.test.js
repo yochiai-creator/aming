@@ -142,6 +142,11 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
 (async () => {
   await wait(30);
   t("撮るだけ：キューが出る", () => { assert.strictEqual(w.document.querySelectorAll("#qList .qi").length, 2); assert.ok(w.document.querySelector("#qList").textContent.includes("特定")); });
+  t("撮るだけ：一括登録のチェックボックス（最初はチェック済み）", () => { const c = w.document.querySelector('[data-qsel="q1"]'); assert.ok(c && c.checked); assert.ok(!w.document.querySelector('[data-qsel="q2"]')); assert.ok(w.document.querySelector('[data-act="qrecAll"]').textContent.includes("1本")); });
+  { const c = w.document.querySelector('[data-qsel="q1"]'); c.checked = false; c.dispatchEvent(new w.Event("change", {bubbles: true})); }
+  t("撮るだけ：チェックを外すと記録ボタンが押せない", () => { assert.ok(w.document.querySelector('[data-act="qrecAll"]').disabled); assert.ok(!w.document.querySelector('[data-qsel="q1"]').checked); });
+  { const c = w.document.getElementById("qAll"); c.checked = true; c.dispatchEvent(new w.Event("change", {bubbles: true})); }
+  t("撮るだけ：全部にチェック", () => assert.ok(w.document.querySelector('[data-qsel="q1"]').checked));
   t("撮るだけ：塗装完了は一覧から記録ボタン", () => assert.ok(w.document.querySelector('[data-act="qrec"][data-id="q1"]')));
   click('[data-act="qrec"][data-id="q1"]'); await wait(30);
   t("撮るだけ：名前未設定なら確認者を選ばせる", () => { assert.ok(!calls.includes("apiQueueRecord")); assert.ok(w.document.getElementById("meRow").classList.contains("need")); });
