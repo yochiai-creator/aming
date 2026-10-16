@@ -463,7 +463,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/15-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/16-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1066,7 +1066,109 @@ function skewAngle(pts, cx, cy) {
   for (let a = best - 1; a <= best + 1; a += 0.2) { const sc = score(a); if (sc > bs) { bs = sc; best = a; } }
   return best;
 }
+// 刻印の切り出し v2：回転＋行ごとの傾き（台形ゆがみ）＋文字の斜め（シアー）をまとめて直す
 function straightCrop(src, box) {
+  const W = src.width, H = src.height;
+  const [y0, x0, y1, x1] = box.map(v => v / 1000);
+  const bw = (x1 - x0) * W, bh = (y1 - y0) * H;
+  if (bw < 20 || bh < 10) return cropByBox(src, box);
+  const mx = bw * 0.25 + bh * 0.4, my = bh * 0.6 + bw * 0.12;
+  const rx0 = Math.max(0, x0 * W - mx), ry0 = Math.max(0, y0 * H - my), rx1 = Math.min(W, x1 * W + mx), ry1 = Math.min(H, y1 * H + my);
+  const R = document.createElement("canvas"); R.width = Math.round(rx1 - rx0); R.height = Math.round(ry1 - ry0);
+  R.getContext("2d").drawImage(src, rx0, ry0, R.width, R.height, 0, 0, R.width, R.height);
+  const cx = (x0 + x1) / 2 * W - rx0, cy = (y0 + y1) / 2 * H - ry0;
+  const ex0 = Math.max(0, cx - bw * 0.6), ey0 = Math.max(0, cy - bh * 0.75), ex1 = Math.min(R.width, cx + bw * 0.6), ey1 = Math.min(R.height, cy + bh * 0.75);
+  const E = document.createElement("canvas"); E.width = Math.round(ex1 - ex0); E.height = Math.round(ey1 - ey0);
+  E.getContext("2d").drawImage(R, ex0, ey0, E.width, E.height, 0, 0, E.width, E.height);
+  const pts = edgePoints(E, 900);
+  for (let i = 0; i < pts.length; i += 2) { pts[i] += ex0; pts[i + 1] += ey0; }
+  if (pts.length < 60) return cropByBox(src, box);
+  // ① 大まかな回転
+  const ang = skewAngle(pts, cx, cy), r = -ang * Math.PI / 180, sn = Math.sin(r), cs = Math.cos(r);
+  const P = [];  // 回転後の点 [x, y]
+  for (let i = 0; i < pts.length; i += 2) { const dx = pts[i] - cx, dy = pts[i + 1] - cy; P.push([dx * cs - dy * sn, dx * sn + dy * cs]); }
+  // ② 行を見つける：yの点の数の山（なだらかにして）で、山の半分以上の帯＝1行
+  const ys = P.map(p => p[1]), ymin = Math.min(...ys), BIN = 2, nb = Math.ceil((Math.max(...ys) - ymin) / BIN) + 1;
+  const hist = new Float32Array(nb); ys.forEach(y => hist[Math.floor((y - ymin) / BIN)]++);
+  const sm = new Float32Array(nb), K = Math.max(2, Math.round(bh / 40 / BIN));
+  for (let i = 0; i < nb; i++) { let s = 0, n = 0; for (let j = -K; j <= K; j++) if (hist[i + j] !== undefined) { s += hist[i + j]; n++; } sm[i] = s / n; }
+  const peak = Math.max(...sm), segs = [];
+  for (let i = 0, st = -1; i <= nb; i++) {
+    const on = i < nb && sm[i] >= peak * 0.25;
+    if (on && st < 0) st = i;
+    if (!on && st >= 0) { let n = 0; for (let j = st; j < i; j++) n += hist[j]; segs.push({a: ymin + st * BIN, b: ymin + i * BIN, n}); st = -1; }
+  }
+  segs.sort((p, q) => q.n - p.n);
+  const lines = segs.slice(0, 2).filter(s => s.n >= segs[0].n * 0.25).sort((p, q) => p.a - q.a);
+  if (!lines.length) return straightCropRot(src, box);
+  // ③ 行ごとに中心線 y = a + b·x を当てはめる（xを区切って中央値→最小二乗）
+  const fit = ln => {
+    const q = P.filter(p => p[1] >= ln.a - BIN * 2 && p[1] <= ln.b + BIN * 2);
+    const xs = q.map(p => p[0]).sort((u, v) => u - v), lo = xs[Math.floor(xs.length * 0.003)], hi = xs[Math.floor(xs.length * 0.997)];
+    const NB = 14, step = (hi - lo) / NB, mx = [], my = [];
+    for (let k = 0; k < NB; k++) {
+      const v = q.filter(p => p[0] >= lo + k * step && p[0] < lo + (k + 1) * step).map(p => p[1]).sort((u, w) => u - w);
+      if (v.length >= 8) { mx.push(lo + (k + 0.5) * step); my.push(v[v.length >> 1]); }
+    }
+    let a, b = 0;
+    if (mx.length >= 3) {
+      const n = mx.length, sx = mx.reduce((s, v) => s + v, 0), sy = my.reduce((s, v) => s + v, 0);
+      const sxx = mx.reduce((s, v) => s + v * v, 0), sxy = mx.reduce((s, v, i) => s + v * my[i], 0);
+      b = (n * sxy - sx * sy) / (n * sxx - sx * sx); a = (sy - b * sx) / n;
+    } else a = (ln.a + ln.b) / 2;
+    const res = q.map(p => Math.abs(p[1] - (a + b * p[0]))).sort((u, v) => u - v);
+    return {a, b, h: Math.max(4, res[Math.floor(res.length * 0.92)]), lo, hi, pts: q};
+  };
+  const F = lines.map(fit);
+  const top = F[0], bot = F[1] || {a: top.a + top.h * 2.6, b: top.b, h: top.h, lo: top.lo, hi: top.hi, pts: []};
+  const Lt = x => top.a + top.b * x, Lb = x => bot.a + bot.b * x;
+  let xl = Math.min(top.lo, bot.lo), xr = Math.max(top.hi, bot.hi);
+  const xm = (xl + xr) / 2, D = Lb(xm) - Lt(xm);
+  if (!(D > 4)) return straightCropRot(src, box);
+  // ④ 遠い側は字が小さく写る（台形）→ 行の間隔に合わせて横も伸ばす：u(x) = ∫ D / 間隔(x) dx
+  const pad = (xr - xl) * 0.06 + 10; xl -= pad; xr += pad;
+  const N = 400, dx = (xr - xl) / N, U = new Float32Array(N + 1);
+  for (let i = 1; i <= N; i++) { const x = xl + (i - 0.5) * dx; U[i] = U[i - 1] + dx * D / Math.max(D * 0.3, Lb(x) - Lt(x)); }
+  const uOf = x => { const f = Math.max(0, Math.min(N, (x - xl) / dx)), i = Math.min(N - 1, Math.floor(f)); return U[i] + (U[i + 1] - U[i]) * (f - i); };
+  const xOf = u => { let lo = 0, hi = N; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (U[m] <= u) lo = m; else hi = m; } const t = (u - U[lo]) / Math.max(1e-6, U[hi] - U[lo]); return xl + (lo + t) * dx; };
+  // 正規化した座標：上の行の中心 Y=0、下の行の中心 Y=D
+  const Q = [];
+  F.forEach(f => f.pts.forEach(p => { const lt = Lt(p[0]), lb = Lb(p[0]); Q.push([uOf(p[0]), D * (p[1] - lt) / Math.max(1, lb - lt)]); }));
+  // ⑤ 文字の斜め（イタリックみたいな傾き）：縦の線が一番まっすぐ揃うずらし量を探す
+  const ym = D / 2;
+  const shearScore = k => { const m = new Map(); Q.forEach(q => { const b = Math.round((q[0] - k * (q[1] - ym)) / 2); m.set(b, (m.get(b) || 0) + 1); }); let s = 0; m.forEach(n => { s += n * n; }); return s; };
+  let kb = 0, ks = -1;
+  for (let k = -0.6; k <= 0.6001; k += 0.04) { const s = shearScore(k); if (s > ks) { ks = s; kb = k; } }
+  for (let k = kb - 0.04; k <= kb + 0.04; k += 0.01) { const s = shearScore(k); if (s > ks) { ks = s; kb = k; } }
+  // ⑥ 出力の範囲
+  const us = Q.map(q => q[0] - kb * (q[1] - ym)).sort((a, b) => a - b);
+  const u0 = us[Math.floor(us.length * 0.003)] - D * 0.35, u1 = us[Math.floor(us.length * 0.997)] + D * 0.35;
+  const hT = top.h * D / Math.max(1, Lb(xm) - Lt(xm)), hB = bot.h * D / Math.max(1, Lb(xm) - Lt(xm));
+  const Y0 = -hT * 1.6, Y1 = D + hB * 1.6;
+  const ow = Math.max(20, Math.round(u1 - u0)), oh = Math.max(10, Math.round(Y1 - Y0));
+  if (ow > 4000 || oh > 2000 || ow < bw * 0.3) return straightCropRot(src, box);
+  // ⑦ 1画素ずつ元の写真から拾う（バイリニア）
+  const sd = R.getContext("2d").getImageData(0, 0, R.width, R.height).data, RW = R.width, RH = R.height;
+  const out = document.createElement("canvas"); out.width = ow; out.height = oh;
+  const ox = out.getContext("2d"), od = ox.createImageData(ow, oh), o = od.data;
+  for (let j = 0; j < oh; j++) {
+    const Y = Y0 + j + 0.5;
+    for (let i = 0; i < ow; i++) {
+      const u = u0 + i + 0.5 + kb * (Y - ym), x = xOf(u), lt = Lt(x), y = lt + (Lb(x) - lt) * Y / D;
+      const sx = x * cs + y * sn + cx, sy = -x * sn + y * cs + cy;  // 回転を戻す
+      const p = (j * ow + i) * 4;
+      if (sx < 0 || sy < 0 || sx >= RW - 1 || sy >= RH - 1) { o[p] = o[p + 1] = o[p + 2] = 128; o[p + 3] = 255; continue; }
+      const xi = sx | 0, yi = sy | 0, fx = sx - xi, fy = sy - yi, q00 = (yi * RW + xi) * 4, q10 = q00 + 4, q01 = q00 + RW * 4, q11 = q01 + 4;
+      for (let c = 0; c < 3; c++) o[p + c] = (sd[q00 + c] * (1 - fx) + sd[q10 + c] * fx) * (1 - fy) + (sd[q01 + c] * (1 - fx) + sd[q11 + c] * fx) * fy;
+      o[p + 3] = 255;
+    }
+  }
+  ox.putImageData(od, 0, 0);
+  out.dataset.angle = ang.toFixed(1) + " 斜" + kb.toFixed(2) + " 行" + F.length;
+  return out;
+}
+// 回転だけで直す版（行が見つからない時の予備）
+function straightCropRot(src, box) {
   const W = src.width, H = src.height;
   let [y0, x0, y1, x1] = box.map(v => v / 1000);
   const bw = (x1 - x0) * W, bh = (y1 - y0) * H;
