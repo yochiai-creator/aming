@@ -198,9 +198,10 @@ function healthCheck() {
   return {ss: ss.getName(), counts: counts, latest: latest ? latest.getName() : null, lastImported: PropertiesService.getScriptProperties().getProperty('LAST_IMPORTED'), ai: cfg_('AI_PROVIDER'), apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
 }
 
-/** 毎朝のトリガーを入れる（何度実行しても同じ2本だけになる） */
+/** 毎朝のトリガーを入れる（何度実行しても同じになる）。未チェック通知メールは10/18に廃止（トリガーがあれば消す） */
 function setupTriggers() {
-  const plan = [['importLatest', cfgNum_('IMPORT_HOUR') || 6], ['notifyUnchecked', cfgNum_('NOTIFY_HOUR') || 7]];
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'notifyUnchecked') ScriptApp.deleteTrigger(t); });
+  const plan = [['importLatest', cfgNum_('IMPORT_HOUR') || 6]];
   // 撮るだけモードの取りこぼしを5分おきに読む
   ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'processQueue') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('processQueue').timeBased().everyMinutes(5).create();
@@ -1415,6 +1416,12 @@ function learnHint_(st) {
  * 次の出荷日（翌営業日）に出荷するアームのうち、ねじ穴タップ「良」の記録がないものだけを送る
  */
 function notifyUnchecked() {
+  // 10/18 ユーザー：未チェック通知メールは要らない → 送らずに、自分のトリガーも消す
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'notifyUnchecked') ScriptApp.deleteTrigger(t); });
+  console.log('未チェック通知は止めています（トリガーも削除）');
+  return 0;
+}
+function notifyUncheckedMail_() {  // 使っていない（戻すときは notifyUnchecked から呼ぶ）
   const day = nextShipDate_();
   if (!day) { console.log('次の出荷日なし'); return 0; }
   const list = uncheckedBetween_(day, day);

@@ -37,9 +37,10 @@ function healthCheck() {
   return {ss: ss.getName(), counts: counts, latest: latest ? latest.getName() : null, lastImported: PropertiesService.getScriptProperties().getProperty('LAST_IMPORTED'), ai: cfg_('AI_PROVIDER'), apiKey: !!PropertiesService.getScriptProperties().getProperty(aiKeyName_()), photoFolder: DriveApp.getFolderById(cfg_('PHOTO_FOLDER_ID')).getName()};
 }
 
-/** 毎朝のトリガーを入れる（何度実行しても同じ2本だけになる） */
+/** 毎朝のトリガーを入れる（何度実行しても同じになる）。未チェック通知メールは10/18に廃止（トリガーがあれば消す） */
 function setupTriggers() {
-  const plan = [['importLatest', cfgNum_('IMPORT_HOUR') || 6], ['notifyUnchecked', cfgNum_('NOTIFY_HOUR') || 7]];
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'notifyUnchecked') ScriptApp.deleteTrigger(t); });
+  const plan = [['importLatest', cfgNum_('IMPORT_HOUR') || 6]];
   // 撮るだけモードの取りこぼしを5分おきに読む
   ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'processQueue') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('processQueue').timeBased().everyMinutes(5).create();

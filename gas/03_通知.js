@@ -3,6 +3,12 @@
  * 次の出荷日（翌営業日）に出荷するアームのうち、ねじ穴タップ「良」の記録がないものだけを送る
  */
 function notifyUnchecked() {
+  // 10/18 ユーザー：未チェック通知メールは要らない → 送らずに、自分のトリガーも消す
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'notifyUnchecked') ScriptApp.deleteTrigger(t); });
+  console.log('未チェック通知は止めています（トリガーも削除）');
+  return 0;
+}
+function notifyUncheckedMail_() {  // 使っていない（戻すときは notifyUnchecked から呼ぶ）
   const day = nextShipDate_();
   if (!day) { console.log('次の出荷日なし'); return 0; }
   const list = uncheckedBetween_(day, day);
