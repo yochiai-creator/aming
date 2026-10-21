@@ -548,6 +548,10 @@ function apiList() {
   // 予定に関係なく今日「塗装完了」を記録した本数（Excelの予定より先に塗った分も数える）
   const rec = Object.keys(st).filter(k => String(st[k]['塗装完了'] || '').indexOf(today) === 0).length;
   return {paint: {date: today, total: pt.length, done: pt.filter(a => a.painted).length, rec: rec},
+    // 塗装済み在庫（10/21）：塗装済みで出荷の記録がないアーム全部（出荷日の範囲に関係なく）
+    stock: loadArms_().filter(a => { const s = st[a['キー']]; return s && !s['出荷'] && (s['塗装完了'] || s['塗装後修正完了'] || last[a['キー']]); })
+      .map(a => Object.assign(armView_(a, last[a['キー']], st[a['キー']]), {holes: holes[a['図番']] || ''}))
+      .sort((x, y) => (x.ship || '9').localeCompare(y.ship || '9') || x.z.localeCompare(y.z) || (+x.g - +y.g)),
     days: Object.keys(m).sort().map(k => m[k]), rows: rows,
     unchecked: rows.filter(a => a.ship >= from && a.ship <= alertTo && a.status !== '良')};
 }

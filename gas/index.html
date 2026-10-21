@@ -164,6 +164,9 @@ ul.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--edge);margi
 .redto{color:var(--ng);font-weight:700}
 .tile i.plan{display:block;font-style:normal;font-size:.66rem;color:var(--sub);font-family:"Share Tech Mono","BIZ UDPGothic",monospace}
 .tile i.plan.late{color:var(--ng);font-weight:700}
+.lmode{display:flex;gap:6px;margin:0 0 10px}.lmode button{flex:1;padding:10px 6px;background:#0A0D0F;border:1px solid var(--edge-hi);color:var(--sub);font-weight:700}
+.lmode button.on{background:var(--accent);color:#fff;border-color:var(--accent)}.lmode small{margin-left:6px;font-family:"Share Tech Mono",monospace}
+details.sd summary em.late{font-style:normal;color:var(--ng);font-size:.75rem;margin-left:6px}
 .sub{margin-top:8px}
 .sub>em{display:flex;align-items:center;gap:6px;font-style:normal;font-size:.74rem;font-weight:700;margin:0 0 4px;letter-spacing:.05em}
 .sub>em::before{content:"";width:4px;height:12px;background:currentColor}
@@ -466,7 +469,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/21-3"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/21-4"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -558,11 +561,27 @@ function fetchList() {
   }).finally(() => { listFetching = null; });
   return listFetching;
 }
+// 一覧の表示：出荷日ごと／塗装済み在庫（出荷日＝曜日ごとにまとめて全部）
+let listMode = ls.get("trace.listMode") || "day";
+function modeBar() {
+  const n = (listData.stock || []).length;
+  return `<div class="lmode"><button type="button" data-act="lmode" data-m="day" class="${listMode === "day" ? "on" : ""}">出荷日ごと</button><button type="button" data-act="lmode" data-m="stock" class="${listMode === "stock" ? "on" : ""}">塗装済み在庫<small>${n}本</small></button></div>`;
+}
+function drawStock(keep) {
+  const el = $("listView"), list = listData.stock || [], y = window.scrollY;
+  const closed = keep ? [...el.querySelectorAll("details.sd:not([open])")].map(d => d.dataset.d) : [];
+  const byDay = new Map(); list.forEach(a => { const d = a.ship || ""; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(a); });
+  const fixed = list.filter(isFixed).length;
+  el.innerHTML = modeBar() + `<section><h2>塗装済み在庫 ${list.length}本</h2><p class="muted">塗装完了を記録して、出荷の記録がまだのアーム（うち塗装後修正済 ${fixed}本）。出荷日（曜日）ごと</p>
+    ${list.length ? [...byDay].map(([d, l]) => `<details class="ud sd" data-d="${esc(d)}" ${closed.includes(d) ? "" : "open"}><summary><span>${d ? esc(md(d)) + "(" + esc(wd(d)) + ")" : "出荷日なし"}${d && d < boot.today ? ' <em class="late">出荷日過ぎ</em>' : ""}</span><b>${l.length}本</b></summary>${armGroups(l)}</details>`).join("") : '<p class="muted">在庫はありません</p>'}</section>`;
+  if (keep) window.scrollTo(0, y);
+}
 function drawList(keep) {
+  if (listMode === "stock") return drawStock(keep);
   const el = $("listView"), days = listData.days.length ? listData.days : boot.days;
   if (!day || !days.some(d => d.date === day)) day = (days[0] || {}).date || boot.today;
   const y = window.scrollY, open = keep ? [...el.querySelectorAll("details.ud[open]")].map(d => d.dataset.d) : [];
-  el.innerHTML = `<div class="days">${days.map(d => `<button type="button" data-act="day" data-d="${d.date}" class="${d.date === day ? "on" : ""} ${d.todo ? "has-todo" : ""}">${md(d.date)}(${wd(d.date)})<small>${d.todo ? "未" + d.todo + " / " : ""}${d.total}本</small></button>`).join("")}</div>
+  el.innerHTML = modeBar() + `<div class="days">${days.map(d => `<button type="button" data-act="day" data-d="${d.date}" class="${d.date === day ? "on" : ""} ${d.todo ? "has-todo" : ""}">${md(d.date)}(${wd(d.date)})<small>${d.todo ? "未" + d.todo + " / " : ""}${d.total}本</small></button>`).join("")}</div>
     <section><h2>${esc(md(day))}(${esc(wd(day))}) 出荷分</h2><div id="dayList"></div></section>
     <section id="uncheckedSec" class="warnbox hidden"></section>`;
   listRows = listData.rows.filter(a => a.ship === day); renderDayList();
@@ -588,7 +607,7 @@ async function renderList(noFetch) {
 const armCache = new Map();
 let armToken = 0;
 function quickArm(key) {
-  const r = (listData && listData.rows.find(a => a.key === key)) || (listData && listData.unchecked.find(a => a.key === key));
+  const r = (listData && listData.rows.find(a => a.key === key)) || (listData && listData.unchecked.find(a => a.key === key)) || (listData && (listData.stock || []).find(a => a.key === key));
   return r ? Object.assign({steps: [], taps: [], photos: [], otherChanges: [], _partial: true}, r, {holes: r.holes || ""}, /ﾃﾚｽｺ|テレスコ/.test(r.spec || r.kishu || "") ? {tele: r.g} : {}) : null;
 }
 async function openArm(key, fromScan, qPurpose) {
@@ -1369,6 +1388,7 @@ document.addEventListener("click", async e => {
   if (act === "purpose") { purpose = b.dataset.v; ls.set("trace.purpose", purpose); syncPurpose(); }
   else if (act === "goal") { const t = document.getElementById("tapForm"); if (t) t.scrollIntoView({behavior: "smooth", block: "start"}); }
   else if (act === "nav") show(b.dataset.v);
+  else if (act === "lmode") { listMode = b.dataset.m; ls.set("trace.listMode", listMode); drawList(false); window.scrollTo(0, 0); }
   else if (act === "day") { day = b.dataset.d; renderList(true); }
   else if (act === "lf") { listFilter = b.dataset.f; ls.set("trace.listFilter", listFilter); renderDayList(); }
   else if (act === "arm") openArm(b.dataset.k, !!b.closest("#cands"));
