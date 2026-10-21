@@ -314,6 +314,7 @@ h1{font-size:1.9rem}
 .qi .qa .arm{border:1px solid var(--edge);padding:6px 8px}
 .qi .qc{flex:0 0 auto;display:flex;align-items:center;align-self:center;padding:4px}
 .qi .qc input,.qsel input{width:22px;height:22px;accent-color:var(--accent)}
+#bulkBtn small{display:block;font-size:.72rem;font-weight:400;opacity:.8;margin-top:2px}
 #qBar{display:flex;flex-direction:column;gap:6px}#qBar .btn{width:100%}
 @media (max-width:420px){.qi .qt{flex-basis:84px;height:46px}}
 .qsel{display:flex;align-items:center;gap:12px;font-size:.85rem;color:var(--sub);margin-bottom:6px}.qsel label{display:flex;align-items:center;gap:6px;color:var(--ink)}
@@ -353,6 +354,7 @@ h1{font-size:1.9rem}
     </div></div>
     <div class="purpose" id="meRow"><span id="meLab">確認者</span><div class="seg" id="meSeg"></div></div>
     <button class="shoot" id="shootBtn" type="button"><svg class="bucket" viewBox="0 0 34 26" fill="none" stroke="#fff" stroke-width="2.6"><path d="M2 8 V2 H9 M25 2 H32 V8 M32 18 V24 H25 M9 24 H2 V18"/><path d="M8 13 H26" stroke-width="1.6" opacity=".9"/></svg><b class="pl" id="shootPurpose"></b>刻印を撮る<small>撮るだけでOK。続けて何枚でも。読み取りは裏でやって、終わったら知らせます</small></button>
+    <button class="shoot alt" id="bulkBtn" type="button">撮ってある写真をまとめて読む<small>アルバムから何枚でも選べます（目的は上で選んだもの）</small></button>
     <button class="shoot alt" id="pickBtn" type="button">写真を選んで自分で枠を合わせる</button>
     <input id="cam" type="file" accept="image/*" capture="environment" class="hidden">
     <input id="camMulti" type="file" accept="image/*" multiple class="hidden">
@@ -464,7 +466,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/21-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/21-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1276,8 +1278,16 @@ $("q").addEventListener("input", () => {
 /* ================= イベント ================= */
 $("shootBtn").onclick = () => $("cam").click();
 $("addMulti").onclick = () => $("camMulti").click();
+$("bulkBtn").onclick = () => { if (!me) { needMe(); return; } $("camMulti").click(); };
 $("cam").onchange = e => { const fs = [...e.target.files]; e.target.value = ""; fs.forEach(queueAddFile); };
-$("camMulti").onchange = e => { const fs = [...e.target.files]; e.target.value = ""; fs.forEach(queueAddFile); };
+// まとめて選んだ写真は1枚ずつ順に送る（一度に送ると通信が詰まって失敗しやすい）
+$("camMulti").onchange = async e => {
+  const fs = [...e.target.files]; e.target.value = "";
+  if (!fs.length) return;
+  toast(`${fs.length}枚を順に送ります`);
+  for (let i = 0; i < fs.length; i++) { $("qCount").textContent = `送信中 ${i + 1}/${fs.length}`; await queueAddFile(fs[i]); }
+  renderQueue(); toast(`${fs.length}枚 送りました。読み取りは裏で進みます`);
+};
 $("pickBtn").onclick = () => $("pick").click();
 $("vfCancel").onclick = closeViewfinder;
 $("busyCancel").onclick = () => { readToken++; cancelRead(); busy(false); };
