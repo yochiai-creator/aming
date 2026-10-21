@@ -466,7 +466,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/21-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/21-3"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1017,7 +1017,7 @@ function renderQueue() {
     const chk = qCheckable(q) ? `<label class="qc"><input type="checkbox" data-qsel="${esc(q.id)}" ${sel.includes(q) ? "checked" : ""} aria-label="一括登録に入れる"></label>` : "";
     return `<div class="qi ${q.rec ? "recd" : ""}">${chk}<div class="qt" ${thumb}></div><div class="qb">
       <div class="qs ${lb[0]}">${lb[0] === "wait" ? '<span class="spin"></span>' : ""}${esc(lb[1])}${q.purpose ? "　" + esc(q.purpose) : ""}</div>
-      <div class="qr">${esc(arm)}</div>${warn}${lightW}${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
+      <div class="qr">${esc(arm)}</div>${q.shotAt ? `<div class="muted" style="font-size:.72rem">📷 撮影 ${esc(q.shotAt.slice(5))}${q.shotAt.slice(0, 10) !== boot.today ? "（この日時で記録）" : ""}</div>` : ""}${warn}${lightW}${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
       <div class="qa">${acts}</div></div>
       ${["送信中", "処理中"].includes(q.state) ? "" : `<button type="button" class="x" data-act="qdone" data-id="${esc(q.id)}" aria-label="一覧から消す">×</button>`}</div>`;
   }).join("");
@@ -1209,15 +1209,46 @@ function straightCropRot(src, box) {
   out.dataset.angle = ang.toFixed(1);
   return out;
 }
+// 写真の撮影日時：JPEGのEXIF（DateTimeOriginal→DateTime）を読む。読めなければ、ファイルの更新日時が1分以上前ならそれ（純粋に近い：Fileだけ使う）
+async function photoTakenAt(f) {
+  const fmt = d => `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  try {
+    const v = new DataView(await f.slice(0, 256 * 1024).arrayBuffer());
+    const ex = exifDate(v);
+    if (ex) return ex;
+  } catch (e) {}
+  return f.lastModified && Date.now() - f.lastModified > 60000 ? fmt(new Date(f.lastModified)) : "";
+}
+function exifDate(v) {
+  if (v.getUint16(0) !== 0xFFD8) return "";
+  let p = 2;
+  while (p + 4 < v.byteLength) {
+    const mk = v.getUint16(p), len = v.getUint16(p + 2);
+    if (mk === 0xFFE1 && v.getUint32(p + 4) === 0x45786966) {  // "Exif"
+      const t = p + 10, le = v.getUint16(t) === 0x4949;
+      const u16 = o => v.getUint16(t + o, le), u32 = o => v.getUint32(t + o, le);
+      const str = (o, n) => { let x = ""; for (let i = 0; i < n - 1; i++) x += String.fromCharCode(v.getUint8(t + o + i)); return x; };
+      const tags = ifd => { const n = u16(ifd), m = {}; for (let i = 0; i < n; i++) { const e = ifd + 2 + i * 12; m[u16(e)] = {n: u32(e + 4), o: u32(e + 8)}; } return m; };
+      const ifd0 = tags(u32(4)), sub = ifd0[0x8769] ? tags(ifd0[0x8769].o) : {};
+      const d = sub[0x9003] || ifd0[0x0132];
+      if (!d) return "";
+      const m = str(d.o, d.n).match(/^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d)/);
+      return m ? `${m[1]}/${m[2]}/${m[3]} ${m[4]}:${m[5]}` : "";
+    }
+    if ((mk & 0xFF00) !== 0xFF00) break;
+    p += 2 + len;
+  }
+  return "";
+}
 async function queueAddFile(f) {
-  const tmp = "tmp" + (++qTmp);
+  const tmp = "tmp" + (++qTmp), shotAt = await photoTakenAt(f);
   let canvas;
   try { canvas = await fullCanvas(await loadImg(URL.createObjectURL(f))); } catch (e) { toast("写真を開けませんでした"); return; }
   const small = document.createElement("canvas"); small.width = 224; small.height = Math.round(224 * canvas.height / canvas.width);
   small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
   qUpdate({id: tmp, state: "送信中", purpose, thumb: small.toDataURL("image/jpeg", .7)});
   try {
-    const v = await run("apiQueueAdd", await b64(await toBlob(canvas, 0.85)), purpose);
+    const v = await run("apiQueueAdd", await b64(await toBlob(canvas, 0.85)), purpose, shotAt);
     qLocal[v.id] = canvas;
     v._tmp = tmp; qUpdate(v); delete queue.find(q => q.id === v.id)._tmp;
     qPump();

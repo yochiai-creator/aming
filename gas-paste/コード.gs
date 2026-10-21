@@ -58,7 +58,7 @@ const TAP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '結果', 
 const DATE_COLS = ['着工', '検査完了日', '塗装完了日', '塗装後修正完了日', '出荷日', '納入日'];
 const STEP_COLS = ['記録ID', '日時', 'キー', '図番', '号機', '工程', '確認者', '備考', '写真ID', '取消'];
 const CHANGE_COLS = ['日時', 'キー', '項目', '前', '後', '元ファイル'];
-const QUEUE_COLS = ['ID', '日時', '目的', '状態', '元写真ID', '切り出しID', '枠', 'AI読取', 'キー', '候補', 'エラー', '確認', '記録', '鮮明度'];
+const QUEUE_COLS = ['ID', '日時', '目的', '状態', '元写真ID', '切り出しID', '枠', 'AI読取', 'キー', '候補', 'エラー', '確認', '記録', '鮮明度', '撮影日時'];
 const READLOG_COLS = ['日時', '秒', '結果', 'AI読取', '1位候補', 'ログ'];
 const PHOTO_COLS = ['日時', 'キー', '図番', '号機', '写真ID', 'ファイル名', 'AI読取', '目的', '鮮明度'];
 // 現場で記録する工程（名前 → 台帳の対応する日付列）
@@ -963,7 +963,7 @@ function queueView_(r, st) {
   try { cands = r['候補'] ? JSON.parse(r['候補']) : []; } catch (e) {}
   let box = null;
   try { box = r['枠'] ? JSON.parse(r['枠']) : null; } catch (e) {}
-  return {id: r['ID'], at: r['日時'], purpose: r['目的'], state: r['状態'], fullId: r['元写真ID'], cropId: r['切り出しID'],
+  return {id: r['ID'], at: r['日時'], shotAt: r['撮影日時'] || '', purpose: r['目的'], state: r['状態'], fullId: r['元写真ID'], cropId: r['切り出しID'],
     box: box, read: r['AI読取'], key: r['キー'], cands: cands, error: r['エラー'], seen: r['確認'] === '済', rec: r['記録'] || '',
     already: alreadyStep_(r, st)};
 }
@@ -976,11 +976,20 @@ function alreadyStep_(r, st) {
 }
 
 /** 撮った写真（全体・縮小済み）を積む。すぐ返る */
-function apiQueueAdd(b64, purpose) {
+// 読取キューの見出し：列を足したら（記録・鮮明度・撮影日時…）足りない分だけ書き足す
+function queueHeader_() {
+  const sh = queueSheet_(), n = QUEUE_COLS.length, cur = sh.getRange(1, 1, 1, n).getDisplayValues()[0];
+  if (cur.join('|') === QUEUE_COLS.join('|')) return;
+  if (cur.every((h, i) => !h || h === QUEUE_COLS[i])) sh.getRange(1, 1, 1, n).setValues([QUEUE_COLS]).setFontWeight('bold');
+}
+// shotAt：写真の撮影日時（画面が写真のEXIFから読む。'yyyy/MM/dd HH:mm'）。アルバムからまとめて読んだ時に、記録の日時をこれにする
+function apiQueueAdd(b64, purpose, shotAt) {
   const fullId = savePhoto_(b64, 'raw');
   const id = Utilities.getUuid().slice(0, 8);
   const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
-  appendRows_(CONFIG.SHEETS.QUEUE, [[id, now, purpose || '', '待ち', fullId, '', '', '', '', '', '', '']]);
+  queueHeader_();
+  const row = QUEUE_COLS.map(c => ({'ID': id, '日時': now, '目的': purpose || '', '状態': '待ち', '元写真ID': fullId, '撮影日時': /^\d{4}\/\d\d\/\d\d \d\d:\d\d$/.test(shotAt || '') ? shotAt : ''})[c] || '');
+  appendRows_(CONFIG.SHEETS.QUEUE, [row]);
   return queueView_(queueFind_(id));
 }
 
@@ -1017,11 +1026,7 @@ function apiQueueProcess(id) {
 function apiQueueCrop(id, cropB64, enhB64, sharp) {
   let row = queueFind_(id);
   if (!row['切り出しID']) row = queueSet_(row, {'切り出しID': savePhoto_(cropB64, 'kokuin')});
-  if (sharp !== undefined && sharp !== null) {
-    const sh = queueSheet_(), c = QUEUE_COLS.indexOf('鮮明度') + 1;
-    if (sh.getRange(1, c).getValue() !== '鮮明度') sh.getRange(1, c).setValue('鮮明度').setFontWeight('bold');
-    row = queueSet_(row, {'鮮明度': sharp});
-  }
+  if (sharp !== undefined && sharp !== null) { queueHeader_(); row = queueSet_(row, {'鮮明度': sharp}); }
   if (row['状態'] === '候補' && enhB64) {
     READ_DEADLINE = Date.now() + 40000; READ_LOG = [];
     const t0 = Date.now();
@@ -1053,8 +1058,7 @@ function apiQueueRecord(ids, person) {
   try { return queueRecord_(ids, person); } finally { lock.releaseLock(); }
 }
 function queueRecord_(ids, person) {
-  const sh = queueSheet_();
-  if (sh.getRange(1, QUEUE_COLS.length).getValue() !== '記録') sh.getRange(1, QUEUE_COLS.length).setValue('記録').setFontWeight('bold');
+  queueHeader_();
   const rows = queueRows_(), arms = {};
   loadArms_().forEach(a => { arms[a['キー']] = a; });
   const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm'), add = [], done = [];
@@ -1064,7 +1068,9 @@ function queueRecord_(ids, person) {
     const a = arms[r['キー']];
     if (!a) return;
     const recId = Utilities.getUuid().slice(0, 8);
-    add.push([recId, now, a['キー'], a['図番'], a['号機'], step, person, '', r['切り出しID'] || r['元写真ID'] || '', '']);
+    // 撮影日時がわかる写真（アルバムから読んだ分）は、その日時で記録する
+    const at = r['撮影日時'] || now;
+    add.push([recId, at, a['キー'], a['図番'], a['号機'], step, person, r['撮影日時'] ? '撮影日時で記録（' + now + ' 登録）' : '', r['切り出しID'] || r['元写真ID'] || '', '']);
     done.push([r, recId]);
   });
   if (add.length) appendRows_(CONFIG.SHEETS.STEPS, add);
