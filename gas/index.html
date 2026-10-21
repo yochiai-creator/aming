@@ -469,7 +469,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/21-4"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/22-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -572,8 +572,8 @@ function drawStock(keep) {
   const closed = keep ? [...el.querySelectorAll("details.sd:not([open])")].map(d => d.dataset.d) : [];
   const byDay = new Map(); list.forEach(a => { const d = a.ship || ""; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(a); });
   const fixed = list.filter(isFixed).length;
-  el.innerHTML = modeBar() + `<section><h2>塗装済み在庫 ${list.length}本</h2><p class="muted">塗装完了を記録して、出荷の記録がまだのアーム（うち塗装後修正済 ${fixed}本）。出荷日（曜日）ごと</p>
-    ${list.length ? [...byDay].map(([d, l]) => `<details class="ud sd" data-d="${esc(d)}" ${closed.includes(d) ? "" : "open"}><summary><span>${d ? esc(md(d)) + "(" + esc(wd(d)) + ")" : "出荷日なし"}${d && d < boot.today ? ' <em class="late">出荷日過ぎ</em>' : ""}</span><b>${l.length}本</b></summary>${armGroups(l)}</details>`).join("") : '<p class="muted">在庫はありません</p>'}</section>`;
+  el.innerHTML = modeBar() + `<section><h2>塗装済み在庫 ${list.length}本</h2><p class="muted">これから出荷する塗装済みのアーム全部（アプリの記録か、Excelの塗装完了日が今日まで）。うち塗装後修正済 ${fixed}本・アプリ未記録 ${list.filter(a => a.xl).length}本。出荷日（曜日）ごと</p>
+    ${list.length ? [...byDay].map(([d, l]) => `<details class="ud sd" data-d="${esc(d)}" ${closed.includes(d) ? "" : "open"}><summary><span>${d ? esc(md(d)) + "(" + esc(wd(d)) + ")" : "出荷日なし"}</span><b>${l.length}本</b></summary>${armGroups(l)}</details>`).join("") : '<p class="muted">在庫はありません</p>'}</section>`;
   if (keep) window.scrollTo(0, y);
 }
 function drawList(keep) {
