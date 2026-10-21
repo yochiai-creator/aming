@@ -468,8 +468,17 @@ function apiSaveStep(rec) {
   const a = loadArms_().find(r => r['キー'] === rec.key);
   if (!a) throw new Error('台帳にないアームです: ' + rec.key);
   const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
-  appendRows_(CONFIG.SHEETS.STEPS, [[Utilities.getUuid().slice(0, 8), now, a['キー'], a['図番'], a['号機'], rec.step, rec.person, rec.note || '', rec.photoId || '', '']]);
-  return apiArm(rec.key);
+  // 二度押し防止（10/21 実データで同じ写真の記録が同じ分に2件あった）：同じ号機・工程で、同じ写真か2分以内の記録が既にあれば足さない
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  let dup = false;
+  try {
+    const t0 = Utilities.formatDate(new Date(Date.now() - 2 * 60000), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+    dup = readTable_(sheet_(CONFIG.SHEETS.STEPS)).some(r => r['取消'] !== '1' && r['キー'] === rec.key && r['工程'] === rec.step &&
+      ((rec.photoId && r['写真ID'] === rec.photoId) || String(r['日時']) >= t0));
+    if (!dup) appendRows_(CONFIG.SHEETS.STEPS, [[Utilities.getUuid().slice(0, 8), now, a['キー'], a['図番'], a['号機'], rec.step, rec.person, rec.note || '', rec.photoId || '', '']]);
+  } finally { lock.releaseLock(); }
+  const v = apiArm(rec.key); v.dupSkipped = dup;
+  return v;
 }
 function apiCancelStep(id, key) {
   cancelRow_(CONFIG.SHEETS.STEPS, STEP_COLS, id);

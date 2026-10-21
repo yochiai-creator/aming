@@ -459,11 +459,12 @@ function recordable(live) {
   return live.filter(q => q.state === "確定" && !q.rec && !q.already && STEP_PURPOSE(q.purpose) && !seen[q.key] && (seen[q.key] = 1));
 }
 const STEP_PURPOSE = p => p === "塗装完了" || p === "出荷";
+let stepSaving = false;
 let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastRead = "", lastSharp = null;
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/16-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/21-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1286,7 +1287,7 @@ $("vfShot").onclick = () => { const c = shotFromViewfinder(); closeViewfinder();
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act;
-  if (act === "qopen") { const q = queue.find(x => x.id === b.dataset.id); if (!q) return; run("apiQueueDone", q.id).catch(() => {}); q.seen = true; renderQueue(); photoId = ""; openArm(q.key, false, q.purpose); return; }
+  if (act === "qopen") { const q = queue.find(x => x.id === b.dataset.id); if (!q) return; run("apiQueueDone", q.id).catch(() => {}); q.seen = true; renderQueue(); openArm(q.key, false, q.purpose); photoId = q.cropId || ""; return; }
   if (act === "qpick") {
     const q = queue.find(x => x.id === b.dataset.id); b.disabled = true;
     try {
@@ -1350,15 +1351,18 @@ document.addEventListener("click", async e => {
   else if (act === "chk") { form[b.dataset.k] = !form[b.dataset.k]; syncForm(); }
   else if (act === "save") { readForm(); saveTap({result: form.result, holes: form.holes, treated: form.treated, person: form.person, note: form.note}); }
   else if (act === "step") {
+    if (stepSaving) return;
     if (!me) { toast("読取画面の「確認者」で自分の名前を選んでください"); return; }
     // 同じ工程がもう記録されていたら確認（撮り直しで二重に入らないように）
     const done = (armData.steps || []).filter(x => x.step === b.dataset.s).flatMap(x => x.recs || []).filter(r => !r.canceled);
     if (done.length && !confirm(`この号機は「${b.dataset.s}」がもう記録されています（${done[0].at} ${done[0].by}）。もう一度記録しますか？`)) return;
     const note = prompt(`${b.dataset.s}を記録します（${me}）。メモがあれば入力`, "");
     if (note === null) return;
-    b.disabled = true;
-    try { armData = await run("apiSaveStep", {key: armData.key, step: b.dataset.s, person: me, note, photoId}); toast(b.dataset.s + "を記録しました"); scanPurpose = ""; renderArm(); }
+    // 記録中は何度押しても1回だけ（途中で詳細が届いて画面が描き直されてもボタンが復活しないように）
+    stepSaving = true; b.disabled = true;
+    try { armData = await run("apiSaveStep", {key: armData.key, step: b.dataset.s, person: me, note, photoId}); toast(armData.dupSkipped ? "もう記録されていたので、二重には記録しませんでした" : b.dataset.s + "を記録しました"); scanPurpose = ""; renderArm(); }
     catch (err) { toast(errMsg(err)); b.disabled = false; }
+    finally { stepSaving = false; }
   }
   else if (act === "delPhoto") {
     if (!confirm("この写真を消しますか？（ドライブのゴミ箱に移します。30日間は戻せます）")) return;
