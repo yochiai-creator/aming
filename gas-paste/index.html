@@ -93,8 +93,8 @@ textarea{min-height:64px}
 .plate{font-family:"Share Tech Mono",ui-monospace,monospace;color:var(--cyan);text-shadow:0 0 6px rgba(63,208,255,.4);
   background:#060909;border:1px solid var(--edge);padding:8px 12px;letter-spacing:.14em;font-size:1.3rem;overflow-x:auto}
 .plate .fix{color:var(--warn);text-decoration:underline}
-#preview{display:none;gap:6px;margin-bottom:10px}
-#preview img{width:50%;border:1px solid var(--edge);filter:contrast(1.05)}
+#preview{display:none;flex-direction:column;gap:6px;margin-bottom:10px}
+#preview img{width:100%;border:1px solid var(--edge);filter:contrast(1.05);cursor:zoom-in}
 #status{font-family:"Share Tech Mono","BIZ UDPGothic",monospace;font-size:.88rem;color:var(--cyan);min-height:1.4em}
 #status:not(:empty)::before{content:"▶ "}
 .arm{display:block;width:100%;text-align:left;background:transparent;border:none;border-top:1px dashed var(--edge);padding:10px 4px;color:var(--ink)}
@@ -170,6 +170,12 @@ details.sd summary em.late{font-style:normal;color:var(--ng);font-size:.75rem;ma
 .shipbig{margin-top:6px;font-size:1.05rem;font-weight:700}.shipq{font-size:.82rem;margin-top:2px}
 .ship1{color:var(--ng)}.ship3{color:#FFB020}.ship9{color:var(--cyan)}.ship0{color:var(--sub)}
 .shipc{display:block;font-size:.7rem;color:var(--sub)}
+.qi.need{flex-wrap:wrap}.qi.need .qb{flex:1 1 100%}
+.qbig{display:flex;flex-direction:column;gap:4px;margin-bottom:6px}.qbig img{width:100%;border:1px solid var(--edge);background:#060909;cursor:zoom-in}
+#lb{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.92);display:flex;flex-direction:column}
+#lb.hidden{display:none}
+.lbbar{display:flex;justify-content:space-between;padding:10px;gap:10px}.lbbar button{padding:10px 14px;background:#1A2226;color:#fff;border:1px solid var(--edge-hi);font-weight:700}
+.lbwrap{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y pinch-zoom}.lbwrap img{display:block;width:100%;max-width:none}
 .sub{margin-top:8px}
 .sub>em{display:flex;align-items:center;gap:6px;font-style:normal;font-size:.74rem;font-weight:700;margin:0 0 4px;letter-spacing:.05em}
 .sub>em::before{content:"";width:4px;height:12px;background:currentColor}
@@ -374,7 +380,7 @@ h1{font-size:1.9rem}
     </section>
     <section id="resultSec" class="hidden">
       <h2>読み取り結果</h2>
-      <div id="preview"><img id="pv1" alt="切り抜いた刻印"><img id="pv2" alt="凹凸強調"></div>
+      <div id="preview"><img id="pv1" alt="切り抜いた刻印" data-zoom="1"><img id="pv2" alt="凹凸強調" data-zoom="1"><small class="muted">写真をタップすると大きく見られます</small></div>
       <div id="status"></div>
       <div id="readout"></div>
       <div id="cands"></div>
@@ -387,6 +393,7 @@ h1{font-size:1.9rem}
   </div>
 
   <div id="listView" class="hidden"></div>
+  <div id="lb" class="hidden"><div class="lbbar"><button type="button" data-act="lbzoom">拡大 ×<b id="lbz">1</b></button><button type="button" data-act="lbclose">閉じる ✕</button></div><div class="lbwrap"><img id="lbImg" alt="拡大"></div></div>
   <div id="armView" class="hidden"></div>
   <div id="settingsView" class="hidden"></div>
 </main>
@@ -472,7 +479,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/24-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/24-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1048,7 +1055,11 @@ function renderQueue() {
       (q.already ? `<div class="qw">⚠ この号機は「${esc(q.purpose)}」記録済み（${esc(q.already)}）</div>` : "");
     const lightW = q.light && q.state !== "確定" ? `<div class="qw">☀ ${esc(q.light)}</div>` : "";
     const chk = qCheckable(q) ? `<label class="qc"><input type="checkbox" data-qsel="${esc(q.id)}" ${sel.includes(q) ? "checked" : ""} aria-label="一括登録に入れる"></label>` : "";
-    return `<div class="qi ${q.rec ? "recd" : ""}">${chk}<div class="qt" ${thumb}></div><div class="qb">
+    // 読めなかった・候補から選ぶ時は、刻印を大きく見せる（切り出し＋凹凸強調、無ければ写真全体）。タップで拡大
+    const need = ["候補", "刻印なし", "失敗"].includes(q.state);
+    const bigImgs = need ? (q.box && q.thumb ? [q.thumb, q.enh].filter(Boolean) : [q.full || q.thumb].filter(Boolean)) : [];
+    const big = bigImgs.length ? `<div class="qbig">${bigImgs.map(u => `<img src="${u}" data-zoom="1" alt="刻印">`).join("")}<small class="muted">タップで拡大</small></div>` : "";
+    return `<div class="qi ${q.rec ? "recd" : ""} ${big ? "need" : ""}">${chk}${big ? "" : `<div class="qt" ${thumb}></div>`}<div class="qb">${big}
       <div class="qs ${lb[0]}">${lb[0] === "wait" ? '<span class="spin"></span>' : ""}${esc(lb[1])}${q.purpose ? "　" + esc(q.purpose) : ""}</div>
       <div class="qr">${esc(arm)}</div>${shipQ}${q.shotAt ? `<div class="muted" style="font-size:.72rem">📷 撮影 ${esc(q.shotAt.slice(5))}${q.shotAt.slice(0, 10) !== boot.today ? "（この日時で記録）" : ""}</div>` : ""}${warn}${lightW}${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
       <div class="qa">${acts}</div></div>
@@ -1279,7 +1290,10 @@ async function queueAddFile(f) {
   try { canvas = await fullCanvas(await loadImg(URL.createObjectURL(f))); } catch (e) { toast("写真を開けませんでした"); return; }
   const small = document.createElement("canvas"); small.width = 224; small.height = Math.round(224 * canvas.height / canvas.width);
   small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
-  qUpdate({id: tmp, state: "送信中", purpose, thumb: small.toDataURL("image/jpeg", .7)});
+  // 読めなかった時に見て確かめる用の大きめの写真
+  const mid = document.createElement("canvas"), mw = Math.min(1000, canvas.width); mid.width = mw; mid.height = Math.round(mw * canvas.height / canvas.width);
+  mid.getContext("2d").drawImage(canvas, 0, 0, mid.width, mid.height); const midUrl = mid.toDataURL("image/jpeg", .75);
+  qUpdate({id: tmp, state: "送信中", purpose, thumb: small.toDataURL("image/jpeg", .7), full: midUrl});
   try {
     const v = await run("apiQueueAdd", await b64(await toBlob(canvas, 0.85)), purpose, shotAt);
     qLocal[v.id] = canvas;
@@ -1306,7 +1320,8 @@ async function qAfter(q) {
   try { cv = straightCrop(src, q.box); } catch (e) { cv = cropByBox(src, q.box); }
   q.thumb = cv.toDataURL("image/jpeg", .7); renderQueue();
   const imgs = await prepare(cv);
-  q.light = lightAdvice(imgs.light); if (q.light) renderQueue();
+  q.enh = URL.createObjectURL(imgs.enh);
+  q.light = lightAdvice(imgs.light); renderQueue();
   try {
     const v = await run("apiQueueCrop", q.id, await b64(imgs.orig), q.state === "候補" ? await b64(imgs.enh) : "", imgs.light.sharp);
     qUpdate(v);
@@ -1358,8 +1373,13 @@ $("busyCancel").onclick = () => { readToken++; cancelRead(); busy(false); };
 $("vfShot").onclick = () => { const c = shotFromViewfinder(); closeViewfinder(); if (c) readCanvas(c); };
 ["pick"].forEach(id => $(id).onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; const c = await cropFromFile(f); if (c) readCanvas(c); });
 
+let lbZoom = 1;
 document.addEventListener("click", async e => {
+  const z = e.target.closest && e.target.closest("[data-zoom]");
+  if (z && z.src) { lbZoom = 1; $("lbImg").src = z.src; $("lbImg").style.width = "100%"; $("lbz").textContent = "1"; $("lb").classList.remove("hidden"); return; }
   const b = e.target.closest("[data-act]"); if (!b) return;
+  if (b.dataset.act === "lbclose") { $("lb").classList.add("hidden"); $("lbImg").src = ""; return; }
+  if (b.dataset.act === "lbzoom") { lbZoom = lbZoom >= 3 ? 1 : lbZoom + 1; $("lbImg").style.width = lbZoom * 100 + "%"; $("lbz").textContent = lbZoom; return; }
   const act = b.dataset.act;
   if (act === "qopen") { const q = queue.find(x => x.id === b.dataset.id); if (!q) return; run("apiQueueDone", q.id).catch(() => {}); q.seen = true; renderQueue(); openArm(q.key, false, q.purpose); photoId = q.cropId || ""; return; }
   if (act === "qpick") {
