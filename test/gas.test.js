@@ -178,7 +178,7 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
   click('[data-act="nav"][data-v="scan"]'); await wait(10);
   click('[data-act="purpose"][data-v="出荷"]');
   t("撮影の目的：選べる", () => assert.ok(w.document.querySelector('[data-act="purpose"][data-v="出荷"]').classList.contains("on")));
-  t("起動：未チェックバッジ", () => assert.strictEqual(w.document.getElementById("todoBadge").textContent, "1")); // 起動後に一覧を先読みして最新の数に更新;
+  t("一覧タブに赤い数字は出さない", () => assert.ok(!w.document.getElementById("todoBadge")));
   click('[data-act="nav"][data-v="list"]'); await wait(30);
   t("一覧：出荷日と未チェック", () => {
     assert.ok(w.document.querySelector(".days .on").textContent.includes("10/7"));

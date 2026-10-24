@@ -358,7 +358,7 @@ h1{font-size:1.9rem}
   <div class="tracks"></div>
   <nav id="nav">
     <button type="button" data-act="nav" data-v="scan" class="on">読取</button>
-    <button type="button" data-act="nav" data-v="list">一覧<span id="todoBadge" class="badge hidden"></span></button>
+    <button type="button" data-act="nav" data-v="list">一覧</button>
     <button type="button" data-act="nav" data-v="settings">設定</button>
   </nav>
 
@@ -483,7 +483,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/24-7"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/24-8"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -515,8 +515,6 @@ function renderHead() {
   } else $("paintNow").classList.add("hidden");  // 日付が変わって前日の分が残らないように
   renderMe();
   $("today").textContent = boot.today ? md(boot.today) + "(" + wd(boot.today) + ")" : "";
-  const todo = boot.days.filter(d => d.date >= boot.today).slice(0, 4).reduce((s, d) => s + d.todo, 0);
-  $("todoBadge").textContent = todo; $("todoBadge").classList.toggle("hidden", !todo);
 }
 
 /* ================= 一覧 ================= */
