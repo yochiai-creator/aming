@@ -483,7 +483,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/24-6"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/24-7"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -607,7 +607,9 @@ function drawList(keep) {
   const el = $("listView"), days = listData.days.length ? listData.days : boot.days;
   if (!day || !days.some(d => d.date === day)) day = (days[0] || {}).date || boot.today;
   const y = window.scrollY, open = keep ? [...el.querySelectorAll("details.ud[open]")].map(d => d.dataset.d) : [];
-  el.innerHTML = modeBar() + `<div class="days">${days.map(d => `<button type="button" data-act="day" data-d="${d.date}" class="${d.date === day ? "on" : ""} ${d.todo ? "has-todo" : ""}">${md(d.date)}(${wd(d.date)})<small>${d.todo ? "未" + d.todo + " / " : ""}${d.total}本</small></button>`).join("")}</div>
+  // 日付の下の「未N」＝その出荷日の未塗装の本数（10/24 ユーザー）
+  const unp = {}; listData.rows.forEach(a => { if (!isPainted(a)) unp[a.ship] = (unp[a.ship] || 0) + 1; });
+  el.innerHTML = modeBar() + `<div class="days">${days.map(d => `<button type="button" data-act="day" data-d="${d.date}" class="${d.date === day ? "on" : ""} ${unp[d.date] ? "has-todo" : ""}">${md(d.date)}(${wd(d.date)})<small>${unp[d.date] ? "未" + unp[d.date] + " / " : ""}${d.total}本</small></button>`).join("")}</div>
     <section><h2>${esc(md(day))}(${esc(wd(day))}) 出荷分</h2><div id="dayList"></div></section>
     <section id="uncheckedSec" class="warnbox hidden"></section>`;
   listRows = listData.rows.filter(a => a.ship === day); renderDayList();
