@@ -483,7 +483,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/24-5"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/24-6"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -549,11 +549,15 @@ function tileHtml(a, bucket) {
   const st = stOf(a), cls = STAGE_CLS[st] === "bad" ? "bad" : bucket, lab = cls === "bad" ? (TILE_LABEL[st] || st) : "";
   return `<button type="button" class="tile ${cls}" data-act="arm" data-k="${esc(a.key)}"><b>${esc(a.g)}</b>${lab || a.by ? `<small>${esc([lab, a.by].filter(Boolean).join("・"))}</small>` : ""}${planHtml(a)}</button>`;
 }
+// 図番のまとまりの並び：未塗装が残っている図番 → 出荷先 東条→本間→あゆみ→正和→正和(13ton)→その他（10/24 ユーザー）
+const TO_ORDER = ["東条", "本間", "あゆみ", "正和", "正和(13ton)"];
+const toRank = to => { const i = TO_ORDER.indexOf(String(to || "").trim()); return i < 0 ? TO_ORDER.length : i; };
+const grpCmp = (x, y) => (x.some(a => !isPainted(a)) ? 0 : 1) - (y.some(a => !isPainted(a)) ? 0 : 1) || toRank(x[0].to) - toRank(y[0].to);
 // 図番（＋出荷先）ごとにまとめて、号機をタイルで並べる
 function armGroups(rows, withShip) {
   const g = new Map();
   rows.forEach(a => { const k = a.z + "|" + (a.to || "") + "|" + (withShip ? a.ship : ""); if (!g.has(k)) g.set(k, []); g.get(k).push(a); });
-  return [...g.values()].map(list => {
+  return [...g.values()].sort(grpCmp).map(list => {
     const a0 = list[0], ok = list.filter(isFixed).length;
     list.sort((x, y) => String(x.g).localeCompare(String(y.g), "ja", {numeric: true}));
     return `<div class="grp"><div class="gh"><span class="gz">${esc(a0.z)}</span><span class="gc">${ok}/${list.length}</span>
