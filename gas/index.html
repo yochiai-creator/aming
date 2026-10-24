@@ -167,6 +167,9 @@ ul.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--edge);margi
 .lmode{display:flex;gap:6px;margin:0 0 10px}.lmode button{flex:1;padding:10px 6px;background:#0A0D0F;border:1px solid var(--edge-hi);color:var(--sub);font-weight:700}
 .lmode button.on{background:var(--accent);color:#fff;border-color:var(--accent)}.lmode small{margin-left:6px;font-family:"Share Tech Mono",monospace}
 details.sd summary em.late{font-style:normal;color:var(--ng);font-size:.75rem;margin-left:6px}
+.shipbig{margin-top:6px;font-size:1.05rem;font-weight:700}.shipq{font-size:.82rem;margin-top:2px}
+.ship1{color:var(--ng)}.ship3{color:#FFB020}.ship9{color:var(--cyan)}.ship0{color:var(--sub)}
+.shipc{display:block;font-size:.7rem;color:var(--sub)}
 .sub{margin-top:8px}
 .sub>em{display:flex;align-items:center;gap:6px;font-style:normal;font-size:.74rem;font-weight:700;margin:0 0 4px;letter-spacing:.05em}
 .sub>em::before{content:"";width:4px;height:12px;background:currentColor}
@@ -469,7 +472,7 @@ let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastR
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/22-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/24-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -517,6 +520,14 @@ function planHtml(a) {
   const p = !isPainted(a) ? ["塗", a.paintPlan] : !isFixed(a) ? ["修", a.fixPlan] : null;
   if (!p || !p[1]) return "";
   return `<i class="plan ${p[1] < boot.today ? "late" : ""}">${p[0]}${esc(md(p[1]))}</i>`;
+}
+// 出荷日の表示：「出荷 10/28(水) あと4日」。近いほど目立たせる（今日・明日＝赤、3日以内＝オレンジ、過ぎ＝灰）
+function shipLabel(d) {
+  if (!d) return '<span class="ship0">出荷日 未定</span>';
+  const n = Math.round((new Date(d.replace(/-/g, "/")) - new Date(boot.today.replace(/-/g, "/"))) / 864e5);
+  const rel = n < 0 ? "出荷日過ぎ" : n === 0 ? "今日出荷" : n === 1 ? "明日出荷" : `あと${n}日`;
+  const cls = n < 0 ? "ship0" : n <= 1 ? "ship1" : n <= 3 ? "ship3" : "ship9";
+  return `<span class="${cls}">出荷 ${esc(md(d))}(${esc(wd(d))})　<b>${rel}</b></span>`;
 }
 function stOf(a) { return a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未"); }
 // 一覧で赤字にする出荷先（ユーザー 10/12）
@@ -647,8 +658,10 @@ function renderArm(keep) {
   <div class="row" style="margin:0 0 10px"><button type="button" class="btn sec mini" data-act="back">← 戻る</button></div>
   <section>
     <div class="az" style="font-size:1.3rem">${esc(a.z)}<b>${esc(a.g)}</b>号機${stBadge(a)}</div>
+    <div class="shipbig">${shipLabel(a.ship)}</div>
     <dl class="kv" style="margin-top:8px">
       <dt>機種</dt><dd>${esc(a.kishu)}　${esc(a.spec)}</dd>
+      <dt>出荷日</dt><dd>${esc(a.ship || "-")}</dd>
       <dt>出荷先</dt><dd>${esc(a.to || "-")}</dd>
       <dt>${a.tele && !a.kenki ? "テレスコ号機" : "建機号機"}</dt><dd class="mono">${esc(a.kenki || (a.tele ? a.tele + "号機" : "-"))}</dd>
       ${a.teleSet && a.teleSet.length ? `<dt>セット</dt><dd>${a.teleSet.map(t => `<button type="button" class="link" data-act="arm" data-k="${esc(t.key)}">${esc(t.z)}（${esc(t.spec)}）</button>`).join("<br>")}</dd>` : ""}
@@ -1027,16 +1040,17 @@ function renderQueue() {
     if (q.state === "確定" && q.rec) acts = `<span class="qdone">✔ ${esc(q.purpose)} 記録済み</span> <button type="button" class="link" data-act="qunrec" data-id="${esc(q.id)}">取消</button> <button type="button" class="link" data-act="qopen" data-id="${esc(q.id)}">詳細</button>`;
     else if (q.state === "確定" && STEP_PURPOSE(q.purpose)) acts = `<button type="button" class="btn go mini" data-act="qrec" data-id="${esc(q.id)}">${esc(q.purpose)}を記録</button> <button type="button" class="link" data-act="qopen" data-id="${esc(q.id)}">詳細</button>`;
     else if (q.state === "確定") acts = `<button type="button" class="btn go mini" data-act="qopen" data-id="${esc(q.id)}">タップを記録</button>`;
-    else if (q.state === "候補") acts = (q.cands || []).slice(0, 3).map(a => `<button type="button" class="arm" data-act="qpick" data-id="${esc(q.id)}" data-k="${esc(a.key)}"><span class="az">${esc(a.z)}<b>${esc(a.g)}</b></span></button>`).join("");
+    else if (q.state === "候補") acts = (q.cands || []).slice(0, 3).map(a => `<button type="button" class="arm" data-act="qpick" data-id="${esc(q.id)}" data-k="${esc(a.key)}"><span class="az">${esc(a.z)}<b>${esc(a.g)}</b></span>${a.ship ? `<small class="shipc">出荷 ${esc(md(a.ship))}(${esc(wd(a.ship))})</small>` : ""}</button>`).join("");
     else if (q.state === "刻印なし" || q.state === "失敗") acts = `<button type="button" class="btn sec mini" data-act="qretry" data-id="${esc(q.id)}">もう一度読む</button>`;
     const arm = q.state === "確定" && q.cands && q.cands[0] ? `${q.cands[0].z} ${q.cands[0].g}号機` : (q.read || "");
+    const shipQ = q.state === "確定" && q.cands && q.cands[0] && q.cands[0].ship ? `<div class="shipq">${shipLabel(q.cands[0].ship)}${q.cands[0].to ? "　" + esc(q.cands[0].to) : ""}</div>` : "";
     const warn = q.state !== "確定" || q.rec ? "" : (keyCount[q.key] > 1 ? `<div class="qw">⚠ 同じ号機の写真がほかにもあります（読み違い？撮り直し？）</div>` : "") +
       (q.already ? `<div class="qw">⚠ この号機は「${esc(q.purpose)}」記録済み（${esc(q.already)}）</div>` : "");
     const lightW = q.light && q.state !== "確定" ? `<div class="qw">☀ ${esc(q.light)}</div>` : "";
     const chk = qCheckable(q) ? `<label class="qc"><input type="checkbox" data-qsel="${esc(q.id)}" ${sel.includes(q) ? "checked" : ""} aria-label="一括登録に入れる"></label>` : "";
     return `<div class="qi ${q.rec ? "recd" : ""}">${chk}<div class="qt" ${thumb}></div><div class="qb">
       <div class="qs ${lb[0]}">${lb[0] === "wait" ? '<span class="spin"></span>' : ""}${esc(lb[1])}${q.purpose ? "　" + esc(q.purpose) : ""}</div>
-      <div class="qr">${esc(arm)}</div>${q.shotAt ? `<div class="muted" style="font-size:.72rem">📷 撮影 ${esc(q.shotAt.slice(5))}${q.shotAt.slice(0, 10) !== boot.today ? "（この日時で記録）" : ""}</div>` : ""}${warn}${lightW}${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
+      <div class="qr">${esc(arm)}</div>${shipQ}${q.shotAt ? `<div class="muted" style="font-size:.72rem">📷 撮影 ${esc(q.shotAt.slice(5))}${q.shotAt.slice(0, 10) !== boot.today ? "（この日時で記録）" : ""}</div>` : ""}${warn}${lightW}${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
       <div class="qa">${acts}</div></div>
       ${["送信中", "処理中"].includes(q.state) ? "" : `<button type="button" class="x" data-act="qdone" data-id="${esc(q.id)}" aria-label="一覧から消す">×</button>`}</div>`;
   }).join("");
