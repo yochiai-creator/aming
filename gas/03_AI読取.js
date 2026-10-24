@@ -93,8 +93,8 @@ function matchRead_(r1, last) {
   const taps = latestTaps_(loadTaps_()), st = liveSteps_();
   const arms = loadArms_().map(a => ({z: a['図番'], g: a['号機'], ship: a['出荷日'], done: !!taps[a['キー']], src: a}));
   const top = rankArms_(fz.z, g, arms, {today: today_(), last: last, learned: learned_().pairs}).slice(0, 5);
-  // 完全一致なら隣の号機があっても確定（記録画面で号機を確認できる）
-  const sure = isSure_(top) || (top.length > 0 && isExact_(fz.z, g, top[0].arm));
+  // 完全一致なら隣の号機があっても確定（記録画面で号機を確認できる）。よくある読み間違いだけで2位と差があっても確定（違えば画面の「違う？」で選び直せる）
+  const sure = isSure_(top) || (top.length > 0 && isExact_(fz.z, g, top[0].arm)) || isLikely_(top, today_());
   return {fz: fz, g: g, top: top, sure: sure, taps: taps, st: st,
     cands: top.map(c => { const v = armView_(c.arm.src, taps[c.arm.src['キー']], st[c.arm.src['キー']]); v.cost = Math.round(c.cost * 100) / 100; v.seq = c.seq; return v; })};
 }

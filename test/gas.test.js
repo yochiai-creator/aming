@@ -40,6 +40,21 @@ t("自動学習：読み間違いを集めて照合に効かせる", () => {
   assert.strictEqual(run(`rankArms_('YY12B00902F1G2', '2724', ${arms}, {learned: {'7>0': 2}})`)[0].arm.g, "2024");
   assert.ok(!run("isSure_")(run(`rankArms_('YY12B00902F1G2', '2724', ${arms}, {learned: {'7>0': 2}})`))); // 学習だけで自動確定はしない
 });
+t("精度改善：G抜け・余分な1・出荷済みは下げる・よくある間違いだけなら確定", () => {
+  assert.strictEqual(run("fitZuban_('YY112B20269F1').z"), "YY12B20269F1");
+  assert.strictEqual(run("zubanCost_")("YY12B00902F1", "YY12B00902F1G2"), 0.3);
+  const arms = `[{z:'YY12B00902F1G2', g:'2058', ship:'2026/10/28'}, {z:'YY12B00902F1G2', g:'2068', ship:'2026/10/30'}, {z:'YY12B00902F1G2', g:'2008', ship:'2026/10/01'}]`;
+  const L = "{'2>0': 17, '5>6': 5}";
+  // 2258 → 2058 / 2068 が近すぎる（0.22 と 0.45）ので確定しない
+  assert.ok(!run("isLikely_")(run(`rankArms_('YY12B00902F1G2', '2258', ${arms}, {today:'2026/10/23', learned:${L}})`), "2026/10/23"));
+  // G抜け＋号機そのまま：2位と差があるので確定
+  const r = run(`rankArms_('YY12B00902F1', '2046', [{z:'YY12B00902F1G2', g:'2046', ship:'2026/10/26'}, {z:'YY12B00902F1G2', g:'2045', ship:'2026/10/26'}], {today:'2026/10/23', learned:${L}})`);
+  assert.strictEqual(r[0].arm.g, "2046"); assert.ok(run("isLikely_")(r, "2026/10/23"));
+  // 出荷済み（予定日を3日以上過ぎた）アームは確定しない
+  assert.ok(!run("isLikely_")([{arm: {ship: '2026/10/01'}, cost: 0.2}], "2026/10/23"));
+  // ずれが大きいと確定しない
+  assert.ok(!run("isLikely_")([{arm: {ship: '2026/10/30'}, cost: 0.8}], "2026/10/23"));
+});
 t("rankArms 続き番号優先", () => {
   const r = run(`rankArms_('LS12B10010F1', '4?', [{z:'LS12B10010F1', g:'40'}, {z:'LS12B10010F1', g:'47'}], {last:{z:'LS12B10010F1', g:'39'}})`);
   assert.strictEqual(r[0].arm.g, "40"); assert.ok(r[0].seq);
@@ -153,6 +168,8 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
   t("読取画面で確認者を選べる", () => assert.ok(w.document.querySelector('#meSeg [data-act="me"][data-n="田中"]')));
   click('[data-act="nav"][data-v="scan"]'); await wait(10);
   t("撮影の目的：撮るボタンに目的が出る", () => assert.ok(w.document.getElementById("shootBtn").textContent.includes("【")));
+  click('[data-act="qalt"][data-id="q1"]'); await wait(10);
+  t("撮るだけ：特定が違う？で候補を開ける", () => assert.ok(w.document.querySelector(".qalt").textContent.includes("ほかの候補")));
   click('[data-act="qopen"][data-id="q1"]'); await wait(40);
   t("撮るだけ：確定→記録を開く（目的バナー）", () => { assert.ok(calls.includes("apiArm")); assert.ok(w.document.querySelector(".goal").textContent.includes("塗装完了")); });
   click('[data-act="nav"][data-v="scan"]'); await wait(10);

@@ -324,6 +324,8 @@ h1{font-size:1.9rem}
 .qi .qr{font-family:"Share Tech Mono",monospace;font-size:.85rem;color:var(--stamp);word-break:break-all}
 .qi .qa{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .qi .qa .arm{border:1px solid var(--edge);padding:6px 8px}
+.altrow{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;margin-top:6px;font-size:.8rem}
+.qi .qalt{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding:6px;border:1px dashed var(--edge);border-radius:6px}
 .qi .qc{flex:0 0 auto;display:flex;align-items:center;align-self:center;padding:4px}
 .qi .qc input,.qsel input{width:22px;height:22px;accent-color:var(--accent)}
 #bulkBtn small{display:block;font-size:.72rem;font-weight:400;opacity:.8;margin-top:2px}
@@ -464,6 +466,7 @@ function needMe() {
 // まとめて記録の対象：特定済み・未記録・塗装完了/出荷・記録済みの号機は除く・同じ号機は1枚だけ
 // 一括登録のチェック：qSel[id] に手で付け外しした分を覚える。触っていない行は「まとめて記録の対象」なら最初からチェック
 const qSel = {};
+const qAlt = {}; // 「違う？」で候補を開いている行
 const qCheckable = q => q.state === "確定" && !q.rec && STEP_PURPOSE(q.purpose);
 function qChecked(live) {
   const def = new Set(recordable(live).map(q => q.id));
@@ -476,10 +479,11 @@ function recordable(live) {
 const STEP_PURPOSE = p => p === "塗装完了" || p === "出荷";
 let stepSaving = false;
 let view = "scan", day = "", armData = null, lastArm = null, photoId = "", lastRead = "", lastSharp = null;
+let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの候補（詳細で「違う？」から選び直す）
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/24-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/24-3"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -631,6 +635,7 @@ function quickArm(key) {
 async function openArm(key, fromScan, qPurpose) {
   show("arm");
   scanPurpose = qPurpose || (fromScan ? purpose : "");
+  armFromScan = !!fromScan;
   if (!fromScan) photoId = "";
   const token = ++armToken, quick = armCache.get(key) || quickArm(key);
   if (quick) { armData = Object.assign({}, quick, {_partial: true}); renderArm(); }
@@ -666,6 +671,7 @@ function renderArm(keep) {
   <section>
     <div class="az" style="font-size:1.3rem">${esc(a.z)}<b>${esc(a.g)}</b>号機${stBadge(a)}</div>
     <div class="shipbig">${shipLabel(a.ship)}</div>
+    ${armFromScan && photoId && scanAlt.length ? `<div class="altrow"><span class="muted">AIの特定が違う？</span>${scanAlt.map(c => `<button type="button" class="link" data-act="rearm" data-k="${esc(c.key)}">${esc(c.z)} ${esc(c.g)}号機</button>`).join("")}</div>` : ""}
     <dl class="kv" style="margin-top:8px">
       <dt>機種</dt><dd>${esc(a.kishu)}　${esc(a.spec)}</dd>
       <dt>出荷日</dt><dd>${esc(a.ship || "-")}</dd>
@@ -1011,12 +1017,17 @@ async function readCanvas(cv) {
     const z = r.read.zuban.split("").map((c, i) => r.read.fixed.includes(i) ? `<span class="fix">${esc(c)}</span>` : esc(c)).join("") || "????";
     $("readout").innerHTML = `<div class="plate">${z}<br>◇${esc(r.read.seizo || "????")}-${esc(r.read.goki || "?")} ${esc(r.read.kensa || "")}</div>`;
     const p = r.pick;
-    if (p && p.index >= 0 && r.sure) { toast("一致：" + r.cands[0].z + " " + r.cands[0].g + "号機"); openArm(r.cands[0].key, true); return; }
     let head = "";
     if (p && p.index >= 0) head = `<p>AIの判定：<b>${"ABCDE"[p.index]}</b>（確信度 ${esc(p.confidence)}）${esc(p.reason || "")}</p>`;
     else if (p) head = `<p>候補に一致するものがない、とAIは判定しました。${esc(p.reason || "")}</p>`;
     $("cands").innerHTML = head + '<p class="muted">タップして記録画面を開く</p>' + r.cands.map((a, i) =>
       armBtn(a, (a.seq ? '<span class="chip">前回の続き番号</span>' : ""), p && p.index === i ? "best" : "").replace('class="az">', `class="az">${"ABCDE"[i]}: `)).join("");
+    // 確定なら記録画面を開く。違っていたら「← 戻る」でこの候補から選び直せる（写真のひも付けも付け替わる）
+    if (p && p.index >= 0 && r.sure) {
+      $("cands").innerHTML = '<p class="muted">自動で特定しました。違っていたら下から選び直してください</p>' + $("cands").innerHTML.replace(/<p class="muted">タップして記録画面を開く<\/p>/, "");
+      scanAlt = r.cands.slice(1, 4); toast("一致：" + r.cands[0].z + " " + r.cands[0].g + "号機"); openArm(r.cands[0].key, true); return;
+    }
+    scanAlt = [];
   } catch (e) {
     $("status").textContent = "読み取れませんでした：" + errMsg(e) + "　下の「探す」で手入力もできます。";
   } finally { setBusy(false); busy(false); }
@@ -1047,10 +1058,14 @@ function renderQueue() {
     if (q.state === "確定" && q.rec) acts = `<span class="qdone">✔ ${esc(q.purpose)} 記録済み</span> <button type="button" class="link" data-act="qunrec" data-id="${esc(q.id)}">取消</button> <button type="button" class="link" data-act="qopen" data-id="${esc(q.id)}">詳細</button>`;
     else if (q.state === "確定" && STEP_PURPOSE(q.purpose)) acts = `<button type="button" class="btn go mini" data-act="qrec" data-id="${esc(q.id)}">${esc(q.purpose)}を記録</button> <button type="button" class="link" data-act="qopen" data-id="${esc(q.id)}">詳細</button>`;
     else if (q.state === "確定") acts = `<button type="button" class="btn go mini" data-act="qopen" data-id="${esc(q.id)}">タップを記録</button>`;
-    else if (q.state === "候補") acts = (q.cands || []).slice(0, 3).map(a => `<button type="button" class="arm" data-act="qpick" data-id="${esc(q.id)}" data-k="${esc(a.key)}"><span class="az">${esc(a.z)}<b>${esc(a.g)}</b></span>${a.ship ? `<small class="shipc">出荷 ${esc(md(a.ship))}(${esc(wd(a.ship))})</small>` : ""}</button>`).join("");
+    else if (q.state === "候補") acts = qPickBtns(q, 3);
+    // AIの特定が違っていたら、記録する前なら候補から選び直せる（写真のひも付けも付け替わる）
+    if (q.state === "確定" && !q.rec) acts += ` <button type="button" class="link" data-act="qalt" data-id="${esc(q.id)}">${qAlt[q.id] ? "閉じる" : "違う？"}</button>` +
+      (qAlt[q.id] ? `<div class="qalt">${qPickBtns(q, 5) || '<span class="muted">ほかの候補がありません。×で消して撮り直してください</span>'}</div>` : "");
     else if (q.state === "刻印なし" || q.state === "失敗") acts = `<button type="button" class="btn sec mini" data-act="qretry" data-id="${esc(q.id)}">もう一度読む</button>`;
-    const arm = q.state === "確定" && q.cands && q.cands[0] ? `${q.cands[0].z} ${q.cands[0].g}号機` : (q.read || "");
-    const shipQ = q.state === "確定" && q.cands && q.cands[0] && q.cands[0].ship ? `<div class="shipq">${shipLabel(q.cands[0].ship)}${q.cands[0].to ? "　" + esc(q.cands[0].to) : ""}</div>` : "";
+    const ca = qArm(q);
+    const arm = q.state === "確定" && ca ? `${ca.z} ${ca.g}号機` : (q.read || "");
+    const shipQ = q.state === "確定" && ca && ca.ship ? `<div class="shipq">${shipLabel(ca.ship)}${ca.to ? "　" + esc(ca.to) : ""}</div>` : "";
     const warn = q.state !== "確定" || q.rec ? "" : (keyCount[q.key] > 1 ? `<div class="qw">⚠ 同じ号機の写真がほかにもあります（読み違い？撮り直し？）</div>` : "") +
       (q.already ? `<div class="qw">⚠ この号機は「${esc(q.purpose)}」記録済み（${esc(q.already)}）</div>` : "");
     const lightW = q.light && q.state !== "確定" ? `<div class="qw">☀ ${esc(q.light)}</div>` : "";
@@ -1066,8 +1081,14 @@ function renderQueue() {
       ${["送信中", "処理中"].includes(q.state) ? "" : `<button type="button" class="x" data-act="qdone" data-id="${esc(q.id)}" aria-label="一覧から消す">×</button>`}</div>`;
   }).join("");
 }
+// 特定したアーム（候補から選び直した時は1位でないことがある）
+function qArm(q) { return (q.cands || []).find(a => a.key === q.key) || (q.key ? null : (q.cands || [])[0]); }
+function qPickBtns(q, n) {
+  return (q.cands || []).filter(a => a.key !== q.key).slice(0, n).map(a => `<button type="button" class="arm" data-act="qpick" data-id="${esc(q.id)}" data-k="${esc(a.key)}"><span class="az">${esc(a.z)}<b>${esc(a.g)}</b></span>${a.ship ? `<small class="shipc">出荷 ${esc(md(a.ship))}(${esc(wd(a.ship))})</small>` : ""}</button>`).join("");
+}
 function qNotify(q) {
-  if (q.state === "確定") toast(`✔ 特定：${q.cands && q.cands[0] ? q.cands[0].z + " " + q.cands[0].g + "号機" : q.key}`);
+  const ca = qArm(q);
+  if (q.state === "確定") toast(`✔ 特定：${ca ? ca.z + " " + ca.g + "号機" : q.key}`);
   else if (q.state === "候補") toast("要確認：候補から選んでください");
   else if (q.state === "刻印なし") toast("刻印が見つかりませんでした。撮り直すか「もう一度読む」");
   else if (q.state === "失敗") toast("読み取り失敗：" + (q.error || ""));
@@ -1382,8 +1403,9 @@ document.addEventListener("click", async e => {
   if (b.dataset.act === "lbzoom") { lbZoom = lbZoom >= 3 ? 1 : lbZoom + 1; $("lbImg").style.width = lbZoom * 100 + "%"; $("lbz").textContent = lbZoom; return; }
   const act = b.dataset.act;
   if (act === "qopen") { const q = queue.find(x => x.id === b.dataset.id); if (!q) return; run("apiQueueDone", q.id).catch(() => {}); q.seen = true; renderQueue(); openArm(q.key, false, q.purpose); photoId = q.cropId || ""; return; }
+  if (act === "qalt") { qAlt[b.dataset.id] = !qAlt[b.dataset.id]; renderQueue(); return; }
   if (act === "qpick") {
-    const q = queue.find(x => x.id === b.dataset.id); b.disabled = true;
+    const q = queue.find(x => x.id === b.dataset.id); b.disabled = true; delete qAlt[b.dataset.id];
     try {
       const v = await run("apiQueuePick", b.dataset.id, b.dataset.k); qUpdate(v);
       if (STEP_PURPOSE(v.purpose || (q && q.purpose))) return; // 塗装完了・出荷は一覧のまま「記録」ボタンへ
@@ -1426,6 +1448,7 @@ document.addEventListener("click", async e => {
   else if (act === "day") { day = b.dataset.d; renderList(true); }
   else if (act === "lf") { listFilter = b.dataset.f; ls.set("trace.listFilter", listFilter); renderDayList(); }
   else if (act === "arm") openArm(b.dataset.k, !!b.closest("#cands"));
+  else if (act === "rearm") { const cur = armData; scanAlt = scanAlt.filter(c => c.key !== b.dataset.k).concat(cur && cur.key ? [{key: cur.key, z: cur.z, g: cur.g}] : []); toast("写真を付け替えました"); openArm(b.dataset.k, true); }
   else if (act === "back") show(day ? "list" : "scan");
   else if (act === "res") { form.result = b.dataset.v; syncForm(); }
   else if (act === "person") { form.person = b.dataset.n; syncForm(); }

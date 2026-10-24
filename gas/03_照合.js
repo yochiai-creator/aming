@@ -26,7 +26,9 @@ function normKokuin_(s) { return String(s || '').toUpperCase().replace(/[ØΦθ�
 const TO_DIGIT = {O:'0',D:'0',Q:'0',I:'1',L:'1',T:'1',Z:'2',S:'5',B:'8',G:'6',A:'4'};
 const TO_ALPHA = {'0':'O','1':'I','2':'Z','5':'S','8':'B','6':'G','4':'A'};
 function fitZuban_(raw) {
-  const z = normKokuin_(raw);
+  let z = normKokuin_(raw);
+  // 「YY112B20269F1」のように 12B の前に数字が1つ多い読み → 余分な先頭の数字を落とす
+  if ((z.length === 13 || z.length === 15) && /^[A-Z?]{2}\d{3}B/.test(z)) z = z.slice(0, 2) + z.slice(3);
   const tpl = z.length === 14 ? 'AANNBNNNNNFNGN' : z.length === 12 ? 'AANNBNNNNNFN' : null;
   if (!tpl) return {z: z, fixed: []};
   let out = '';
@@ -52,9 +54,9 @@ function fitGoki_(raw) { return normKokuin_(raw).split('').map(c => /\d|\?/.test
  */
 function rankArms_(z, g, arms, opts) {
   opts = opts || {};
-  const last = opts.last, today = opts.today || '';
+  const last = opts.last, today = opts.today || '', d3 = today && shiftDate_(today, -3), d30 = today && shiftDate_(today, -30);
   const out = arms.map(a => {
-    let cost = (z ? wdist_(z, a.z, opts.learned) : 3) + (g ? wdist_(g, String(a.g), opts.learned) * 1.5 : 2);
+    let cost = (z ? zubanCost_(z, a.z, opts.learned) : 3) + (g ? wdist_(g, String(a.g), opts.learned) * 1.5 : 2);
     let seq = false;
     // 直前に記録したのと同じ図番の続き番号なら優先
     if (last && last.z === a.z && /^\d+$/.test(String(a.g)) && /^\d+$/.test(String(last.g))) {
@@ -62,13 +64,19 @@ function rankArms_(z, g, arms, opts) {
       if (dg >= 1 && dg <= 5) { cost = Math.max(0, cost - 0.3); seq = true; }
     }
     if (a.done) cost += 0.5;                              // チェック済み
-    if (today && a.ship && a.ship < shiftDate_(today, -30)) cost += 0.3; // 出荷から1か月以上前
+    // もう出荷した（予定日を過ぎた）アームは撮ることが少ない。1か月以上前はなおさら
+    if (today && a.ship && a.ship < d3) cost += a.ship < d30 ? 0.7 : 0.4;
     return {arm: a, cost: cost, seq: seq};
   });
   out.sort((x, y) => x.cost - y.cost);
   const seen = {}, uniq = [];
   out.forEach(s => { const k = s.arm.z + '#' + s.arm.g; if (!seen[k]) { seen[k] = 1; uniq.push(s); } });
   return uniq;
+}
+// 図番の距離。末尾の G1/G2 が読めずに抜けたときは小さい差にする（実績：YY12B00902F1G2 → YY12B00902F1）
+function zubanCost_(z, az, L) {
+  if (z.length === 12 && az.length === 14 && az.indexOf(z) === 0) return 0.3;
+  return wdist_(z, az, L);
 }
 // 1位が完全一致で、2位以下がはっきり離れていれば確認（2回目の読取）を省く
 function isSure_(top) { return !!top.length && top[0].cost === 0 && (!top[1] || top[1].cost >= 2); }
@@ -83,6 +91,13 @@ function photoScore_(r, a) {
   return s;
 }
 
+// 完全一致でなくても、ずれが小さく（よくある読み間違い程度）2位とはっきり差があり、出荷前のアームなら確定（10/24 実績33件で1位は全部正解）
+const LIKELY_MAX = 0.45, LIKELY_GAP = 0.4; // 号機の似た字1つ（0.35×1.5=0.53）は確定しない＝学習した間違いだけ通す
+function isLikely_(top, today) {
+  if (!top.length || top[0].cost > LIKELY_MAX) return false;
+  if (top[1] && top[1].cost - top[0].cost < LIKELY_GAP) return false;
+  return !today || !top[0].arm.ship || top[0].arm.ship >= shiftDate_(today, -3);
+}
 // AIが読んだ図番・号機が台帳のアームと1文字も違わず一致（? なし）なら確定扱い
 function isExact_(z, g, arm) { return !!arm && !!z && !!g && !/\?/.test(z + g) && z === arm.z && String(+g) === String(arm.g); }
 
@@ -141,4 +156,4 @@ function learnHint_(st) {
   return '\n' + lines.join('\n');
 }
 
-if (typeof module !== 'undefined') module.exports = {parseRead_, diffPairs_, learnStats_, learnHint_, wdist_, fitZuban_, fitGoki_, rankArms_, isSure_, isExact_, shiftDate_, normKokuin_};
+if (typeof module !== 'undefined') module.exports = {parseRead_, diffPairs_, learnStats_, learnHint_, wdist_, fitZuban_, fitGoki_, rankArms_, isSure_, isLikely_, isExact_, zubanCost_, shiftDate_, normKokuin_};
