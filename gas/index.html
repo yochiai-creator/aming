@@ -483,7 +483,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/24-8"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/25-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -801,13 +801,23 @@ async function refreshDays() { try { boot.days = await run("apiDays"); renderHea
 
 /* ================= 設定 ================= */
 function renderSettings() {
+  run("apiArmPdf").then(pdfInfo).catch(e => { const el = $("pdfInfo"); if (el) el.textContent = "読めませんでした：" + errMsg(e); });
   $("settingsView").innerHTML = `
   <p class="muted">担当者（塗装完了・修正者・測定者・確認者）は台帳スプレッドシートの「担当者」シートで。1行目が役割、その下に1行1人</p>
+  <section><h2>出荷明細PDF（直近1か月）</h2>
+    <p id="pdfInfo" class="muted">確認中…</p>
+    <div class="row"><button type="button" class="btn sec" data-act="pdfmake">今すぐ作り直す</button></div>
+    <p class="muted">生産管理Excelが届くと15分以内に自動で作ります（変更・新規の行は赤字）。保存先は「①出荷作業用」</p>
+  </section>
   <section><h2>CSV出力（タップ記録）</h2>
     <div class="row"><input type="text" id="csvFrom" placeholder="出荷日 から 例 2026/10/01"><input type="text" id="csvTo" placeholder="出荷日 まで"></div>
     <div class="row"><button type="button" class="btn sec" data-act="csv">ダウンロード</button></div>
   </section>
   <p class="muted" style="text-align:center">画面の版 ${APP_VER}</p>`;
+}
+function pdfInfo(p) {
+  const el = $("pdfInfo"); if (!el) return;
+  el.innerHTML = p ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">📄 ${esc(p.name)}</a><br><small>${esc(p.at)} 作成</small>` : "まだありません";
 }
 
 /* ================= 画像 ================= */
@@ -1456,6 +1466,12 @@ document.addEventListener("click", async e => {
   else if (act === "day") { day = b.dataset.d; renderList(true); }
   else if (act === "lf") { listFilter = b.dataset.f; ls.set("trace.listFilter", listFilter); renderDayList(); }
   else if (act === "arm") openArm(b.dataset.k, !!b.closest("#cands"));
+  else if (act === "pdfmake") {
+    b.disabled = true; $("pdfInfo").textContent = "作っています（1分ほど）…";
+    try { const r = await run("apiArmPdfMake"); pdfInfo(r.pdf); if (r.report && r.report.結果) toast(r.report.結果); }
+    catch (e) { $("pdfInfo").textContent = "作れませんでした：" + errMsg(e); }
+    finally { b.disabled = false; }
+  }
   else if (act === "rearm") { const cur = armData; scanAlt = scanAlt.filter(c => c.key !== b.dataset.k).concat(cur && cur.key ? [{key: cur.key, z: cur.z, g: cur.g}] : []); toast("写真を付け替えました"); openArm(b.dataset.k, true); }
   else if (act === "back") show(day ? "list" : "scan");
   else if (act === "res") { form.result = b.dataset.v; syncForm(); }

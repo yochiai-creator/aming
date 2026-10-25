@@ -16,7 +16,10 @@ const CLI_FUNCTIONS = {
   importForce: () => importLatest(true),
   apiDays: () => apiDays(),
   apiUnchecked: () => apiUnchecked().length,
-  apiSearch: q => apiSearch(q)
+  apiSearch: q => apiSearch(q),
+  // 出荷明細PDF（元の「アーム出荷明細pdf生成」の口と同じ。彦右衛門から呼ぶ）
+  main: () => armRun_(),
+  check: () => armCheck_()
 };
 function runFn_(fn, arg) {
   let body;
@@ -45,6 +48,10 @@ function setupTriggers() {
   ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'processQueue') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('processQueue').timeBased().everyMinutes(5).create();
   console.log('トリガー: processQueue 5分おき');
+  // 出荷明細PDF：元の.xlsmが変わった時だけ作り直す（10/25 pdf生成プロジェクトから移植）
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'checkAndGenerateArmPDF') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('checkAndGenerateArmPDF').timeBased().everyMinutes(POLL_INTERVAL_MINUTES).create();
+  console.log('トリガー: checkAndGenerateArmPDF %s分おき', POLL_INTERVAL_MINUTES);
   ScriptApp.getProjectTriggers().forEach(t => {
     if (plan.some(p => p[0] === t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
   });

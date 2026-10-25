@@ -126,6 +126,7 @@ const calls = [];
 const api = {
   apiBoot: () => ({today: "2026/10/07", me: "", people: ["落合", "田中"], hasKey: true, days: [{date: "2026/10/07", total: 3, todo: 2, ng: 0}, {date: "2026/10/08", total: 5, todo: 5, ng: 0}]}),
   apiDays: () => [{date: "2026/10/07", total: 3, todo: 1, ng: 0}],
+  apiArmPdf: () => ({name: "アーム出荷明細(10/24)_2026-10-25.pdf", url: "https://x", at: "2026/10/25 06:10"}),
   apiDay: () => [arm], apiUnchecked: () => [arm], apiList: () => ({days: [{date: "2026/10/07", total: 3, todo: 1, ng: 0}], rows: [arm], unchecked: [arm]}), apiSearch: () => [arm],
   apiArm: () => Object.assign({}, arm, {steps: [
     {name: "着工", date: "2026/09/24", step: "", changes: [], recs: []},
@@ -198,7 +199,8 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
   t("刻印写真：削除", () => { assert.ok(calls.includes("apiDeletePhoto")); assert.ok(!w.document.querySelector(".photos")); });
   t("工程ログ：日程変更の表示", () => assert.ok(w.document.querySelector(".steps .chg").textContent.includes("2026/09/30")));
   w.prompt = () => "メモ";
-  click('[data-act="nav"][data-v="settings"]'); await wait(10); click('[data-act="me"][data-n="田中"]'); await wait(10);
+  click('[data-act="nav"][data-v="settings"]'); await wait(10);
+  t("設定：出荷明細PDFのリンク", () => assert.ok(w.document.getElementById("pdfInfo").textContent.includes("アーム出荷明細"))); click('[data-act="me"][data-n="田中"]'); await wait(10);
   click('[data-act="nav"][data-v="list"]'); await wait(30); click('#dayList [data-act="arm"]'); await wait(30);
   click('[data-act="step"][data-s="塗装完了"]'); await wait(30);
   t("工程ログ：塗装完了を記録", () => { assert.ok(calls.includes("apiSaveStep")); assert.ok(w.document.querySelector(".steps .rec").textContent.includes("田中")); });
