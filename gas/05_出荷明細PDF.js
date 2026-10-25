@@ -62,6 +62,8 @@ var LAST_SOURCE_KEY   = 'ARM_LAST_SOURCE_SIGNATURE';
 var LAST_NOTIFY_KEY   = 'ARM_LAST_NOTIFY_DATE';
 
 var SNAPSHOT_FILE_NAME = 'arm_pdf_snapshot.json'; // 前回生成時点の内容（変更点の赤字判定用）
+var SNAPSHOT_BASE_NAME = 'arm_pdf_snapshot_base.json'; // aming：今の元ファイルで最初に作った時の比較の基準
+var SNAP_SRC_KEY = 'ARM_SNAPSHOT_SOURCE';             // aming：その基準を作った元ファイル
 
 // 同一出荷日内の出荷先の並び順。無い出荷先はスキップされるだけなので問題ない。
 // リストに無い出荷先は末尾に回す。
@@ -92,7 +94,7 @@ function checkAndGenerateArmPDF(){
     return;
   }
 
-  var sig = sourceSignature_(res.file);
+  var sig = pdfSignature_(res.file);
   var props = PropertiesService.getScriptProperties();
   if(props.getProperty(LAST_SOURCE_KEY) === sig){
     Logger.log('変更なし（' + res.file.getName() + '）のためスキップ');
@@ -153,8 +155,14 @@ function generateArmPDF_core_(src){
     if(rows.length===0){ Logger.log('該当データ0件のためPDFは作成しません'); return false; }
 
     // 前回生成時からの変更行を検出（赤字表示用）。図番＋号機で同一出荷物とみなす。
-    var prevSnapshot = loadSnapshot_();
+    // aming：同じ元ファイルで作り直す時（塗装済の○が増えた・今すぐ作る）は、最初に作った時と同じ基準と比べる＝赤字が消えない
+    var props = PropertiesService.getScriptProperties(), srcSig = sourceSignature_(src), sameSrc = props.getProperty(SNAP_SRC_KEY) === srcSig;
+    var prevSnapshot = sameSrc ? loadSnapshot_(SNAPSHOT_BASE_NAME) : loadSnapshot_();
+    if (!sameSrc) writeSnapshotFile_(SNAPSHOT_BASE_NAME, prevSnapshot);
     markChanges_(rows, prevSnapshot);
+    // aming：塗装済み（アプリに塗装完了・塗装後修正完了・出荷・タップの記録あり）は号機に○
+    var painted = armPaintedKeys_();
+    rows.forEach(function(x){ x.painted = !!painted[x.zu + '_' + x.go]; });
 
     rows.sort(function(a,b){ return (a.ship.getTime()-b.ship.getTime()) || (destRank_(a.dest)-destRank_(b.dest)); });
 
@@ -191,6 +199,7 @@ function generateArmPDF_core_(src){
     Logger.log('保存完了: '+pdfName+' / 件数='+rows.length+' / ページ='+pages.length+' / '+saved.getUrl());
 
     saveSnapshot_(rows, prevSnapshot); // 次回比較用に今回の内容を保存
+    props.setProperty(SNAP_SRC_KEY, srcSig);
     return true;
 
   } finally {
@@ -219,7 +228,8 @@ function buildHtml_(pages, rng){
   + 'tr.gtop td{border-top:1.6pt solid #d90000;}'               // グループ先頭の赤線
   + 'tr.r13 td{background:#ffff8c;}'                            // 13ton 黄色
   + '.c-insp{width:15mm}.c-kiki{width:21mm}.c-kishu{width:17mm}.c-zu{width:27mm}'
-  + '.c-go{width:9mm;text-align:center}.c-spec{width:44mm}'
+  + '.c-go{width:10.5mm;text-align:center;padding:1px 0}.c-spec{width:42.5mm}'
+  + '.maru{display:inline-block;border:0.9pt solid #000;border-radius:999px;padding:0 2px;line-height:1.1}'  // aming：塗装済み
   + '.c-ship{width:18mm;text-align:center}.c-info{width:19mm}.c-dest{width:22mm}'
   + '.d1{font-size:8pt;font-weight:bold}.dc{font-size:8pt;color:#666}'
   + '.dprev{font-size:6.5pt;white-space:nowrap;}'                // 出荷日変更時の「旧日付」注記（改行位置が乱れないよう別行・小さめに）
@@ -255,7 +265,7 @@ function buildHtml_(pages, rng){
           +'<td class="c-kiki">'+esc_(x.kiki)+'</td>'
           +'<td class="c-kishu">'+esc_(x.kishu)+'</td>'
           +'<td class="c-zu">'+esc_(x.zu)+'</td>'
-          +'<td class="c-go">'+esc_(x.go)+'</td>'
+          +'<td class="c-go">'+(x.painted ? '<span class="maru">'+esc_(x.go)+'</span>' : esc_(x.go))+'</td>'
           +'<td class="c-spec">'+esc_(x.spec)+'</td>'
           +'<td class="c-ship">'+dcell+'</td>'
           +'<td class="c-info">'+esc_(x.info)+'</td>'
@@ -274,7 +284,7 @@ function buildHtml_(pages, rng){
       tbodies+='<tbody class="grp">'+trs+'</tbody>';
     }
     body+='<div class="'+cls+'"><div class="title">アーム機種別出荷明細</div>'
-        +'<div class="sub">出荷日 '+esc_(rng)+'（直近1ヶ月）</div>'
+        +'<div class="sub">出荷日 '+esc_(rng)+'（直近1ヶ月）　号機の○＝塗装済み（aming の記録）</div>'
         +'<table>'+thead+tbodies+'</table></div>';
   }
   return '<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>'+css+'</style></head><body>'+body+'</body></html>';
@@ -309,12 +319,31 @@ function resolveSource_(){
   return { file: null, viaFallback: false };
 }
 
+/** aming：塗装済みのキー（図番_号機）。工程記録の塗装完了・塗装後修正完了・出荷か、タップの記録があるもの */
+function armPaintedKeys_(){
+  var out = {}, st = liveSteps_(), taps = latestTaps_(loadTaps_());
+  Object.keys(st).forEach(function(k){ var s = st[k]; if (s['塗装完了'] || s['塗装後修正完了'] || s['出荷']) out[k] = 1; });
+  Object.keys(taps).forEach(function(k){ out[k] = 1; });
+  return out;
+}
+/** aming：変更チェック用。元ファイル＋塗装済みの顔ぶれ（○が増えたら作り直す） */
+function pdfSignature_(f){
+  var keys = Object.keys(armPaintedKeys_()).sort().join(',');
+  var h = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, keys).map(function(b){ return ((b + 256) % 256).toString(16); }).join('');
+  return sourceSignature_(f) + '#' + h;
+}
+function writeSnapshotFile_(name, obj){
+  var folder = DriveApp.getFolderById(OUT_FOLDER_ID);
+  var ex = folder.getFilesByName(name);
+  while(ex.hasNext()) ex.next().setTrashed(true);
+  folder.createFile(name, JSON.stringify(obj), MimeType.PLAIN_TEXT);
+}
 function sourceSignature_(f){
   return f.getId() + '::' + f.getLastUpdated().getTime();
 }
 
 function saveSourceSignature_(f){
-  PropertiesService.getScriptProperties().setProperty(LAST_SOURCE_KEY, sourceSignature_(f));
+  PropertiesService.getScriptProperties().setProperty(LAST_SOURCE_KEY, pdfSignature_(f));
 }
 
 /** 対象ファイルが見つからない時、1日1回までメール通知する(トリガーが連続で無言失敗しないように) */
@@ -438,10 +467,7 @@ function saveSnapshot_(rows, prevMap){
       map[key] = { origShip:origShip, kiki:x.kiki, kishu:x.kishu,
         spec:x.spec, ship:x.ship.getTime(), info:x.info, dest:x.dest, is13:x.is13 };
     }
-    var folder = DriveApp.getFolderById(OUT_FOLDER_ID);
-    var ex = folder.getFilesByName(SNAPSHOT_FILE_NAME);
-    while(ex.hasNext()) ex.next().setTrashed(true);
-    folder.createFile(SNAPSHOT_FILE_NAME, JSON.stringify(map), MimeType.PLAIN_TEXT);
+    writeSnapshotFile_(SNAPSHOT_FILE_NAME, map);
   }catch(e){
     Logger.log('スナップショットの保存に失敗: '+e.message);
   }
@@ -452,10 +478,10 @@ function saveSnapshot_(rows, prevMap){
  * ファイルが無い（初回実行など）・読込に失敗した場合はnullを返す
  * ＝比較対象が無いので今回は赤字を出さず基準点にする、とmarkChanges_側で扱う。
  */
-function loadSnapshot_(){
+function loadSnapshot_(name){
   try{
     var folder = DriveApp.getFolderById(OUT_FOLDER_ID);
-    var it = folder.getFilesByName(SNAPSHOT_FILE_NAME);
+    var it = folder.getFilesByName(name || SNAPSHOT_FILE_NAME);
     if(!it.hasNext()) return null;
     return JSON.parse(it.next().getBlob().getDataAsString('UTF-8'));
   }catch(e){
@@ -519,7 +545,7 @@ function armCheck_() {
     notifySourceNotFound_();
     return { 結果: '起こせず', 仔細: '元ファイルが見当たりませぬ' };
   }
-  var sig = sourceSignature_(res.file);
+  var sig = pdfSignature_(res.file);
   var props = PropertiesService.getScriptProperties();
   if (props.getProperty(LAST_SOURCE_KEY) === sig) {
     return {
