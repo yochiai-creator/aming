@@ -197,6 +197,8 @@ function apiQueueList() {
 function processQueue() {
   const limit = Date.now() + 4 * 60 * 1000, old = Utilities.formatDate(new Date(Date.now() - 120000), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
   queueRows_().filter(r => r['状態'] === '待ち' && r['日時'] < old).forEach(r => { if (Date.now() < limit) apiQueueProcess(r['ID']); });
+  // 作り直した写真を元に戻す続き（画面を開かなくても5分おきに進める）
+  if (limit - Date.now() > 30000) apiRevertBadRecrops(limit - Date.now());
 }
 
 function writeReadLog_(t0, row) {
@@ -279,7 +281,8 @@ function apiPhotoOrig(id) { return 'data:image/jpeg;base64,' + Utilities.base64E
 
 // 10/27 その場で撮った写真（黄色い枠の中だけ）の作り直しは、もともと枠いっぱいの写真をさらに切るので
 // 1行目が欠けたり一部だけ拡大されたりした（LC12B10494F1_63・YY12B00902F1G2_2072 など）。作り直した分は全部元の画像に戻し、以後はやらない
-function apiRevertBadRecrops() {
+function apiRevertBadRecrops(ms) {
+  const budget = typeof ms === 'number' ? ms : 240000;
   const props = PropertiesService.getScriptProperties();
   if (props.getProperty('RECROP_REVERTED_WHOLE') === '1') return 0;
   const c = CacheService.getScriptCache();
@@ -294,7 +297,7 @@ function apiRevertBadRecrops() {
     const ids = photoRows_().filter(p => p['写真ID'] && !inQ[p['写真ID']] && p['切り出し版']).map(p => p['写真ID']);
     for (const id of ids) {
       if (done.indexOf(id) >= 0) continue;
-      if (Date.now() - t0 > 240000) return n;   // 時間切れ前にやめる（次に開いた時に続き）
+      if (Date.now() - t0 > budget) return n;   // 時間切れ前にやめる（次に開いた時に続き）
       try {
         const revs = Drive.Revisions.list(id, {fields: 'revisions(id)'}).revisions || [];
         if (revs.length > 1) { Drive.Files.update({}, id, Utilities.newBlob(origBytes_(id), 'image/jpeg'), {supportsAllDrives: true}); n++; }
