@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/27-11"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/27-12"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1261,15 +1261,18 @@ function straightCrop(src, box, whole) {
   for (let k = kb - 0.04; k <= kb + 0.04; k += 0.01) { const s = shearScore(k); if (s > ks) { ks = s; kb = k; } }
   // ⑥ 出力の範囲
   const us = Q.map(q => q[0] - kb * (q[1] - ym)).sort((a, b) => a - b);
-  const u0 = us[Math.floor(us.length * 0.003)] - D * 0.35, u1 = us[Math.floor(us.length * 0.997)] + D * 0.35;
+  // 余白は広めに（10/27 ユーザー：刻印がちゃんと写ってない＝行末の「UM」や1行目の上が切れていた）
+  let u0 = us[Math.floor(us.length * 0.001)] - D * 0.6, u1 = us[Math.floor(us.length * 0.999)] + D * 0.6;
   const hT = top.h * D / Math.max(1, Lb(xm) - Lt(xm)), hB = bot.h * D / Math.max(1, Lb(xm) - Lt(xm));
-  let Y0 = -hT * 1.6, Y1 = D + hB * 1.6;
+  let Y0 = -hT * 2.4, Y1 = D + hB * 2.4;
   // AIの枠（刻印全体）は必ず入れる：太い深打ちの字は字の上端・下端が別の「行」に見えて、1行目だけで切れることがある（10/26 YX12B00180F1）
-  const bY = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]].map(([bx, by]) => {
+  const bP = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]].map(([bx, by]) => {
     const dx = bx * W - rx0 - cx, dy = by * H - ry0 - cy, px = dx * cs - dy * sn, py = dx * sn + dy * cs, lt = Lt(px);
-    return D * (py - lt) / Math.max(1, Lb(px) - lt);
-  });
-  if (!whole) { Y0 = Math.min(Y0, Math.min(...bY) - hT * 0.5); Y1 = Math.max(Y1, Math.max(...bY) + hB * 0.5); }
+    const Y = D * (py - lt) / Math.max(1, Lb(px) - lt);
+    return [uOf(px) - kb * (Y - ym), Y];
+  }), bY = bP.map(p => p[1]), bU = bP.map(p => p[0]);
+  // 横もAIの枠を必ず入れる（行末の薄い字は点が少なくて範囲から漏れやすい）
+  if (!whole) { Y0 = Math.min(Y0, Math.min(...bY) - hT * 0.5); Y1 = Math.max(Y1, Math.max(...bY) + hB * 0.5); u0 = Math.min(u0, Math.min(...bU) - D * 0.2); u1 = Math.max(u1, Math.max(...bU) + D * 0.2); }
   const ow = Math.max(20, Math.round(u1 - u0)), oh = Math.max(10, Math.round(Y1 - Y0));
   if (ow > 4000 || oh > 2000 || ow < bw * (whole ? 0.15 : 0.3)) return whole ? src : straightCropRot(src, box);
   // ⑦ 1画素ずつ元の写真から拾う（バイリニア）
