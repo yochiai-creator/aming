@@ -483,7 +483,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/26-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/27-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -711,7 +711,7 @@ function renderArm(keep) {
     <div id="formMsg" class="muted"></div>
   </section>
   <section>
-    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure class="${p.many && !p.best ? "alt" : ""}"><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${p.many && p.best ? '<b class="adopt">採用</b>' : ""}${esc(p.at)}${p.purpose ? " " + esc(p.purpose) : ""}<button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
+    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure class="${p.many && !p.best ? "alt" : ""}"><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${p.many && p.best ? '<b class="adopt">採用</b>' : ""}${esc(p.at)}${p.purpose ? " " + esc(p.purpose) : ""}<button type="button" class="link" data-act="recrop" data-id="${esc(p.id)}">切り出し直す</button><button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
     <h2>工程ログ</h2>
     ${a._partial ? '<p class="muted">読み込み中…</p>' : `<ul class="tl steps">${a.steps.map(stepHtml).join("")}</ul>`}
     ${a.otherChanges.length ? `<p class="muted">${a.otherChanges.map(c => `${esc(c.col)}：${esc(c.from || "空")} → ${esc(c.to || "空")}（${esc(c.at)} 取込）`).join("<br>")}</p>` : ""}
@@ -804,6 +804,11 @@ function renderSettings() {
   run("apiArmPdf").then(pdfInfo).catch(e => { const el = $("pdfInfo"); if (el) el.textContent = "読めませんでした：" + errMsg(e); });
   $("settingsView").innerHTML = `
   <p class="muted">担当者（塗装完了・修正者・測定者・確認者）は台帳スプレッドシートの「担当者」シートで。1行目が役割、その下に1行1人</p>
+  <section><h2>刻印写真の切り出し直し</h2>
+    <p class="muted">撮るだけ（まとめて読む）で撮った直近2週間の写真を、今の切り出し方で作り直します。1枚数秒かかるので、画面を開いたまま待ってください。写真ごとなら詳細画面の「切り出し直す」でも</p>
+    <div class="row"><button type="button" class="btn sec" data-act="recropAll">まとめて切り出し直す</button></div>
+    <p id="recropMsg" class="muted"></p>
+  </section>
   <section><h2>出荷明細PDF（直近1か月）</h2>
     <p id="pdfInfo" class="muted">確認中…</p>
     <div class="row"><button type="button" class="btn sec" data-act="pdfmake">今すぐ作り直す</button></div>
@@ -1378,6 +1383,15 @@ async function qAfter(q) {
   } catch (e) { console.warn(e); }
   qNotify(queue.find(x => x.id === q.id));
 }
+// 切り出し直し：元写真＋AIの枠から今の切り出しで作り直して、画像の中身を差し替える
+async function recropOne(it) {
+  const src = await fullCanvas(await loadImg(await run("apiPhoto", it.fullId)));
+  let cv;
+  try { cv = straightCrop(src, it.box); } catch (e) { cv = cropByBox(src, it.box); }
+  const imgs = await prepare(cv);
+  await run("apiRecropSave", it.cropId, await b64(imgs.orig), imgs.light.sharp);
+  return cv.toDataURL("image/jpeg", .8);
+}
 async function qBoot() {
   try { queue = await run("apiQueueList"); } catch (e) { return; }
   renderQueue();
@@ -1477,6 +1491,26 @@ document.addEventListener("click", async e => {
   else if (act === "day") { day = b.dataset.d; renderList(true); }
   else if (act === "lf") { listFilter = b.dataset.f; ls.set("trace.listFilter", listFilter); renderDayList(); }
   else if (act === "arm") openArm(b.dataset.k, !!b.closest("#cands"));
+  else if (act === "recrop") {
+    b.disabled = true; b.textContent = "切り出し中…";
+    try {
+      const l = await run("apiRecropList", b.dataset.id, 0);
+      if (!l.length) { toast("この写真は元写真が残っていないので切り出し直せません（その場で撮った写真）"); b.textContent = "切り出し直す"; return; }
+      const url = await recropOne(l[0]);
+      const im = document.querySelector(`img[data-photo="${CSS.escape(b.dataset.id)}"]`); if (im) im.src = url;
+      toast("切り出し直しました"); b.textContent = "切り出し直した";
+    } catch (e) { toast("切り出し直せませんでした：" + errMsg(e)); b.textContent = "切り出し直す"; b.disabled = false; }
+  }
+  else if (act === "recropAll") {
+    b.disabled = true; const msg = $("recropMsg");
+    try {
+      const l = await run("apiRecropList", "", 14);
+      let ok = 0, ng = 0;
+      for (const it of l) { msg.textContent = `切り出し直し中… ${ok + ng + 1} / ${l.length}`; try { await recropOne(it); ok++; } catch (e) { ng++; } }
+      msg.textContent = `${ok}枚 切り出し直しました${ng ? `（${ng}枚 失敗）` : ""}`;
+    } catch (e) { msg.textContent = "できませんでした：" + errMsg(e); }
+    finally { b.disabled = false; }
+  }
   else if (act === "pdfmake") {
     b.disabled = true; $("pdfInfo").textContent = "作っています（1分ほど）…";
     try { const r = await run("apiArmPdfMake"); pdfInfo(r.pdf); if (r.report && r.report.結果) toast(r.report.結果); }

@@ -205,3 +205,27 @@ function writeReadLog_(t0, row) {
       'キュー:' + row['状態'] + (row['エラー'] ? ' ' + row['エラー'].slice(0, 120) : ''), row['AI読取'] || '', row['キー'] || '', READ_LOG.join('\n').slice(0, 3000)]]);
   } catch (e) { console.warn(e); }
 }
+
+/* ===== 切り出し直し（10/27 ユーザー：切り出しがちゃんと出来てない写真がある）=====
+ * 撮るだけの写真は 元写真＋AIの枠 が残っているので、画面の新しい切り出しでやり直せる。
+ * ファイルの中身だけ差し替える（写真ID・ファイル名・刻印写真シートのひも付けはそのまま） */
+/** 切り出し直せる写真：[{cropId, fullId, box}]。cropId を渡すとその1枚、無ければ直近 days 日 */
+function apiRecropList(cropId, days) {
+  const from = Utilities.formatDate(new Date(Date.now() - (days || 14) * 86400000), 'Asia/Tokyo', 'yyyy/MM/dd');
+  return queueRows_().filter(r => r['切り出しID'] && r['元写真ID'] && r['枠'] && (cropId ? r['切り出しID'] === cropId : r['日時'] >= from))
+    .map(r => ({cropId: r['切り出しID'], fullId: r['元写真ID'], box: JSON.parse(r['枠'])}));
+}
+/** 切り出し画像の中身を差し替え＋鮮明度を書き直す */
+function apiRecropSave(cropId, b64, sharp) {
+  Drive.Files.update({}, cropId, Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg'), {supportsAllDrives: true});
+  if (sharp !== undefined && sharp !== null) {
+    const q = queueRows_().find(r => r['切り出しID'] === cropId);
+    if (q) queueSet_(q, {'鮮明度': sharp});
+    const sh = sheet_(CONFIG.SHEETS.PHOTOS), n = sh.getLastRow() - 1;
+    if (n > 0) {
+      const ids = sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, n, 1).getDisplayValues().map(r => r[0]), i = ids.indexOf(cropId);
+      if (i >= 0) sh.getRange(i + 2, PHOTO_COLS.indexOf('鮮明度') + 1).setValue(sharp);
+    }
+  }
+  return true;
+}
