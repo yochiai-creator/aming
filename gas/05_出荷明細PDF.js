@@ -284,7 +284,7 @@ function buildHtml_(pages, rng){
       tbodies+='<tbody class="grp">'+trs+'</tbody>';
     }
     body+='<div class="'+cls+'"><div class="title">アーム機種別出荷明細</div>'
-        +'<div class="sub">出荷日 '+esc_(rng)+'（直近1ヶ月）　号機の○＝塗装済み（aming の記録）</div>'
+        +'<div class="sub">出荷日 '+esc_(rng)+'（直近1ヶ月）　号機の○＝塗装済み（aming の記録か、塗装完了日が今日まで）</div>'
         +'<table>'+thead+tbodies+'</table></div>';
   }
   return '<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>'+css+'</style></head><body>'+body+'</body></html>';
@@ -319,11 +319,14 @@ function resolveSource_(){
   return { file: null, viaFallback: false };
 }
 
-/** aming：塗装済みのキー（図番_号機）。工程記録の塗装完了・塗装後修正完了・出荷か、タップの記録があるもの */
+/** aming：塗装済みのキー（図番_号機）。工程記録の塗装完了・塗装後修正完了・出荷か、タップの記録、またはExcelの塗装完了日が今日まで */
 function armPaintedKeys_(){
   var out = {}, st = liveSteps_(), taps = latestTaps_(loadTaps_());
   Object.keys(st).forEach(function(k){ var s = st[k]; if (s['塗装完了'] || s['塗装後修正完了'] || s['出荷']) out[k] = 1; });
   Object.keys(taps).forEach(function(k){ out[k] = 1; });
+  // Excelの塗装完了日が今日までのアームも塗装済み（一覧の「塗装済み在庫」と同じ数え方。10/27 ユーザー：アプリ未記録の分も○）
+  var today = today_();
+  loadArms_().forEach(function(a){ if (a['塗装完了日'] && a['塗装完了日'] <= today) out[a['キー']] = 1; });
   return out;
 }
 /** aming：変更チェック用。元ファイル＋塗装済みの顔ぶれ（○が増えたら作り直す） */
