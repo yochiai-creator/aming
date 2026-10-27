@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/27-6"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/27-7"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1657,10 +1657,14 @@ async function autoRecrop() {
   if (recropRunning) return; recropRunning = true;
   try {
     const l = await run("apiRecropList", "", 3650, true);
+    let left = l.length;
+    const show = () => { const m = $("recropMsg"); if (m) m.textContent = left ? `裏で切り出し直し中：残り ${left}枚（画面を開いたままにすると進みます）` : "切り出し直しは全部終わりました"; };
+    show();
     for (const it of l) {
       if (document.hidden) break;            // 画面を閉じたらやめる（次に開いた時に続き）
       while (qBusy || busyOn()) await new Promise(r => setTimeout(r, 3000)); // 読取中は待つ
       try { await recropOne(it); } catch (e) { console.warn("切り出し直し失敗", it.cropId, e); }
+      left--; show();
     }
   } catch (e) {} finally { recropRunning = false; }
 }
