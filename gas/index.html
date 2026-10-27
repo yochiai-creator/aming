@@ -483,7 +483,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/27-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/27-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -805,7 +805,7 @@ function renderSettings() {
   $("settingsView").innerHTML = `
   <p class="muted">担当者（塗装完了・修正者・測定者・確認者）は台帳スプレッドシートの「担当者」シートで。1行目が役割、その下に1行1人</p>
   <section><h2>刻印写真の切り出し直し</h2>
-    <p class="muted">撮るだけ（まとめて読む）で撮った直近2週間の写真を、今の切り出し方で作り直します。1枚数秒かかるので、画面を開いたまま待ってください。写真ごとなら詳細画面の「切り出し直す」でも</p>
+    <p class="muted">撮るだけ（まとめて読む）で撮った写真を全部（元写真が残っている分）、今の切り出し方で作り直します。1枚数秒かかるので、画面を開いたまま待ってください。写真ごとなら詳細画面の「切り出し直す」でも</p>
     <div class="row"><button type="button" class="btn sec" data-act="recropAll">まとめて切り出し直す</button></div>
     <p id="recropMsg" class="muted"></p>
   </section>
@@ -1504,7 +1504,7 @@ document.addEventListener("click", async e => {
   else if (act === "recropAll") {
     b.disabled = true; const msg = $("recropMsg");
     try {
-      const l = await run("apiRecropList", "", 14);
+      const l = await run("apiRecropList", "", 3650);
       let ok = 0, ng = 0;
       for (const it of l) { msg.textContent = `切り出し直し中… ${ok + ng + 1} / ${l.length}`; try { await recropOne(it); ok++; } catch (e) { ng++; } }
       msg.textContent = `${ok}枚 切り出し直しました${ng ? `（${ng}枚 失敗）` : ""}`;
