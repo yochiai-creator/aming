@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/27-9"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/27-10"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -712,7 +712,7 @@ function renderArm(keep) {
     <div id="formMsg" class="muted"></div>
   </section>
   <section>
-    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure class="${p.many && !p.best ? "alt" : ""}"><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${p.many && p.best ? '<b class="adopt">採用</b>' : ""}${esc(p.at)}${p.purpose ? " " + esc(p.purpose) : ""}<button type="button" class="link" data-act="recrop" data-id="${esc(p.id)}">切り出し直す</button><button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
+    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure class="${p.many && !p.best ? "alt" : ""}"><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${p.many && p.best ? '<b class="adopt">採用</b>' : ""}${esc(p.at)}${p.purpose ? " " + esc(p.purpose) : ""}<button type="button" class="link" data-act="recrop" data-id="${esc(p.id)}">切り出し直す</button><button type="button" class="link" data-act="unrecrop" data-id="${esc(p.id)}">元に戻す</button><button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
     <h2>工程ログ</h2>
     ${a._partial ? '<p class="muted">読み込み中…</p>' : `<ul class="tl steps">${a.steps.map(stepHtml).join("")}</ul>`}
     ${a.otherChanges.length ? `<p class="muted">${a.otherChanges.map(c => `${esc(c.col)}：${esc(c.from || "空")} → ${esc(c.to || "空")}（${esc(c.at)} 取込）`).join("<br>")}</p>` : ""}
@@ -1435,6 +1435,11 @@ async function recropOne(it) {
     // 2行（図番・号機）が見つかって、刻印らしい横長のときだけ差し替える（アームの縁などを拾った時に悪くしないように）
     const ok = cv !== src && /行2/.test(cv.dataset.angle || "") && cv.width / cv.height > 1.5 && cv.width / cv.height < 9;
     if (!ok) { await run("apiRecropSave", it.cropId, "", null, true); return ""; }
+    // 作り直した方がぼやける（鮮明度が元の7割未満）なら差し替えない（10/27 YB12B00240F1_203 で 17.7→8.9 に落ちた）
+    const imgs = await prepare(cv);
+    if (it.sharp && imgs.light.sharp < it.sharp * 0.7) { await run("apiRecropSave", it.cropId, "", null, true); return ""; }
+    await run("apiRecropSave", it.cropId, await b64(imgs.orig), imgs.light.sharp, true);
+    return cv.toDataURL("image/jpeg", .8);
   }
   else { try { cv = straightCrop(src, it.box); } catch (e) { cv = cropByBox(src, it.box); } }
   const imgs = await prepare(cv);
@@ -1554,6 +1559,12 @@ document.addEventListener("click", async e => {
       const im = document.querySelector(`img[data-photo="${CSS.escape(b.dataset.id)}"]`); if (im) im.src = url;
       toast("切り出し直しました"); b.textContent = "切り出し直した";
     } catch (e) { toast("切り出し直せませんでした：" + errMsg(e)); b.textContent = "切り出し直す"; b.disabled = false; }
+  }
+  else if (act === "unrecrop") {
+    if (!confirm("この写真を切り出し直す前の元の画像に戻しますか？")) return;
+    b.disabled = true;
+    try { const url = await run("apiRecropRevert", b.dataset.id); const im = document.querySelector(`img[data-photo="${CSS.escape(b.dataset.id)}"]`); if (im) im.src = url; toast("元の画像に戻しました"); }
+    catch (e) { toast("戻せませんでした：" + errMsg(e)); b.disabled = false; }
   }
   else if (act === "recropAll") {
     b.disabled = true; const msg = $("recropMsg");

@@ -222,7 +222,7 @@ function apiRecropList(cropId, days, oldOnly) {
   photoRows_().forEach(p => {
     const id = p['写真ID'];
     if (!id || inQ[id] || (cropId ? id !== cropId : p['日時'] < from) || (oldOnly && (+p['切り出し版'] || 0) >= WHOLE_VER)) return;
-    out.push({cropId: id, fullId: id, whole: true});
+    out.push({cropId: id, fullId: id, whole: true, sharp: +p['鮮明度'] || 0});
   });
   return out;
 }
@@ -274,6 +274,12 @@ function origBytes_(id) {
     }
   } catch (e) { console.warn('元の版が読めない ' + id + ' ' + e); }
   return DriveApp.getFileById(id).getBlob().getBytes();
+}
+/** 切り出し直す前の元画像に戻す（10/27 ユーザー：作り直しがダメな写真）。もう自動で作り直さない */
+function apiRecropRevert(id) {
+  Drive.Files.update({}, id, Utilities.newBlob(origBytes_(id), 'image/jpeg'), {supportsAllDrives: true});
+  apiRecropSave(id, '', null, true);
+  return apiPhoto(id);
 }
 /** 画面用：元画像（data URL） */
 function apiPhotoOrig(id) { return 'data:image/jpeg;base64,' + Utilities.base64Encode(origBytes_(id)); }
