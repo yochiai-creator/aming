@@ -210,16 +210,18 @@ function callClaude_(prompt, imgsB64, schema) {
  * 撮った刻印写真（枠で切り出した画像）をアームにひも付ける。
  * ファイル名を 図番_号機_工程_日時.jpg に付け直して 年-月 フォルダへ移し、「刻印写真」シートに記録（同じ写真を別のアームに付け直したら上書き）
  */
-function apiLinkPhoto(photoId, key, readText, purpose, sharp) {
+// shotAt：写真を撮った日時（'yyyy/MM/dd HH:mm'、アルバムから読んだ写真のEXIF）。あれば写真の日時・ファイル名をそれにする（10/27 ユーザー）
+function apiLinkPhoto(photoId, key, readText, purpose, sharp, shotAt) {
   if (!photoId) return null;
   const a = loadArms_().find(r => r['キー'] === key);
   if (!a) throw new Error('台帳にないアームです: ' + key);
   const file = DriveApp.getFileById(photoId);
-  const name = photoName_(a['図番'], a['号機'], purpose, file.getDateCreated());
+  const when = shotDate_(shotAt) || file.getDateCreated();
+  const name = photoName_(a['図番'], a['号機'], purpose, when);
   file.setName(name);
-  file.moveTo(photoFolder_(file.getDateCreated()));
+  file.moveTo(photoFolder_(when));
   const sh = sheet_(CONFIG.SHEETS.PHOTOS);
-  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+  const now = shotAt && shotDate_(shotAt) ? String(shotAt).slice(0, 16) : Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
   if (sh.getLastColumn() < PHOTO_COLS.length) sh.getRange(1, 1, 1, PHOTO_COLS.length).setValues([PHOTO_COLS]).setFontWeight('bold');
   const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || '', purpose || '', sharp === undefined || sharp === null ? '' : sharp];
   const ids = sh.getLastRow() > 1 ? sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]) : [];
@@ -272,6 +274,40 @@ function photoFolder_(date, sub) {
 function photoName_(z, g, purpose, created) {
   const label = PHOTO_LABEL[purpose] || purpose || '';
   return z + '_' + g + (label ? '_' + label : '') + '_' + Utilities.formatDate(created, 'Asia/Tokyo', 'yyyyMMdd_HHmm') + '.jpg';
+}
+function shotDate_(s) {
+  const m = String(s || '').match(/^(\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2})/);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
+}
+/** 画面を開いたとき裏で1回だけ（10/27）：アルバムから読んだ写真の日時・ファイル名を撮影日時に直す（前は登録した時刻になっていた） */
+function apiFixPhotoTimes() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('PHOTO_TIMES_FIXED') === '1') return 0;
+  const c = CacheService.getScriptCache();
+  if (c.get('fixingTimes')) return 0;
+  c.put('fixingTimes', '1', 600);
+  let n = 0;
+  try {
+    const shot = {};
+    queueRows_().forEach(r => { if (r['撮影日時']) [r['切り出しID'], r['元写真ID']].forEach(id => { if (id) shot[id] = r['撮影日時']; }); });
+    const sh = sheet_(CONFIG.SHEETS.PHOTOS), last = sh.getLastRow();
+    if (last > 1) {
+      const v = sh.getRange(2, 1, last - 1, PHOTO_COLS.length).getDisplayValues(), ix = k => PHOTO_COLS.indexOf(k);
+      v.forEach((r, i) => {
+        const at = shot[r[ix('写真ID')]], d = shotDate_(at);
+        if (!d || r[ix('日時')] === at.slice(0, 16)) return;
+        try {
+          const f = DriveApp.getFileById(r[ix('写真ID')]), name = photoName_(r[ix('図番')], r[ix('号機')], r[ix('目的')], d);
+          f.setName(name); f.moveTo(photoFolder_(d));
+          sh.getRange(i + 2, ix('日時') + 1, 1, 1).setValue(at.slice(0, 16));
+          sh.getRange(i + 2, ix('ファイル名') + 1, 1, 1).setValue(name);
+          n++;
+        } catch (e) { console.warn('日時直し失敗 ' + r[ix('写真ID')] + ' ' + e); }
+      });
+    }
+    props.setProperty('PHOTO_TIMES_FIXED', '1');
+  } finally { c.remove('fixingTimes'); }
+  return n;
 }
 /** 画面を開いたとき裏で1回だけ：刻印写真フォルダ直下に残った写真を整理 */
 function apiAutoOrganize() {

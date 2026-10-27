@@ -127,7 +127,7 @@ function apiQueueProcess(id) {
 /** 画面が枠で切り出した画像を受け取る。確定ならひも付け、まだなら切り出し画像（＋強調）で読み直し */
 function apiQueueCrop(id, cropB64, enhB64, sharp) {
   let row = queueFind_(id);
-  if (!row['切り出しID']) row = queueSet_(row, {'切り出しID': savePhoto_(cropB64, 'kokuin')});
+  if (!row['切り出しID']) { queueHeader_(); row = queueSet_(row, {'切り出しID': savePhoto_(cropB64, 'kokuin'), '切り出し版': CROP_VER}); }
   if (sharp !== undefined && sharp !== null) { queueHeader_(); row = queueSet_(row, {'鮮明度': sharp}); }
   if (row['状態'] === '候補' && enhB64) {
     READ_DEADLINE = Date.now() + 40000; READ_LOG = [];
@@ -141,7 +141,7 @@ function apiQueueCrop(id, cropB64, enhB64, sharp) {
     } catch (e) { rlog_('キュー ' + id + ' 読み直し失敗 ' + e); }
     writeReadLog_(t0, row);
   }
-  if (row['状態'] === '確定' && row['キー']) apiLinkPhoto(row['切り出しID'], row['キー'], row['AI読取'], row['目的'], row['鮮明度']);
+  if (row['状態'] === '確定' && row['キー']) apiLinkPhoto(row['切り出しID'], row['キー'], row['AI読取'], row['目的'], row['鮮明度'], row['撮影日時']);
   return queueView_(row);
 }
 
@@ -149,7 +149,7 @@ function apiQueueCrop(id, cropB64, enhB64, sharp) {
 function apiQueuePick(id, key) {
   const row = queueSet_(queueFind_(id), {'キー': key, '状態': '確定'});
   const photo = row['切り出しID'] || row['元写真ID'];
-  if (photo) apiLinkPhoto(photo, key, row['AI読取'], row['目的'], row['切り出しID'] ? row['鮮明度'] : '');
+  if (photo) apiLinkPhoto(photo, key, row['AI読取'], row['目的'], row['切り出しID'] ? row['鮮明度'] : '', row['撮影日時']);
   return queueView_(row);
 }
 /** 特定済みの写真から、目的の工程（塗装完了・出荷）をまとめて記録。詳細を開かずに一覧から押せる */
@@ -210,16 +210,19 @@ function writeReadLog_(t0, row) {
  * 撮るだけの写真は 元写真＋AIの枠 が残っているので、画面の新しい切り出しでやり直せる。
  * ファイルの中身だけ差し替える（写真ID・ファイル名・刻印写真シートのひも付けはそのまま） */
 /** 切り出し直せる写真：[{cropId, fullId, box}]。cropId を渡すとその1枚、無ければ直近 days 日 */
-function apiRecropList(cropId, days) {
+// oldOnly：今の版（CROP_VER）より前のやり方で切り出したものだけ（画面が開いた時に裏で少しずつ作り直す）
+function apiRecropList(cropId, days, oldOnly) {
   const from = Utilities.formatDate(new Date(Date.now() - (days || 14) * 86400000), 'Asia/Tokyo', 'yyyy/MM/dd');
-  return queueRows_().filter(r => r['切り出しID'] && r['元写真ID'] && r['枠'] && (cropId ? r['切り出しID'] === cropId : r['日時'] >= from))
+  return queueRows_().filter(r => r['切り出しID'] && r['元写真ID'] && r['枠'] && (cropId ? r['切り出しID'] === cropId : r['日時'] >= from) && (!oldOnly || (+r['切り出し版'] || 0) < CROP_VER))
     .map(r => ({cropId: r['切り出しID'], fullId: r['元写真ID'], box: JSON.parse(r['枠'])}));
 }
 /** 切り出し画像の中身を差し替え＋鮮明度を書き直す */
 function apiRecropSave(cropId, b64, sharp) {
   Drive.Files.update({}, cropId, Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg'), {supportsAllDrives: true});
+  queueHeader_();
+  const q = queueRows_().find(r => r['切り出しID'] === cropId);
+  if (q) queueSet_(q, {'切り出し版': CROP_VER});
   if (sharp !== undefined && sharp !== null) {
-    const q = queueRows_().find(r => r['切り出しID'] === cropId);
     if (q) queueSet_(q, {'鮮明度': sharp});
     const sh = sheet_(CONFIG.SHEETS.PHOTOS), n = sh.getLastRow() - 1;
     if (n > 0) {
