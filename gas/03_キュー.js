@@ -221,7 +221,7 @@ function apiRecropList(cropId, days, oldOnly) {
   rows.forEach(r => { inQ[r['切り出しID']] = 1; inQ[r['元写真ID']] = 1; });
   photoRows_().forEach(p => {
     const id = p['写真ID'];
-    if (!id || inQ[id] || (cropId ? id !== cropId : p['日時'] < from) || (oldOnly && (+p['切り出し版'] || 0) >= CROP_VER)) return;
+    if (!id || inQ[id] || (cropId ? id !== cropId : p['日時'] < from) || (oldOnly && (+p['切り出し版'] || 0) >= WHOLE_VER)) return;
     out.push({cropId: id, fullId: id, whole: true});
   });
   return out;
@@ -238,7 +238,7 @@ function apiRecropSave(cropId, b64, sharp, whole) {
   const sh = sheet_(CONFIG.SHEETS.PHOTOS);
   if (whole) {
     if (sh.getRange(1, PHOTO_COLS.length).getValue() !== '切り出し版') sh.getRange(1, 1, 1, PHOTO_COLS.length).setValues([PHOTO_COLS]).setFontWeight('bold');
-    photoRows_().filter(p => p['写真ID'] === cropId).forEach(p => sh.getRange(p._row, PHOTO_COLS.indexOf('切り出し版') + 1).setValue(CROP_VER));
+    photoRows_().filter(p => p['写真ID'] === cropId).forEach(p => sh.getRange(p._row, PHOTO_COLS.indexOf('切り出し版') + 1).setValue(WHOLE_VER));
     if (!b64) return true;
   }
   queueHeader_();
@@ -257,7 +257,23 @@ function apiRecropSave(cropId, b64, sharp, whole) {
 /** その場で撮った写真（黄色い枠の中だけ）の刻印の範囲をAIに探させる（撮るだけと同じ仕上がりにするため。10/27 ユーザー：LQ12B10421F1_102 の仕上がりに）。無ければ null */
 function apiPhotoBox(photoId) {
   READ_DEADLINE = Date.now() + 40000; READ_LOG = [];
-  const b64 = Utilities.base64Encode(DriveApp.getFileById(photoId).getBlob().getBytes());
+  const b64 = Utilities.base64Encode(origBytes_(photoId));
   const r = callAI_(P_FULL, [{data: FONT_REF_PNG, mime: 'image/png'}, b64], P_FULL_SCHEMA);
   return r.found && r.box && r.box.length === 4 ? r.box : null;
 }
+
+/** 写真の一番最初の版（切り出し直す前の元画像）。版が1つならそのまま */
+function origBytes_(id) {
+  try {
+    const revs = (Drive.Revisions.list(id, {fields: 'revisions(id,modifiedTime)'}).revisions || []);
+    if (revs.length > 1) {
+      revs.sort((a, b) => String(a.modifiedTime).localeCompare(String(b.modifiedTime)));
+      const res = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + id + '/revisions/' + revs[0].id + '?alt=media&supportsAllDrives=true',
+        {headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken()}, muteHttpExceptions: true});
+      if (res.getResponseCode() === 200) return res.getBlob().getBytes();
+    }
+  } catch (e) { console.warn('元の版が読めない ' + id + ' ' + e); }
+  return DriveApp.getFileById(id).getBlob().getBytes();
+}
+/** 画面用：元画像（data URL） */
+function apiPhotoOrig(id) { return 'data:image/jpeg;base64,' + Utilities.base64Encode(origBytes_(id)); }

@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/27-8"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/27-9"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1423,7 +1423,8 @@ async function qAfter(q) {
 }
 // 切り出し直し：元写真＋AIの枠から今の切り出しで作り直して、画像の中身を差し替える
 async function recropOne(it) {
-  const src = await fullCanvas(await loadImg(await run("apiPhoto", it.fullId)));
+  // その場で撮った写真は、切り出し直す前の元画像（ドライブの最初の版）から作る
+  const src = await fullCanvas(await loadImg(await run(it.whole ? "apiPhotoOrig" : "apiPhoto", it.fullId)));
   let cv;
   // その場で撮った写真（枠なし）は写真そのものから文字を探して作り直す。見つからなければそのまま（差し替えない）
   if (it.whole) {
