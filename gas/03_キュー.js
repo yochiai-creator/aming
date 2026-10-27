@@ -254,3 +254,10 @@ function apiRecropSave(cropId, b64, sharp, whole) {
   }
   return true;
 }
+/** その場で撮った写真（黄色い枠の中だけ）の刻印の範囲をAIに探させる（撮るだけと同じ仕上がりにするため。10/27 ユーザー：LQ12B10421F1_102 の仕上がりに）。無ければ null */
+function apiPhotoBox(photoId) {
+  READ_DEADLINE = Date.now() + 40000; READ_LOG = [];
+  const b64 = Utilities.base64Encode(DriveApp.getFileById(photoId).getBlob().getBytes());
+  const r = callAI_(P_FULL, [{data: FONT_REF_PNG, mime: 'image/png'}, b64], P_FULL_SCHEMA);
+  return r.found && r.box && r.box.length === 4 ? r.box : null;
+}

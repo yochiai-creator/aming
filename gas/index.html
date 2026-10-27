@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/27-7"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/27-8"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1427,7 +1427,10 @@ async function recropOne(it) {
   let cv;
   // その場で撮った写真（枠なし）は写真そのものから文字を探して作り直す。見つからなければそのまま（差し替えない）
   if (it.whole) {
-    try { cv = straightCrop(src, null, true); } catch (e) { cv = src; }
+    // AIに刻印の範囲を探させて、撮るだけと同じやり方で切り出す。AIが見つけられなければ文字のかたまりを自分で探す
+    let box = null;
+    try { box = await run("apiPhotoBox", it.cropId); } catch (e) {}
+    try { cv = box ? straightCrop(src, box) : straightCrop(src, null, true); } catch (e) { cv = src; }
     // 2行（図番・号機）が見つかって、刻印らしい横長のときだけ差し替える（アームの縁などを拾った時に悪くしないように）
     const ok = cv !== src && /行2/.test(cv.dataset.angle || "") && cv.width / cv.height > 1.5 && cv.width / cv.height < 9;
     if (!ok) { await run("apiRecropSave", it.cropId, "", null, true); return ""; }
