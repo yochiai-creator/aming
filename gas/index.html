@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/27-5"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/27-6"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1372,12 +1372,27 @@ async function queueAddFile(f) {
   const mid = document.createElement("canvas"), mw = Math.min(1000, canvas.width); mid.width = mw; mid.height = Math.round(mw * canvas.height / canvas.width);
   mid.getContext("2d").drawImage(canvas, 0, 0, mid.width, mid.height); const midUrl = mid.toDataURL("image/jpeg", .75);
   qUpdate({id: tmp, state: "送信中", purpose, thumb: small.toDataURL("image/jpeg", .7), full: midUrl});
-  try {
-    const v = await run("apiQueueAdd", await b64(await toBlob(canvas, 0.85)), purpose, shotAt);
-    qLocal[v.id] = canvas;
-    v._tmp = tmp; qUpdate(v); delete queue.find(q => q.id === v.id)._tmp;
-    qPump();
-  } catch (e) { qUpdate({id: tmp, state: "失敗", error: errMsg(e)}); }
+  qLocal[tmp] = {canvas, shotAt, purpose};
+  await qUpload(tmp);
+}
+// 写真をサーバーへ送る。電波が悪い時は2回まで自動でやり直す。送れなかった写真は「もう一度読む」で送り直す
+// （10/27 送れていない写真の「もう一度読む」がサーバーに無いIDで読もうとして「キューにありません: tmp10」になっていた）
+async function qUpload(tmp) {
+  const L = qLocal[tmp];
+  if (!L) return;
+  qUpdate({id: tmp, state: "送信中", error: ""});
+  const data = await b64(await toBlob(L.canvas, 0.85));
+  for (let i = 0; ; i++) {
+    try {
+      const v = await run("apiQueueAdd", data, L.purpose, L.shotAt);
+      qLocal[v.id] = L.canvas; delete qLocal[tmp];
+      v._tmp = tmp; qUpdate(v); delete queue.find(q => q.id === v.id)._tmp;
+      qPump(); return;
+    } catch (e) {
+      if (i < 2) { await new Promise(r => setTimeout(r, 3000 * (i + 1))); continue; }
+      qUpdate({id: tmp, state: "失敗", error: "送れませんでした（電波を確認して「もう一度読む」）：" + errMsg(e)}); return;
+    }
+  }
 }
 function qPump() {
   queue.filter(q => q.state === "待ち" && !q._run).forEach(q => {
@@ -1513,7 +1528,11 @@ document.addEventListener("click", async e => {
   }
   if (act === "qclear") { queue.filter(q => !q.seen && q.rec).forEach(q => { q.seen = true; run("apiQueueDone", q.id).catch(() => {}); }); renderQueue(); return; }
   if (act === "qdone") { const q = queue.find(x => x.id === b.dataset.id); if (q) { q.seen = true; renderQueue(); run("apiQueueDone", q.id).catch(() => {}); } return; }
-  if (act === "qretry") { const q = queue.find(x => x.id === b.dataset.id); if (q) { q.state = "待ち"; q.error = ""; renderQueue(); qPump(); } return; }
+  if (act === "qretry") {
+    const q = queue.find(x => x.id === b.dataset.id); if (!q) return;
+    if (/^tmp/.test(q.id)) { if (qLocal[q.id]) qUpload(q.id); else { toast("この写真はもう手元にありません。×で消して撮り直してください"); } return; } // まだ送れていない写真は送り直す
+    q.state = "待ち"; q.error = ""; renderQueue(); qPump(); return;
+  }
   if (act === "purpose") { purpose = b.dataset.v; ls.set("trace.purpose", purpose); syncPurpose(); }
   else if (act === "goal") { const t = document.getElementById("tapForm"); if (t) t.scrollIntoView({behavior: "smooth", block: "start"}); }
   else if (act === "nav") show(b.dataset.v);
