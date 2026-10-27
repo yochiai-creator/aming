@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/27-12"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/27-13"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1556,7 +1556,7 @@ document.addEventListener("click", async e => {
     b.disabled = true; b.textContent = "切り出し中…";
     try {
       const l = await run("apiRecropList", b.dataset.id, 0);
-      if (!l.length) { toast("この写真は切り出し直せません"); b.textContent = "切り出し直す"; b.disabled = false; return; }
+      if (!l.length) { toast("この写真は読取画面で撮った写真なので切り出し直せません（撮るだけで撮ると直せます）"); b.textContent = "切り出し直す"; b.disabled = false; return; }
       const url = await recropOne(l[0]);
       if (!url) { toast("文字の場所が見つからなかったので、そのままにしました"); b.textContent = "切り出し直す"; b.disabled = false; return; }
       const im = document.querySelector(`img[data-photo="${CSS.escape(b.dataset.id)}"]`); if (im) im.src = url;
