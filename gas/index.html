@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/27-10"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/27-11"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1437,7 +1437,7 @@ async function recropOne(it) {
     if (!ok) { await run("apiRecropSave", it.cropId, "", null, true); return ""; }
     // 作り直した方がぼやける（鮮明度が元の7割未満）なら差し替えない（10/27 YB12B00240F1_203 で 17.7→8.9 に落ちた）
     const imgs = await prepare(cv);
-    if (it.sharp && imgs.light.sharp < it.sharp * 0.7) { await run("apiRecropSave", it.cropId, "", null, true); return ""; }
+    if (it.sharp && imgs.light.sharp < it.sharp * 0.85) { await run("apiRecropSave", it.cropId, "", null, true); return ""; }
     await run("apiRecropSave", it.cropId, await b64(imgs.orig), imgs.light.sharp, true);
     return cv.toDataURL("image/jpeg", .8);
   }
@@ -1665,7 +1665,7 @@ function autoLoad(force) {
 }
 setInterval(autoLoad, 60000);
 document.addEventListener("visibilitychange", () => autoLoad(true));
-loadAll().then(() => { run("apiAutoOrganize").catch(() => {}); run("apiFixPhotoTimes").catch(() => {}); setTimeout(autoRecrop, 8000); }).catch(e => toast("起動エラー：" + errMsg(e)));
+loadAll().then(() => { run("apiAutoOrganize").catch(() => {}); run("apiFixPhotoTimes").catch(() => {}); run("apiRevertBadRecrops").catch(() => {}); setTimeout(autoRecrop, 8000); }).catch(e => toast("起動エラー：" + errMsg(e)));
 // 古いやり方の切り出しを、画面を開いている間に裏で1枚ずつ作り直す（ボタン不要。10/27 ユーザー：アプリ内じゃなくやって）
 let recropRunning = false;
 async function autoRecrop() {

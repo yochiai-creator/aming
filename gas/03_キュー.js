@@ -283,3 +283,24 @@ function apiRecropRevert(id) {
 }
 /** 画面用：元画像（data URL） */
 function apiPhotoOrig(id) { return 'data:image/jpeg;base64,' + Utilities.base64Encode(origBytes_(id)); }
+
+// 10/27 その場で撮った写真の作り直しで、元より鮮明度が85パーセント未満に落ちた36枚（YB12B00240F1_203・LC12B10494F1_63 などユーザーが「ダメ」）。画面を開いた時に1回だけ元に戻す
+const REVERT_1027 = ["1_NplICstRJDAxS47WnuI7H4VrWlSSyCQ", "16mq0x352Fu4W1Bd7ybBhWoT11vbUHXGK", "1fWxzJToFlsfOLLj3krlHFuWfhcMCLt7a", "1U4FDJ7eYhHlSsuyqeTKZhCw3q-okLm7t", "1k-PU2Gd-R3lqJxOleQNGU0NlyRIQLLjQ", "1jzqX7XVTILrexqG-nwox2fxGTHkZO_3D", "1t-y_iE6khv-XCiOZ77AlV7Z04YL9F43N", "1c7KKmWhka9rI57FwYk8fFURM5YyyM6jd", "1W0mZBEd1tVMOkNzMBNViRLHLhJ2zp6rC", "1JJhK3ToF01mACCAYkZjvIQ6OlqsmHvJI", "14mkSRzvPa69wZhBet4v7K1kszrmC0Qa1", "1que_MVecxpKC2RKZ0DZ-gOEIimG2q7va", "1hS3bdqWbPJlSaMCx7DRQVIUdflBW0Kvq", "1vtin2yHsWImwLEjea6yeUfPePjxw2vQi", "15h0K7mpoxbZXAaIpzIHAMLe71qGVS0iF", "1QMLyXUsNIuPQHOZ8EJ3Pv1oMtFVICMVI", "1qaFFfbiqi3SrWMNGO7IfslPyUHuT0IsC", "1GQtGiej6zHeTF-spM6P2WMOdUtOYTthW", "1S5KdT6BG5G707CAy7tKOLKjIrI6rHNMI", "1cZIS7afSivm7yBoIT9VNBp192VWh85DT", "1BUOot_mpxBwWoVwMxoxQMu2QXAxwyFsg", "1y3WSdHyhWnZTlICSa_B5C45PlcVdGGFI", "1FVpPrfmqqHimiAkUz0unPJ_cuwcDM7QG", "1J0dwRu9uqFrn6Bi1r0II96KkR4x1l1n1", "1kTve9LKo0w6kbfn6swyDIZUCfSR8ityM", "1Sw1KkPWWfvHF-2VlZwrC3jdt6tNdxvvC", "18t2s3d9YlZFDHYSeVYQJ75bhMksz6nTX", "1Lyq2ci7Ul4NTvDaBP5bZuODProFWYEWF", "1ZWUYIszRji-vQ5PWNR6wgATGfOfHcdEv", "1Y2r9d97EKDkszYMR2WXO-5nWcNqPaFFn", "1KB4TKVydfSNeBCX-ig6DSIm3mfG4jbRh", "15t9VUnPfCnF5YzX0gmhikqGYsZJcVO-2", "1tquLsiNhKqyq366rv7wAu9FNb16r9xcn", "1igYKkqRUhxQeBhTboBg1BtaDw91h6e4D", "1GFt-g4k7jtcE1GMEdb-DNEuz_AgDSAHn", "1OF5sB4Pb-CKLZGQVR7fLG1eNiZExYj5q"];
+function apiRevertBadRecrops() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('RECROP_REVERTED_1027') === '1') return 0;
+  const c = CacheService.getScriptCache();
+  if (c.get('reverting')) return 0;
+  c.put('reverting', '1', 600);
+  let n = 0;
+  try {
+    const done = JSON.parse(props.getProperty('RECROP_REVERTED_IDS') || '[]');
+    for (const id of REVERT_1027) {
+      if (done.indexOf(id) >= 0) continue;
+      try { Drive.Files.update({}, id, Utilities.newBlob(origBytes_(id), 'image/jpeg'), {supportsAllDrives: true}); n++; } catch (e) { console.warn('戻せない ' + id + ' ' + e); }
+      done.push(id); props.setProperty('RECROP_REVERTED_IDS', JSON.stringify(done));
+    }
+    props.setProperty('RECROP_REVERTED_1027', '1');
+  } finally { c.remove('reverting'); }
+  return n;
+}
