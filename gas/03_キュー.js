@@ -213,18 +213,40 @@ function writeReadLog_(t0, row) {
 // oldOnly：今の版（CROP_VER）より前のやり方で切り出したものだけ（画面が開いた時に裏で少しずつ作り直す）
 function apiRecropList(cropId, days, oldOnly) {
   const from = Utilities.formatDate(new Date(Date.now() - (days || 14) * 86400000), 'Asia/Tokyo', 'yyyy/MM/dd');
-  return queueRows_().filter(r => r['切り出しID'] && r['元写真ID'] && r['枠'] && (cropId ? r['切り出しID'] === cropId : r['日時'] >= from) && (!oldOnly || (+r['切り出し版'] || 0) < CROP_VER))
+  const rows = queueRows_();
+  const out = rows.filter(r => r['切り出しID'] && r['元写真ID'] && r['枠'] && (cropId ? r['切り出しID'] === cropId : r['日時'] >= from) && (!oldOnly || (+r['切り出し版'] || 0) < CROP_VER))
     .map(r => ({cropId: r['切り出しID'], fullId: r['元写真ID'], box: JSON.parse(r['枠'])}));
+  // その場で撮った写真（キューに無い＝黄色い枠の中だけ保存）は、写真そのものから文字を探して作り直す（10/27）
+  const inQ = {};
+  rows.forEach(r => { inQ[r['切り出しID']] = 1; inQ[r['元写真ID']] = 1; });
+  photoRows_().forEach(p => {
+    const id = p['写真ID'];
+    if (!id || inQ[id] || (cropId ? id !== cropId : p['日時'] < from) || (oldOnly && (+p['切り出し版'] || 0) >= CROP_VER)) return;
+    out.push({cropId: id, fullId: id, whole: true});
+  });
+  return out;
+}
+function photoRows_() {
+  const sh = sheet_(CONFIG.SHEETS.PHOTOS), n = sh.getLastRow() - 1;
+  if (n < 1) return [];
+  return sh.getRange(2, 1, n, PHOTO_COLS.length).getDisplayValues().map((r, i) => { const o = {_row: i + 2}; PHOTO_COLS.forEach((c, j) => { o[c] = r[j]; }); return o; });
 }
 /** 切り出し画像の中身を差し替え＋鮮明度を書き直す */
-function apiRecropSave(cropId, b64, sharp) {
-  Drive.Files.update({}, cropId, Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg'), {supportsAllDrives: true});
+// whole：その場で撮った写真（版は刻印写真シートに書く）。b64 が空なら作り直さず「済」にするだけ。元の画像はドライブの版の履歴に残す
+function apiRecropSave(cropId, b64, sharp, whole) {
+  if (b64) Drive.Files.update({}, cropId, Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg'), {supportsAllDrives: true, keepRevisionForever: true});
+  const sh = sheet_(CONFIG.SHEETS.PHOTOS);
+  if (whole) {
+    if (sh.getRange(1, PHOTO_COLS.length).getValue() !== '切り出し版') sh.getRange(1, 1, 1, PHOTO_COLS.length).setValues([PHOTO_COLS]).setFontWeight('bold');
+    photoRows_().filter(p => p['写真ID'] === cropId).forEach(p => sh.getRange(p._row, PHOTO_COLS.indexOf('切り出し版') + 1).setValue(CROP_VER));
+    if (!b64) return true;
+  }
   queueHeader_();
   const q = queueRows_().find(r => r['切り出しID'] === cropId);
   if (q) queueSet_(q, {'切り出し版': CROP_VER});
   if (sharp !== undefined && sharp !== null) {
     if (q) queueSet_(q, {'鮮明度': sharp});
-    const sh = sheet_(CONFIG.SHEETS.PHOTOS), n = sh.getLastRow() - 1;
+    const n = sh.getLastRow() - 1;
     if (n > 0) {
       const ids = sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, n, 1).getDisplayValues().map(r => r[0]), i = ids.indexOf(cropId);
       if (i >= 0) sh.getRange(i + 2, PHOTO_COLS.indexOf('鮮明度') + 1).setValue(sharp);

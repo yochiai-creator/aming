@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/27-3"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/27-5"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1158,8 +1158,28 @@ function skewAngle(pts, cx, cy) {
   for (let a = best - 1; a <= best + 1; a += 0.2) { const sc = score(a); if (sc > bs) { bs = sc; best = a; } }
   return best;
 }
+// 枠が無い写真で、打刻の点が集まっているところ（文字のかたまり）の枠 [ymin,xmin,ymax,xmax] 0-1000 を推定。見つからなければ null
+function textBox(src) {
+  const W = src.width, H = src.height, pts = edgePoints(src, 900);
+  if (pts.length < 120) return null;
+  const NB = 50, hx = new Float32Array(NB), hy = new Float32Array(NB);
+  for (let i = 0; i < pts.length; i += 2) { hx[Math.min(NB - 1, Math.floor(pts[i] / W * NB))]++; hy[Math.min(NB - 1, Math.floor(pts[i + 1] / H * NB))]++; }
+  const span = h => {
+    const sm = h.map((_, i) => ((h[i - 1] || 0) + 2 * h[i] + (h[i + 1] || 0)) / 4), peak = Math.max(...sm);
+    let pk = sm.indexOf(peak), a = pk, b = pk;
+    while (a > 0 && sm[a - 1] >= peak * 0.2) a--;
+    while (b < NB - 1 && sm[b + 1] >= peak * 0.2) b++;
+    return [a / NB, (b + 1) / NB];
+  };
+  const [x0, x1] = span(hx), [y0, y1] = span(hy);
+  if (x1 - x0 > 0.97 && y1 - y0 > 0.97) return null;
+  const px = 0.02, py = 0.03;
+  return [Math.max(0, y0 - py), Math.max(0, x0 - px), Math.min(1, y1 + py), Math.min(1, x1 + px)].map(v => Math.round(v * 1000));
+}
 // 刻印の切り出し v2：回転＋行ごとの傾き（台形ゆがみ）＋文字の斜め（シアー）をまとめて直す
-function straightCrop(src, box) {
+// whole：枠なしで画像全体から探す（その場で撮った写真＝黄色い枠の中を作り直す時。10/27）
+function straightCrop(src, box, whole) {
+  if (whole) { const b = textBox(src); if (b) return straightCrop(src, b); box = [0, 0, 1000, 1000]; }
   const W = src.width, H = src.height;
   const [y0, x0, y1, x1] = box.map(v => v / 1000);
   const bw = (x1 - x0) * W, bh = (y1 - y0) * H;
@@ -1181,8 +1201,10 @@ function straightCrop(src, box) {
   for (let i = 0; i < pts.length; i += 2) { const dx = pts[i] - cx, dy = pts[i + 1] - cy; P.push([dx * cs - dy * sn, dx * sn + dy * cs]); }
   // ② 行を見つける：yの点の数の山（なだらかにして）で、山の半分以上の帯＝1行
   const ys = P.map(p => p[1]), ymin = Math.min(...ys), BIN = 2, nb = Math.ceil((Math.max(...ys) - ymin) / BIN) + 1;
+  // 文字のかたまりの高さ（枠があれば枠の高さ、全体から探す時は点の上下2〜98%）
+  const ysS = ys.slice().sort((u, v) => u - v), th = whole ? Math.max(20, ysS[Math.floor(ysS.length * 0.98)] - ysS[Math.floor(ysS.length * 0.02)]) : bh;
   const hist = new Float32Array(nb); ys.forEach(y => hist[Math.floor((y - ymin) / BIN)]++);
-  const sm = new Float32Array(nb), K = Math.max(2, Math.round(bh / 40 / BIN));
+  const sm = new Float32Array(nb), K = Math.max(2, Math.round(th / 40 / BIN));
   for (let i = 0; i < nb; i++) { let s = 0, n = 0; for (let j = -K; j <= K; j++) if (hist[i + j] !== undefined) { s += hist[i + j]; n++; } sm[i] = s / n; }
   const peak = Math.max(...sm), segs = [];
   for (let i = 0, st = -1; i <= nb; i++) {
@@ -1193,7 +1215,7 @@ function straightCrop(src, box) {
   // 太い深打ちの字は字の上端・下端が別の帯に分かれる → 中心が近すぎる帯（枠の高さの3割未満）は同じ行としてまとめる（10/26）
   for (let i = 0; i + 1 < segs.length;) {
     const p = segs[i], q = segs[i + 1];
-    if ((q.a + q.b) / 2 - (p.a + p.b) / 2 < bh * 0.3) segs.splice(i, 2, {a: p.a, b: q.b, n: p.n + q.n}); else i++;
+    if ((q.a + q.b) / 2 - (p.a + p.b) / 2 < th * 0.3) segs.splice(i, 2, {a: p.a, b: q.b, n: p.n + q.n}); else i++;
   }
   segs.sort((p, q) => q.n - p.n);
   const lines = segs.slice(0, 2).filter(s => s.n >= segs[0].n * 0.25).sort((p, q) => p.a - q.a);
@@ -1247,9 +1269,9 @@ function straightCrop(src, box) {
     const dx = bx * W - rx0 - cx, dy = by * H - ry0 - cy, px = dx * cs - dy * sn, py = dx * sn + dy * cs, lt = Lt(px);
     return D * (py - lt) / Math.max(1, Lb(px) - lt);
   });
-  Y0 = Math.min(Y0, Math.min(...bY) - hT * 0.5); Y1 = Math.max(Y1, Math.max(...bY) + hB * 0.5);
+  if (!whole) { Y0 = Math.min(Y0, Math.min(...bY) - hT * 0.5); Y1 = Math.max(Y1, Math.max(...bY) + hB * 0.5); }
   const ow = Math.max(20, Math.round(u1 - u0)), oh = Math.max(10, Math.round(Y1 - Y0));
-  if (ow > 4000 || oh > 2000 || ow < bw * 0.3) return straightCropRot(src, box);
+  if (ow > 4000 || oh > 2000 || ow < bw * (whole ? 0.15 : 0.3)) return whole ? src : straightCropRot(src, box);
   // ⑦ 1画素ずつ元の写真から拾う（バイリニア）
   const sd = R.getContext("2d").getImageData(0, 0, R.width, R.height).data, RW = R.width, RH = R.height;
   const out = document.createElement("canvas"); out.width = ow; out.height = oh;
@@ -1388,9 +1410,16 @@ async function qAfter(q) {
 async function recropOne(it) {
   const src = await fullCanvas(await loadImg(await run("apiPhoto", it.fullId)));
   let cv;
-  try { cv = straightCrop(src, it.box); } catch (e) { cv = cropByBox(src, it.box); }
+  // その場で撮った写真（枠なし）は写真そのものから文字を探して作り直す。見つからなければそのまま（差し替えない）
+  if (it.whole) {
+    try { cv = straightCrop(src, null, true); } catch (e) { cv = src; }
+    // 2行（図番・号機）が見つかって、刻印らしい横長のときだけ差し替える（アームの縁などを拾った時に悪くしないように）
+    const ok = cv !== src && /行2/.test(cv.dataset.angle || "") && cv.width / cv.height > 1.5 && cv.width / cv.height < 9;
+    if (!ok) { await run("apiRecropSave", it.cropId, "", null, true); return ""; }
+  }
+  else { try { cv = straightCrop(src, it.box); } catch (e) { cv = cropByBox(src, it.box); } }
   const imgs = await prepare(cv);
-  await run("apiRecropSave", it.cropId, await b64(imgs.orig), imgs.light.sharp);
+  await run("apiRecropSave", it.cropId, await b64(imgs.orig), imgs.light.sharp, !!it.whole);
   return cv.toDataURL("image/jpeg", .8);
 }
 async function qBoot() {
@@ -1496,8 +1525,9 @@ document.addEventListener("click", async e => {
     b.disabled = true; b.textContent = "切り出し中…";
     try {
       const l = await run("apiRecropList", b.dataset.id, 0);
-      if (!l.length) { toast("この写真は元写真が残っていないので切り出し直せません（その場で撮った写真）"); b.textContent = "切り出し直す"; return; }
+      if (!l.length) { toast("この写真は切り出し直せません"); b.textContent = "切り出し直す"; b.disabled = false; return; }
       const url = await recropOne(l[0]);
+      if (!url) { toast("文字の場所が見つからなかったので、そのままにしました"); b.textContent = "切り出し直す"; b.disabled = false; return; }
       const im = document.querySelector(`img[data-photo="${CSS.escape(b.dataset.id)}"]`); if (im) im.src = url;
       toast("切り出し直しました"); b.textContent = "切り出し直した";
     } catch (e) { toast("切り出し直せませんでした：" + errMsg(e)); b.textContent = "切り出し直す"; b.disabled = false; }
