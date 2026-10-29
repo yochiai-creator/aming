@@ -100,6 +100,12 @@ function isLikely_(top, today) {
 }
 // AIが読んだ図番・号機が台帳のアームと1文字も違わず一致（? なし）なら確定扱い
 function isExact_(z, g, arm) { return !!arm && !!z && !!g && !/\?/.test(z + g) && z === arm.z && String(+g) === String(arm.g); }
+// 完全一致でも、そのアームの出荷日が3日以上前で、近い2位がいる時は確定しない（10/28 2082 を 2032＝出荷済み と読んで確定した）
+function isExactTop_(z, g, top, today) {
+  if (!top.length || !isExact_(z, g, top[0].arm)) return false;
+  const live = !today || !top[0].arm.ship || top[0].arm.ship >= shiftDate_(today, -3);
+  return live || !top[1] || top[1].cost - top[0].cost >= LIKELY_GAP;
+}
 
 function shiftDate_(ymd, days) {
   const p = ymd.split('/').map(Number), d = new Date(p[0], p[1] - 1, p[2] + days);
@@ -156,4 +162,4 @@ function learnHint_(st) {
   return '\n' + lines.join('\n');
 }
 
-if (typeof module !== 'undefined') module.exports = {parseRead_, diffPairs_, learnStats_, learnHint_, wdist_, fitZuban_, fitGoki_, rankArms_, isSure_, isLikely_, isExact_, zubanCost_, shiftDate_, normKokuin_};
+if (typeof module !== 'undefined') module.exports = {parseRead_, diffPairs_, learnStats_, learnHint_, wdist_, fitZuban_, fitGoki_, rankArms_, isSure_, isLikely_, isExact_, isExactTop_, zubanCost_, shiftDate_, normKokuin_};

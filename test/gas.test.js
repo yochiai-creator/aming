@@ -24,6 +24,12 @@ t("isExact 完全一致だけ確定", () => {
   assert.ok(run("isExact_")("YY12B00902F1G2", "0020", {z: "YY12B00902F1G2", g: "20"}));
   assert.ok(!run("isExact_")("YY12B00902F1G2", "2724", {z: "YY12B00902F1G2", g: "2024"}));
   assert.ok(!run("isExact_")("Y?12B00273F1", "247", {z: "YB12B00273F1", g: "247"}));
+  // 10/28 2082 を 2032（出荷済み）と読んだ：完全一致でも出荷済み＋近い2位なら確定しない
+  const ex = run("isExactTop_"), z9 = "YY12B00902F1G2";
+  const old = [{arm: {z: z9, g: "2032", ship: "2026/10/20"}, cost: 0.4}, {arm: {z: z9, g: "2082", ship: "2026/11/04"}, cost: 0.52}];
+  assert.ok(!ex(z9, "2032", old, "2026/10/28"));
+  assert.ok(ex(z9, "2032", [{arm: {z: z9, g: "2032", ship: "2026/10/30"}, cost: 0}, {arm: {z: z9, g: "2082"}, cost: 0.35}], "2026/10/28"));
+  assert.ok(ex(z9, "2032", [old[0], {arm: {z: z9, g: "2082"}, cost: 1.2}], "2026/10/28"));
 });
 t("自動学習：読み間違いを集めて照合に効かせる", () => {
   assert.strictEqual(JSON.stringify(run("parseRead_('YY12B00902F1G2 / 2512-2724 U')")), '{"z":"YY12B00902F1G2","g":"2724"}');
