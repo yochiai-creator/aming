@@ -27,6 +27,9 @@ const TO_DIGIT = {O:'0',D:'0',Q:'0',I:'1',L:'1',T:'1',Z:'2',S:'5',B:'8',G:'6',A:
 const TO_ALPHA = {'0':'O','1':'I','2':'Z','5':'S','8':'B','6':'G','4':'A'};
 function fitZuban_(raw) {
   let z = normKokuin_(raw);
+  // 本間向け（YY16B 等）は数字の頭の0を打たない：「YY16B29F1」→「YY16B00029F1」（12B は5桁そろうので、3桁以下の時だけ）
+  const sm = z.match(/^([A-Z?]{2}(\d\d)B)(\d{1,4})(F\d(G\d)?)$/);
+  if (sm && (sm[2] !== '12' || sm[3].length <= 3)) z = sm[1] + sm[3].padStart(5, '0') + sm[4];
   // 「YY112B20269F1」のように 12B の前に数字が1つ多い読み → 余分な先頭の数字を落とす
   if ((z.length === 13 || z.length === 15) && /^[A-Z?]{2}\d{3}B/.test(z)) z = z.slice(0, 2) + z.slice(3);
   const tpl = z.length === 14 ? 'AANNBNNNNNFNGN' : z.length === 12 ? 'AANNBNNNNNFN' : null;
@@ -64,6 +67,8 @@ function rankArms_(z, g, arms, opts) {
       if (dg >= 1 && dg <= 5) { cost = Math.max(0, cost - 0.3); seq = true; }
     }
     if (a.done) cost += 0.5;                              // チェック済み
+    // 塗装完了を撮っている時、もう塗装完了を記録したアームは今撮っているアームではないことが多い（10/28 2082 を 2032 と読んだ）
+    if (opts.purpose === '塗装完了' && a.painted) cost += 0.5;
     // もう出荷した（予定日を過ぎた）アームは撮ることが少ない。1か月以上前はなおさら
     if (today && a.ship && a.ship < d3) cost += a.ship < d30 ? 0.7 : 0.4;
     return {arm: a, cost: cost, seq: seq};

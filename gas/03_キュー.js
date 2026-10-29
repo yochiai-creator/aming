@@ -8,9 +8,10 @@
 const P_FULL = [
   '1枚目は刻印機（Telesis）のドットフォント見本です。上段 0123456789、中段 ?@ABCDEFGHIJKLM、下段 NOPQRSTUVWXYZ。',
   '2枚目は建機アームを撮った写真です。どこかに点の打刻で2行の刻印があります（白い塗装面で薄いことが多い）。',
-  'まず刻印の2行がある範囲を見つけて box に [ymin, xmin, ymax, xmax]（画像全体を0〜1000とした整数）で返してください。見つからなければ found=false。',
+  'まず刻印がある範囲を見つけて box に [ymin, xmin, ymax, xmax]（画像全体を0〜1000とした整数）で返してください。見つからなければ found=false。',
   '1行目: 図番。形式は 英大文字2文字 + 数字2桁 + "B" + 数字5桁 + "F" + 数字1桁、末尾に "G"+数字1桁 が付くことがある（例: LS12B10010F1, YY12B00902F1G2）。',
   '2行目: ◇マーク、製作年月4桁(YYMM)、"-"またはすき間、号機(1〜4桁の数字。前に英字1文字が付くことがある 例 2610-K2022 → 号機は 2022。英字は goki に入れず note に書く)、検査記号(例 UM, U)。',
+  '別の形式（本間向けなど）：1行だけで「図番 S号機 記号」と並ぶことがある。例「YY16B29F1 S167 E」→ zuban=YY16B29F1（数字の頭の0は打たれていない。そのまま書く）、seizo は空、goki=167（前の S は goki に入れず note に書く）、kensa=E。フォントもドットでなく線の字のことがある。',
   'このフォントの見分け方: 0は斜線入り（Oは斜線なし）。2は角ばって斜めの線。9は丸い頭とまっすぐ下に伸びる右の縦線。5は上が平ら。B・Dは左側がまっすぐな縦線（8・0と区別）。1は上に小さな旗。',
   '自信のない文字は ? にしてください。推測で埋めないこと。'
 ].join('\n');
@@ -111,7 +112,7 @@ function apiQueueProcess(id) {
     const b64 = Utilities.base64Encode(DriveApp.getFileById(row['元写真ID']).getBlob().getBytes());
     const r1 = callAI_(P_FULL + learnHint_(learned_()), [{data: FONT_REF_PNG, mime: 'image/png'}, b64], P_FULL_SCHEMA);
     const box = r1.found && r1.box && r1.box.length === 4 ? r1.box : null;
-    const m = matchRead_(r1, null);
+    const m = matchRead_(r1, null, row['目的']);
     const read = m.fz.z + ' / ' + (r1.seizo || '?') + '-' + (m.g || '?') + ' ' + (r1.kensa || '');
     queueSet_(row, {'枠': box ? JSON.stringify(box) : '', 'AI読取': read.trim(), '候補': JSON.stringify(m.cands),
       'キー': m.sure && m.cands[0] ? m.cands[0].key : '', '状態': m.sure ? '確定' : (box ? '候補' : '刻印なし'), 'エラー': ''});
@@ -134,7 +135,7 @@ function apiQueueCrop(id, cropB64, enhB64, sharp) {
     const t0 = Date.now();
     try {
       const r1 = callAI_(P1 + learnHint_(learned_()), [{data: FONT_REF_PNG, mime: 'image/png'}, cropB64, enhB64], P1_SCHEMA);
-      const m = matchRead_(r1, null);
+      const m = matchRead_(r1, null, row['目的']);
       const read = m.fz.z + ' / ' + (r1.seizo || '?') + '-' + (m.g || '?') + ' ' + (r1.kensa || '');
       queueSet_(row, {'AI読取': read.trim(), '候補': JSON.stringify(m.cands), 'キー': m.sure && m.cands[0] ? m.cands[0].key : '', '状態': m.sure ? '確定' : '候補'});
       rlog_('キュー ' + id + ' 切り出しで読み直し → ' + row['状態'] + ' ' + read);

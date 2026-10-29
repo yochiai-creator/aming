@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "10/27-14"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "10/30-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1027,7 +1027,7 @@ async function readCanvas(cv) {
   try {
     const token = ++readToken;
     const r = await Promise.race([
-      run("apiRead", await b64(imgs.orig), await b64(imgs.enh), lastArm),
+      run("apiRead", await b64(imgs.orig), await b64(imgs.enh), lastArm, purpose),
       new Promise((_, rej) => { setTimeout(() => rej(new Error("時間切れ（100秒）。撮り直すか、下の「探す」で手入力してください")), 100000); cancelRead = () => rej(new Error("読み取りをやめました")); })
     ]);
     if (token !== readToken) return;

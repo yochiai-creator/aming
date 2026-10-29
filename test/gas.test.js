@@ -24,6 +24,16 @@ t("isExact 完全一致だけ確定", () => {
   assert.ok(run("isExact_")("YY12B00902F1G2", "0020", {z: "YY12B00902F1G2", g: "20"}));
   assert.ok(!run("isExact_")("YY12B00902F1G2", "2724", {z: "YY12B00902F1G2", g: "2024"}));
   assert.ok(!run("isExact_")("Y?12B00273F1", "247", {z: "YB12B00273F1", g: "247"}));
+  // 本間向け YY16B は頭の0を打たない
+  assert.strictEqual(run("fitZuban_")("YY16B29F1").z, "YY16B00029F1");
+  assert.strictEqual(run("fitZuban_")("YY16B37F1").z, "YY16B00037F1");
+  assert.strictEqual(run("fitZuban_")("YY12B0167F1").z, "YY12B0167F1");   // 12B の4桁は桁落ちなので埋めない
+  assert.strictEqual(run("fitZuban_")("YY12B167F1").z, "YY12B00167F1");
+  // 塗装完了を撮っている時は、もう塗装完了を記録したアームを下げる
+  const rk = run("rankArms_"), zz = "YY12B00902F1G2";
+  const pa = [{z: zz, g: "2032", ship: "2026/10/20", painted: true}, {z: zz, g: "2082", ship: "2026/11/04"}];
+  assert.strictEqual(rk(zz, "2032", pa, {purpose: "塗装完了", today: "2026/10/28"})[0].arm.g, "2082");
+  assert.strictEqual(rk(zz, "2032", pa, {purpose: "出荷", today: "2026/10/28"})[0].arm.g, "2032");
   // 10/28 2082 を 2032（出荷済み）と読んだ：完全一致でも出荷済み＋近い2位なら確定しない
   const ex = run("isExactTop_"), z9 = "YY12B00902F1G2";
   const old = [{arm: {z: z9, g: "2032", ship: "2026/10/20"}, cost: 0.4}, {arm: {z: z9, g: "2082", ship: "2026/11/04"}, cost: 0.52}];

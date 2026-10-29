@@ -5,9 +5,10 @@
 const P1 = [
   '1枚目は刻印機（Telesis）のドットフォント見本です。上段 0123456789、中段 ?@ABCDEFGHIJKLM、下段 NOPQRSTUVWXYZ。',
   '2枚目が建機アームに打刻された刻印を切り抜いた写真、3枚目がその凹凸を強調した画像です。刻印は見本と同じフォントで、点の打刻で文字ができています。',
-  '刻印は2行あります。',
+  '刻印はふつう2行あります。',
   '1行目: 図番。形式は 英大文字2文字 + 数字2桁 + "B" + 数字5桁 + "F" + 数字1桁、末尾に "G"+数字1桁 が付くことがある（例: LS12B10010F1, YY12B00902F1G2）。',
   '2行目: ◇マーク、製作年月4桁(YYMM)、"-"またはすき間、号機(1〜4桁の数字。前に英字1文字が付くことがある 例 2610-K2022 → 号機は 2022。英字は goki に入れず note に書く)、検査記号(例 UM, U)。',
+  '別の形式（本間向けなど）：1行だけで「図番 S号機 記号」と並ぶことがある。例「YY16B29F1 S167 E」→ zuban=YY16B29F1（数字の頭の0は打たれていない。そのまま書く）、seizo は空、goki=167（前の S は goki に入れず note に書く）、kensa=E。フォントもドットでなく線の字のことがある。',
   'このフォントの見分け方: 0は斜線入り（Oは斜線なし）。2は角ばって斜めの線。9は丸い頭とまっすぐ下に伸びる右の縦線。5は上が平ら。B・Dは左側がまっすぐな縦線（8・0と区別）。1は上に小さな旗。',
   '文字ごとに見本と見比べてください。自信のない文字は ? にしてください。推測で埋めないこと。'
 ].join('\n');
@@ -48,11 +49,11 @@ function apiReadFilm(b64) {
   return {value: ok ? Math.round(r.value * 10) / 10 : null, note: r.note || ''};
 }
 
-function apiRead(orig, enh, last) {
+function apiRead(orig, enh, last, purpose) {
   READ_DEADLINE = Date.now() + 50000; READ_LOG = [];
   const t0 = Date.now();
   let res = null, err = null;
-  try { res = readCore_(orig, enh, last); return res; }
+  try { res = readCore_(orig, enh, last, purpose); return res; }
   catch (e) { err = e; throw e; }
   finally {
     try {
@@ -63,12 +64,12 @@ function apiRead(orig, enh, last) {
   }
 }
 
-function readCore_(orig, enh, last) {
+function readCore_(orig, enh, last, purpose) {
   const photoId = savePhoto_(orig);
   rlog_('写真保存 ' + photoId);
   const imgs = [{data: FONT_REF_PNG, mime: 'image/png'}, orig, enh];
   const r1 = callAI_(P1 + learnHint_(learned_()), imgs, P1_SCHEMA);
-  const m = matchRead_(r1, last), fz = m.fz, g = m.g, top = m.top, sure = m.sure, taps = m.taps, st = m.st;
+  const m = matchRead_(r1, last, purpose), fz = m.fz, g = m.g, top = m.top, sure = m.sure, taps = m.taps, st = m.st;
   let pick = sure ? {index: 0, confidence: '高', reason: '1回目で一致'} : null;
   // 2回目は時間に余裕があるときだけ（無ければ候補一覧から選んでもらう）
   if (!sure && top.length && cfg_('AI_SECOND_PASS') === 'する' && timeLeft_() > 22000) {
@@ -88,11 +89,14 @@ function readCore_(orig, enh, last) {
 // 画像は base64文字列（JPEG）か {data, mime}
 function img_(x) { return typeof x === 'string' ? {data: x, mime: 'image/jpeg'} : x; }
 /** AIの読み → 台帳照合（上位5件・確定判定） */
-function matchRead_(r1, last) {
-  const fz = fitZuban_(r1.zuban), g = fitGoki_(r1.goki);
+function matchRead_(r1, last, purpose) {
+  const fz = fitZuban_(r1.zuban);
+  // 本間向け（12B 以外）は号機の前に S が付く（S167）。S→5 と読み替えないよう先に外す
+  const g = fitGoki_(/^[A-Z?]{2}12B/.test(fz.z) ? r1.goki : String(r1.goki || '').replace(/^S(?=\d)/, ''));
   const taps = latestTaps_(loadTaps_()), st = liveSteps_();
-  const arms = loadArms_().map(a => ({z: a['図番'], g: a['号機'], ship: a['出荷日'], done: !!taps[a['キー']], src: a}));
-  const top = rankArms_(fz.z, g, arms, {today: today_(), last: last, learned: learned_().pairs}).slice(0, 5);
+  const arms = loadArms_().map(a => ({z: a['図番'], g: a['号機'], ship: a['出荷日'], done: !!taps[a['キー']],
+    painted: !!(st[a['キー']] && (st[a['キー']]['塗装完了'] || st[a['キー']]['塗装後修正完了'])), src: a}));
+  const top = rankArms_(fz.z, g, arms, {today: today_(), last: last, learned: learned_().pairs, purpose: purpose}).slice(0, 5);
   // 完全一致なら隣の号機があっても確定（記録画面で号機を確認できる）。よくある読み間違いだけで2位と差があっても確定（違えば画面の「違う？」で選び直せる）
   const sure = isSure_(top) || isExactTop_(fz.z, g, top, today_()) || isLikely_(top, today_());
   return {fz: fz, g: g, top: top, sure: sure, taps: taps, st: st,
