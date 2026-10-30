@@ -101,6 +101,13 @@ t("diffArm 日付と出荷先の変更だけ拾う", () => {
   const d = run("diffArm_")({"塗装完了日": "2026/09/30", "出荷先": "正和", "仕様": "A"}, {"塗装完了日": "2026/10/02", "出荷先": "正和", "仕様": "B"});
   assert.deepStrictEqual(JSON.parse(JSON.stringify(d)), [["塗装完了日", "2026/09/30", "2026/10/02"]]);
 });
+t("goneKeys Excelから消えた行だけ消す", () => {
+  const g = run("goneKeys_"), A = (k, s) => ({"キー": k, "出荷日": s});
+  const cur = [A("Z_1", "2023/01/05"), A("Y_2088", "2026/11/03"), A("Y_2089", "2026/11/03"), A("Y_2090", "2026/11/04"), A("Y_2091", "2026/11/04")];
+  const now = [A("Y_2089", "2026/11/03"), A("Y_2090", "2026/11/04"), A("Y_2091", "2026/11/04"), A("Y_2092", "2026/11/05"), A("X_1", "2024/02/01")];
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(g(cur, now))), ["Y_2088"]);          // 2023年の古い行は範囲外なので残す
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(g(cur, now.slice(0, 2)))), []);      // 本数が急に減った時は消さない
+});
 t("parseSettingRows 確認者を1行1人で", () => {
   const o = run("parseSettingRows_")([["AI読取", "gemini", ""], ["確認者", "A.ましゃたか", "説明"], ["", "田中", ""], ["", "", ""], ["", "佐藤", ""]]);
   assert.strictEqual(o["確認者"], "A.ましゃたか,田中,佐藤"); assert.strictEqual(o["AI読取"], "gemini");

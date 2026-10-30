@@ -139,6 +139,9 @@ function mergeArms_(arms, at, fileName) {
     a['更新日時'] = at;
     byKey[a['キー']] = a;
   });
+  // Excelから消えた行（号機の打ち間違いを直した等）は台帳からも消す。Excelは数年分あるので、その出荷日の範囲内で無くなった行だけ
+  const gone = goneKeys_(cur, arms);
+  gone.forEach(k => { changes.push([at, k, '削除', byKey[k]['出荷日'] || '', 'Excelから消えた', fileName || '']); delete byKey[k]; });
   const rows = Object.keys(byKey).sort().map(k => ARM_COLS.map(c => byKey[k][c] === undefined ? '' : byKey[k][c]));
   if (sh.getMaxColumns() < ARM_COLS.length) sh.insertColumnsAfter(sh.getMaxColumns(), ARM_COLS.length - sh.getMaxColumns());
   sh.getRange(1, 1, 1, ARM_COLS.length).setValues([ARM_COLS]).setFontWeight('bold');
@@ -146,7 +149,16 @@ function mergeArms_(arms, at, fileName) {
   if (rows.length) sh.getRange(2, 1, rows.length, ARM_COLS.length).setNumberFormat('@').setValues(rows);
   clearArmsCache_();
   if (changes.length) appendRows_(CONFIG.SHEETS.CHANGES, changes);
-  return {added: added, updated: updated, changes: changes.length};
+  return {added: added, updated: updated, removed: gone.length, changes: changes.length};
+}
+
+// 今の台帳にあって新しいExcelに無いキー（純粋関数）。読み違いで大量に消さないよう、新しいExcelが今の9割未満の本数なら何も消さない
+function goneKeys_(cur, arms) {
+  if (!arms.length || arms.length < cur.length * 0.9) return [];
+  const now = {};
+  let from = '';
+  arms.forEach(a => { now[a['キー']] = 1; if (a['出荷日'] && (!from || a['出荷日'] < from)) from = a['出荷日']; });
+  return cur.filter(a => !now[a['キー']] && a['出荷日'] && a['出荷日'] >= from).map(a => a['キー']);
 }
 
 // 追跡する列のうち値が変わったもの [[列, 前, 後]]（純粋関数）
@@ -165,4 +177,4 @@ function appendRows_(name, rows) {
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 }
 
-if (typeof module !== 'undefined') module.exports = {parseShipValues_, fmtDate_, cleanCell_, fileDateKey_, diffArm_};
+if (typeof module !== 'undefined') module.exports = {parseShipValues_, fmtDate_, cleanCell_, fileDateKey_, diffArm_, goneKeys_};
