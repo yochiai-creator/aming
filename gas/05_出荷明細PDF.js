@@ -323,9 +323,7 @@ function resolveSource_(){
 function armPaintedKeys_(){
   // 刻印の写真がアプリにあるアームだけ○（11/3 ユーザー：刻印の写真が無いものは塗ってない。写真なしの手入力の記録では○にしない）
   // Excelの日付は予定なので○にしない（10/27 ユーザー：アプリで記録した物だけ）
-  var out = {};
-  photoRows_().forEach(function(p){ if (p['キー'] && p['写真ID']) out[p['キー']] = 1; });
-  return out;
+  return photoKeys_();
 }
 /** aming：変更チェック用。元ファイル＋塗装済みの顔ぶれ（○が増えたら作り直す） */
 function pdfSignature_(f){

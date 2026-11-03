@@ -165,7 +165,12 @@ function paintSpec_(a) {
 // 刻印写真があるアームのキー（1回の呼び出しの中で1回だけ読む）
 let PHOTO_KEYS = null;
 function photoKeys_() {
-  if (!PHOTO_KEYS) { PHOTO_KEYS = {}; photoRows_().forEach(p => { if (p['キー'] && p['写真ID']) PHOTO_KEYS[p['キー']] = 1; }); }
+  if (!PHOTO_KEYS) {
+    PHOTO_KEYS = {};
+    photoRows_().forEach(p => { if (p['キー'] && p['写真ID']) PHOTO_KEYS[p['キー']] = 1; });
+    // 工程記録に写真が付いている分も（11/3：刻印写真シートにひも付けが残っていない記録があった＝YN12B20051F1_52 など）
+    readTable_(sheet_(CONFIG.SHEETS.STEPS)).forEach(r => { if (r['キー'] && r['写真ID'] && r['取消'] !== '1') PHOTO_KEYS[r['キー']] = 1; });
+  }
   return PHOTO_KEYS;
 }
 function armView_(a, last, steps) {
