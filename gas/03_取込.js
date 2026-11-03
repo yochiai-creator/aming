@@ -140,7 +140,13 @@ function mergeArms_(arms, at, fileName) {
     byKey[a['キー']] = a;
   });
   // Excelから消えた行（号機の打ち間違いを直した等）は台帳からも消す。Excelは数年分あるので、その出荷日の範囲内で無くなった行だけ
-  const gone = goneKeys_(cur, arms);
+  // ただし写真や記録が付いているアームは消さない（号機変更で行が消えても、塗った記録を失わないように。変更履歴に残して人が確認）
+  const used = Object.assign({}, photoKeys_(), liveSteps_(), latestTaps_(loadTaps_()));
+  const gone = goneKeys_(cur, arms).filter(k => {
+    if (!used[k]) return true;
+    changes.push([at, k, '要確認', byKey[k]['出荷日'] || '', 'Excelから消えたが記録・写真があるので残した', fileName || '']);
+    return false;
+  });
   gone.forEach(k => { changes.push([at, k, '削除', byKey[k]['出荷日'] || '', 'Excelから消えた', fileName || '']); delete byKey[k]; });
   const rows = Object.keys(byKey).sort().map(k => ARM_COLS.map(c => byKey[k][c] === undefined ? '' : byKey[k][c]));
   if (sh.getMaxColumns() < ARM_COLS.length) sh.insertColumnsAfter(sh.getMaxColumns(), ARM_COLS.length - sh.getMaxColumns());
