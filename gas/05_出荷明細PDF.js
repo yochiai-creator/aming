@@ -321,10 +321,10 @@ function resolveSource_(){
 
 /** aming：塗装済みのキー（図番_号機）。工程記録の塗装完了・塗装後修正完了・出荷か、タップの記録 */
 function armPaintedKeys_(){
-  var out = {}, st = liveSteps_(), taps = latestTaps_(loadTaps_());
-  Object.keys(st).forEach(function(k){ var s = st[k]; if (s['塗装完了'] || s['塗装後修正完了'] || s['出荷']) out[k] = 1; });
-  Object.keys(taps).forEach(function(k){ out[k] = 1; });
+  // 刻印の写真がアプリにあるアームだけ○（11/3 ユーザー：刻印の写真が無いものは塗ってない。写真なしの手入力の記録では○にしない）
   // Excelの日付は予定なので○にしない（10/27 ユーザー：アプリで記録した物だけ）
+  var out = {};
+  photoRows_().forEach(function(p){ if (p['キー'] && p['写真ID']) out[p['キー']] = 1; });
   return out;
 }
 /** aming：変更チェック用。元ファイル＋塗装済みの顔ぶれ（○が増えたら作り直す） */
