@@ -181,7 +181,8 @@ function armView_(a, last, steps) {
     paintSpec: paintSpec_(a),
     status: last ? last['結果'] : '', by: last ? last['確認者'] : '', at: last ? last['日時'] : '',
     // 写真なしの手入力だけの塗装完了は、一覧と同じく「未」（11/4：一覧は未塗装なのに詳細は塗装完了と食い違っていた）
-    stage: (st => st === '塗装完了' && !photoKeys_()[a['キー']] ? '未' : st)(stage_(last, steps)),
+    // 逆に、刻印写真があれば記録が無くても「塗装完了」（11/4：写真はあるのに記録漏れで未塗装と出ていた YY16B00029F1_168）
+    stage: (st => st === '塗装完了' && !photoKeys_()[a['キー']] ? '未' : st === '未' && photoKeys_()[a['キー']] ? '塗装完了' : st)(stage_(last, steps)),
     // 一覧の絞込み用：塗装済＝刻印の写真がアプリにある（11/3 ユーザー：写真が無いものは塗ってない。記録だけでは塗装済にしない）
     // 塗装後修正済＝塗装後修正完了・タップ良・出荷のどれか
     painted: !!photoKeys_()[a['キー']],
