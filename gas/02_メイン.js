@@ -402,15 +402,13 @@ function apiList() {
   const rec = Object.keys(st).filter(k => String(st[k]['塗装完了'] || '').indexOf(today) === 0).length;
   return {paint: {date: today, total: pt.length, done: pt.filter(a => a.painted).length, rec: rec},
     // 塗装済み在庫（10/21 ユーザー：全在庫）：これから出荷する（出荷日が今日以降）で、塗装済みのアーム全部。
-    // 塗装済み＝刻印の写真がアプリにあるか、Excelの塗装完了日が今日まで。出荷を記録したものは除く
+    // 塗装済み＝刻印の写真がアプリにあるもの（11/3 ユーザー：在庫も写真だけ。Excelの塗装完了日は見ない）。出荷を記録したものは除く
     stock: loadArms_().filter(a => {
       const s = st[a['キー']] || {};
       if (s['出荷'] || !a['出荷日'] || a['出荷日'] < today) return false;
-      return !!photoKeys_()[a['キー']] || (a['塗装完了日'] && a['塗装完了日'] <= today);
+      return !!photoKeys_()[a['キー']];
     }).map(a => {
       const v = Object.assign(armView_(a, last[a['キー']], st[a['キー']]), {holes: holes[a['図番']] || ''});
-      // Excelの日付で済んでいる分も在庫の段分けでは済み扱い
-      if (!v.painted) { v.painted = true; v.xl = true; }
       if (!v.fixed && a['塗装後修正完了日'] && a['塗装後修正完了日'] <= today && !(last[a['キー']] && last[a['キー']]['結果'] === '否')) v.fixed = true;
       return v;
     })
