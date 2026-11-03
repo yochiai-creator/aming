@@ -162,6 +162,12 @@ function paintSpec_(a) {
   const i = String(a['情報①'] || '');
   return /グレー|イエロー|ブルー|ブラック|ホワイト|レッド|シルバー|グリーン/.test(i) ? i : '';
 }
+// 刻印写真があるアームのキー（1回の呼び出しの中で1回だけ読む）
+let PHOTO_KEYS = null;
+function photoKeys_() {
+  if (!PHOTO_KEYS) { PHOTO_KEYS = {}; photoRows_().forEach(p => { if (p['キー'] && p['写真ID']) PHOTO_KEYS[p['キー']] = 1; }); }
+  return PHOTO_KEYS;
+}
 function armView_(a, last, steps) {
   return {
     key: a['キー'], z: a['図番'], g: a['号機'], kishu: a['機種'], spec: a['仕様'], kenki: a['建機号機'],
@@ -170,8 +176,9 @@ function armView_(a, last, steps) {
     paintSpec: paintSpec_(a),
     status: last ? last['結果'] : '', by: last ? last['確認者'] : '', at: last ? last['日時'] : '',
     stage: stage_(last, steps),
-    // 一覧の絞込み用：塗装済＝塗装完了以降の記録あり、塗装後修正済＝塗装後修正完了・タップ良・出荷のどれか
-    painted: !!(steps && (steps['塗装完了'] || steps['塗装後修正完了'] || steps['出荷'])) || !!last,
+    // 一覧の絞込み用：塗装済＝刻印の写真がアプリにある（11/3 ユーザー：写真が無いものは塗ってない。記録だけでは塗装済にしない）
+    // 塗装後修正済＝塗装後修正完了・タップ良・出荷のどれか
+    painted: !!photoKeys_()[a['キー']],
     // 最新のタップが否なら塗装後修正済に数えない（ユーザー 10/12）
     fixed: !(last && last['結果'] === '否') && (!!(steps && (steps['塗装後修正完了'] || steps['出荷'])) || !!(last && last['結果'] === '良'))
   };
@@ -395,11 +402,11 @@ function apiList() {
   const rec = Object.keys(st).filter(k => String(st[k]['塗装完了'] || '').indexOf(today) === 0).length;
   return {paint: {date: today, total: pt.length, done: pt.filter(a => a.painted).length, rec: rec},
     // 塗装済み在庫（10/21 ユーザー：全在庫）：これから出荷する（出荷日が今日以降）で、塗装済みのアーム全部。
-    // 塗装済み＝アプリの記録（塗装完了・塗装後修正完了・タップ）か、Excelの塗装完了日が今日まで。出荷を記録したものは除く
+    // 塗装済み＝刻印の写真がアプリにあるか、Excelの塗装完了日が今日まで。出荷を記録したものは除く
     stock: loadArms_().filter(a => {
       const s = st[a['キー']] || {};
       if (s['出荷'] || !a['出荷日'] || a['出荷日'] < today) return false;
-      return !!(s['塗装完了'] || s['塗装後修正完了'] || last[a['キー']]) || (a['塗装完了日'] && a['塗装完了日'] <= today);
+      return !!photoKeys_()[a['キー']] || (a['塗装完了日'] && a['塗装完了日'] <= today);
     }).map(a => {
       const v = Object.assign(armView_(a, last[a['キー']], st[a['キー']]), {holes: holes[a['図番']] || ''});
       // Excelの日付で済んでいる分も在庫の段分けでは済み扱い

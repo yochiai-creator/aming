@@ -216,6 +216,7 @@ function callClaude_(prompt, imgsB64, schema) {
  */
 // shotAt：写真を撮った日時（'yyyy/MM/dd HH:mm'、アルバムから読んだ写真のEXIF）。あれば写真の日時・ファイル名をそれにする（10/27 ユーザー）
 function apiLinkPhoto(photoId, key, readText, purpose, sharp, shotAt) {
+  PHOTO_KEYS = null;
   if (!photoId) return null;
   const a = loadArms_().find(r => r['キー'] === key);
   if (!a) throw new Error('台帳にないアームです: ' + key);
@@ -238,6 +239,7 @@ function apiLinkPhoto(photoId, key, readText, purpose, sharp, shotAt) {
 
 /** 刻印写真を消す（ドライブのゴミ箱へ。30日は戻せる）＋「刻印写真」シートの行を削除 */
 function apiDeletePhoto(photoId, key) {
+  PHOTO_KEYS = null;
   const sh = sheet_(CONFIG.SHEETS.PHOTOS);
   if (sh.getLastRow() > 1) {
     const ids = sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]);
