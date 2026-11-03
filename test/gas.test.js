@@ -217,6 +217,7 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
     assert.ok(calls.includes("apiSaveTap"));
     assert.ok(w.document.querySelector(".hist").textContent.includes("処置 33"));
   });
+  await wait(30); // 写真は後から読み込まれる
   t("刻印写真：詳細に表示", () => assert.strictEqual(w.document.querySelector(".photos img").getAttribute("src"), "data:image/jpeg;base64,AAAA"));
   w.confirm = () => true; click('[data-act="delPhoto"]'); await wait(30);
   t("刻印写真：削除", () => { assert.ok(calls.includes("apiDeletePhoto")); assert.ok(!w.document.querySelector(".photos")); });
