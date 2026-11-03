@@ -160,8 +160,8 @@ function generateArmPDF_core_(src){
     var prevSnapshot = sameSrc ? loadSnapshot_(SNAPSHOT_BASE_NAME) : loadSnapshot_();
     if (!sameSrc) writeSnapshotFile_(SNAPSHOT_BASE_NAME, prevSnapshot);
     markChanges_(rows, prevSnapshot);
-    // aming：塗装済み（アプリに塗装完了・塗装後修正完了・出荷・タップの記録あり）は号機に○
-    var painted = armPaintedKeys_();
+    // aming：塗装済みは号機に○（11/4 ユーザー：○は要らない＝PDF_MARU=false）
+    var painted = PDF_MARU ? armPaintedKeys_() : {};
     rows.forEach(function(x){ x.painted = !!painted[x.zu + '_' + x.go]; });
 
     rows.sort(function(a,b){ return (a.ship.getTime()-b.ship.getTime()) || (destRank_(a.dest)-destRank_(b.dest)); });
@@ -284,7 +284,7 @@ function buildHtml_(pages, rng){
       tbodies+='<tbody class="grp">'+trs+'</tbody>';
     }
     body+='<div class="'+cls+'"><div class="title">アーム機種別出荷明細</div>'
-        +'<div class="sub">出荷日 '+esc_(rng)+'（直近1ヶ月）　号機の○＝塗装済み（aming の記録）</div>'
+        +'<div class="sub">出荷日 '+esc_(rng)+'（直近1ヶ月）'+(PDF_MARU ? '　号機の○＝塗装済み（aming の記録）' : '')+'</div>'
         +'<table>'+thead+tbodies+'</table></div>';
   }
   return '<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>'+css+'</style></head><body>'+body+'</body></html>';
@@ -319,6 +319,8 @@ function resolveSource_(){
   return { file: null, viaFallback: false };
 }
 
+// aming：号機の○（塗装済み）を付けるか。11/4 ユーザー：○は無くして
+var PDF_MARU = false;
 /** aming：塗装済みのキー（図番_号機）。工程記録の塗装完了・塗装後修正完了・出荷か、タップの記録 */
 function armPaintedKeys_(){
   // 刻印の写真がアプリにあるアームだけ○（11/3 ユーザー：刻印の写真が無いものは塗ってない。写真なしの手入力の記録では○にしない）
@@ -327,6 +329,7 @@ function armPaintedKeys_(){
 }
 /** aming：変更チェック用。元ファイル＋塗装済みの顔ぶれ（○が増えたら作り直す） */
 function pdfSignature_(f){
+  if (!PDF_MARU) return sourceSignature_(f);
   var keys = Object.keys(armPaintedKeys_()).sort().join(',');
   var h = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, keys).map(function(b){ return ((b + 256) % 256).toString(16); }).join('');
   return sourceSignature_(f) + '#' + h;
