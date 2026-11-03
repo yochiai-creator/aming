@@ -227,12 +227,17 @@ function apiLinkPhoto(photoId, key, readText, purpose, sharp, shotAt) {
   file.moveTo(photoFolder_(when));
   const sh = sheet_(CONFIG.SHEETS.PHOTOS);
   const now = shotAt && shotDate_(shotAt) ? String(shotAt).slice(0, 16) : Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
-  if (sh.getLastColumn() < PHOTO_COLS.length) sh.getRange(1, 1, 1, PHOTO_COLS.length).setValues([PHOTO_COLS]).setFontWeight('bold');
   const row = [now, a['キー'], a['図番'], a['号機'], photoId, name, readText || '', purpose || '', sharp === undefined || sharp === null ? '' : sharp];
-  const ids = sh.getLastRow() > 1 ? sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]) : [];
-  const i = ids.indexOf(photoId);
-  if (i < 0) appendRows_(CONFIG.SHEETS.PHOTOS, [row]);
-  else sh.getRange(i + 2, 1, 1, row.length).setValues([row]);
+  // 行の位置を読んでから書くまでの間にほかの写真の追加・削除が入ると、別の行を上書きしてしまう（11/3 まとめて読んだ分で行が消えていた）ので鍵をかける
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    if (sh.getLastColumn() < PHOTO_COLS.length) sh.getRange(1, 1, 1, PHOTO_COLS.length).setValues([PHOTO_COLS]).setFontWeight('bold');
+    const ids = sh.getLastRow() > 1 ? sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]) : [];
+    const i = ids.indexOf(photoId);
+    if (i < 0) appendRows_(CONFIG.SHEETS.PHOTOS, [row]);
+    else sh.getRange(i + 2, 1, 1, row.length).setValues([row]);
+    SpreadsheetApp.flush();
+  } finally { lock.releaseLock(); }
   CacheService.getScriptCache().remove('learned');
   return name;
 }
@@ -241,10 +246,14 @@ function apiLinkPhoto(photoId, key, readText, purpose, sharp, shotAt) {
 function apiDeletePhoto(photoId, key) {
   PHOTO_KEYS = null;
   const sh = sheet_(CONFIG.SHEETS.PHOTOS);
-  if (sh.getLastRow() > 1) {
-    const ids = sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]);
-    for (let i = ids.length - 1; i >= 0; i--) if (ids[i] === photoId) sh.deleteRow(i + 2);
-  }
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    if (sh.getLastRow() > 1) {
+      const ids = sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => r[0]);
+      for (let i = ids.length - 1; i >= 0; i--) if (ids[i] === photoId) sh.deleteRow(i + 2);
+    }
+    SpreadsheetApp.flush();
+  } finally { lock.releaseLock(); }
   try { DriveApp.getFileById(photoId).setTrashed(true); } catch (e) { console.warn('写真ファイルなし: ' + photoId); }
   return apiArm(key);
 }
