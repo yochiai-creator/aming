@@ -317,7 +317,7 @@ h1{font-size:1.9rem}
 #tapForm.focus{border-color:var(--accent);box-shadow:inset 0 0 22px rgba(0,200,215,.12)}
 .qi{display:flex;gap:10px;align-items:flex-start;border-top:1px dashed var(--edge);padding:10px 0}
 .qi:first-child{border-top:none}
-.qi .qt{flex:0 0 112px;height:56px;background:#060909 center/cover no-repeat;border:1px solid var(--edge)}
+.qi .qt{flex:0 0 112px;height:56px;background:#060909 center/contain no-repeat;border:1px solid var(--edge);object-fit:contain}
 .qi .qb{flex:1;min-width:0}
 .qi .qs{font-size:.78rem;font-weight:700}
 .qi .qs.ok{color:var(--ok)}.qi .qs.ng{color:var(--ng)}.qi .qs.wait{color:var(--cyan)}.qi .qs.mid{color:var(--warn)}
@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/3-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/3-3"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1077,7 +1077,6 @@ function renderQueue() {
     (recd.length ? `<button type="button" class="btn sec mini" data-act="qclear">記録済みを片付ける</button>` : "");
   $("qList").innerHTML = live.map(q => {
     const lb = Q_LABEL[q.state] || ["wait", q.state];
-    const thumb = q.thumb ? `style="background-image:url('${q.thumb}')"` : "";
     let acts = "";
     if (q.state === "確定" && q.rec) acts = `<span class="qdone">✔ ${esc(q.purpose)} 記録済み</span> <button type="button" class="link" data-act="qunrec" data-id="${esc(q.id)}">取消</button> <button type="button" class="link" data-act="qopen" data-id="${esc(q.id)}">詳細</button>`;
     else if (q.state === "確定" && STEP_PURPOSE(q.purpose)) acts = `<button type="button" class="btn go mini" data-act="qrec" data-id="${esc(q.id)}">${esc(q.purpose)}を記録</button> <button type="button" class="link" data-act="qopen" data-id="${esc(q.id)}">詳細</button>`;
@@ -1098,7 +1097,7 @@ function renderQueue() {
     const need = ["候補", "刻印なし", "失敗"].includes(q.state);
     const bigImgs = need ? (q.box && q.thumb ? [q.thumb, q.enh].filter(Boolean) : [q.full || q.thumb].filter(Boolean)) : [];
     const big = bigImgs.length ? `<div class="qbig">${bigImgs.map(u => `<img src="${u}" data-zoom="1" alt="刻印">`).join("")}<small class="muted">タップで拡大</small></div>` : "";
-    return `<div class="qi ${q.rec ? "recd" : ""} ${big ? "need" : ""}">${chk}${big ? "" : `<div class="qt" ${thumb}></div>`}<div class="qb">${big}
+    return `<div class="qi ${q.rec ? "recd" : ""} ${big ? "need" : ""}">${chk}${big ? "" : (q.thumb ? `<img class="qt" src="${q.thumb}" data-zoom="1" alt="刻印（タップで拡大）">` : `<div class="qt"></div>`)}<div class="qb">${big}
       <div class="qs ${lb[0]}">${lb[0] === "wait" ? '<span class="spin"></span>' : ""}${esc(lb[1])}${q.purpose ? "　" + esc(q.purpose) : ""}</div>
       <div class="qr">${esc(arm)}</div>${shipQ}${q.shotAt ? `<div class="muted" style="font-size:.72rem">📷 撮影 ${esc(q.shotAt.slice(5))}${q.shotAt.slice(0, 10) !== boot.today ? "（この日時で記録）" : ""}</div>` : ""}${warn}${lightW}${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
       <div class="qa">${acts}</div></div>
