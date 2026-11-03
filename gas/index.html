@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/3-4"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/4-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1392,6 +1392,8 @@ async function qUpload(tmp) {
   for (let i = 0; ; i++) {
     try {
       const v = await run("apiQueueAdd", data, L.purpose, L.shotAt);
+      // 同じ写真をもう送ってあった：新しく積まない（11/4）
+      if (v.dup) { delete qLocal[tmp]; queue = queue.filter(q => q.id !== tmp); if (!queue.some(q => q.id === v.id)) qUpdate(v); renderQueue(); toast("同じ写真はもう送ってあります（はじきました）"); return; }
       qLocal[v.id] = L.canvas; delete qLocal[tmp];
       v._tmp = tmp; qUpdate(v); delete queue.find(q => q.id === v.id)._tmp;
       qPump(); return;

@@ -87,13 +87,26 @@ function queueHeader_() {
 }
 // shotAt：写真の撮影日時（画面が写真のEXIFから読む。'yyyy/MM/dd HH:mm'）。アルバムからまとめて読んだ時に、記録の日時をこれにする
 function apiQueueAdd(b64, purpose, shotAt) {
-  const fullId = savePhoto_(b64, 'raw');
-  const id = Utilities.getUuid().slice(0, 8);
-  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
+  // 同じ写真を2回送ったら（まとめて読むで同じ写真を選んだ・送り直した）新しく積まずに前の行を返す（11/4 ユーザー：はじいて）
+  const hash = photoHash_(b64);
   queueHeader_();
-  const row = QUEUE_COLS.map(c => ({'ID': id, '日時': now, '目的': purpose || '', '状態': '待ち', '元写真ID': fullId, '撮影日時': /^\d{4}\/\d\d\/\d\d \d\d:\d\d$/.test(shotAt || '') ? shotAt : ''})[c] || '');
-  appendRows_(CONFIG.SHEETS.QUEUE, [row]);
-  return queueView_(queueFind_(id));
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const dup = queueRows_().find(r => r['ハッシュ'] === hash);
+    if (dup) { const v = queueView_(dup); v.dup = true; return v; }
+    const fullId = savePhoto_(b64, 'raw');
+    const id = Utilities.getUuid().slice(0, 8);
+    const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
+    const row = QUEUE_COLS.map(c => ({'ID': id, '日時': now, '目的': purpose || '', '状態': '待ち', '元写真ID': fullId, 'ハッシュ': hash,
+      '撮影日時': /^\d{4}\/\d\d\/\d\d \d\d:\d\d$/.test(shotAt || '') ? shotAt : ''})[c] || '');
+    appendRows_(CONFIG.SHEETS.QUEUE, [row]);
+    SpreadsheetApp.flush();
+    return queueView_(queueFind_(id));
+  } finally { lock.releaseLock(); }
+}
+// 写真の中身から作る目印（同じ写真なら同じ値）
+function photoHash_(b64) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, Utilities.base64Decode(b64)).map(b => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
 }
 
 /** 1件読む：写真全体から枠＋読み → 照合 */
