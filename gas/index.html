@@ -484,7 +484,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/3-3"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/3-4"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1095,7 +1095,8 @@ function renderQueue() {
     const chk = qCheckable(q) ? `<label class="qc"><input type="checkbox" data-qsel="${esc(q.id)}" ${sel.includes(q) ? "checked" : ""} aria-label="一括登録に入れる"></label>` : "";
     // 読めなかった・候補から選ぶ時は、刻印を大きく見せる（切り出し＋凹凸強調、無ければ写真全体）。タップで拡大
     const need = ["候補", "刻印なし", "失敗"].includes(q.state);
-    const bigImgs = need ? (q.box && q.thumb ? [q.thumb, q.enh].filter(Boolean) : [q.full || q.thumb].filter(Boolean)) : [];
+    // 特定できた行も、刻印と照らし合わせられるよう切り出しを横いっぱいに出す（11/3 ユーザー：小さくて刻印確認できない）
+    const bigImgs = need ? (q.box && q.thumb ? [q.thumb, q.enh].filter(Boolean) : [q.full || q.thumb].filter(Boolean)) : (q.thumb ? [q.thumb] : []);
     const big = bigImgs.length ? `<div class="qbig">${bigImgs.map(u => `<img src="${u}" data-zoom="1" alt="刻印">`).join("")}<small class="muted">タップで拡大</small></div>` : "";
     return `<div class="qi ${q.rec ? "recd" : ""} ${big ? "need" : ""}">${chk}${big ? "" : (q.thumb ? `<img class="qt" src="${q.thumb}" data-zoom="1" alt="刻印（タップで拡大）">` : `<div class="qt"></div>`)}<div class="qb">${big}
       <div class="qs ${lb[0]}">${lb[0] === "wait" ? '<span class="spin"></span>' : ""}${esc(lb[1])}${q.purpose ? "　" + esc(q.purpose) : ""}</div>
