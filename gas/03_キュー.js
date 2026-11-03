@@ -218,7 +218,7 @@ function apiRecropList(cropId, days, oldOnly) {
   const from = Utilities.formatDate(new Date(Date.now() - (days || 14) * 86400000), 'Asia/Tokyo', 'yyyy/MM/dd');
   const rows = queueRows_();
   const out = rows.filter(r => r['切り出しID'] && r['元写真ID'] && r['枠'] && (cropId ? r['切り出しID'] === cropId : r['日時'] >= from) && (!oldOnly || (+r['切り出し版'] || 0) < CROP_VER))
-    .map(r => ({cropId: r['切り出しID'], fullId: r['元写真ID'], box: JSON.parse(r['枠'])}));
+    .map(r => ({cropId: r['切り出しID'], fullId: r['元写真ID'], box: JSON.parse(r['枠']), read: r['AI読取']}));
   // その場で撮った写真（キューに無い＝黄色い枠の中だけ保存）は作り直さない（10/27 やってみたら欠けたので中止。元に戻す apiRevertBadRecrops）
   return out;
 }
