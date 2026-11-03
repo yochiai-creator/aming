@@ -242,11 +242,16 @@ function apiRecropSave(cropId, b64, sharp, whole) {
   if (q) queueSet_(q, {'切り出し版': CROP_VER});
   if (sharp !== undefined && sharp !== null) {
     if (q) queueSet_(q, {'鮮明度': sharp});
-    const n = sh.getLastRow() - 1;
-    if (n > 0) {
-      const ids = sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, n, 1).getDisplayValues().map(r => r[0]), i = ids.indexOf(cropId);
-      if (i >= 0) sh.getRange(i + 2, PHOTO_COLS.indexOf('鮮明度') + 1).setValue(sharp);
-    }
+    // 行の位置を読んでから書くまでに行が増減すると別の行に書いてしまうので鍵をかける（apiLinkPhoto と同じ）
+    const lock = LockService.getScriptLock(); lock.waitLock(20000);
+    try {
+      const n = sh.getLastRow() - 1;
+      if (n > 0) {
+        const ids = sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, n, 1).getDisplayValues().map(r => r[0]), i = ids.indexOf(cropId);
+        if (i >= 0) sh.getRange(i + 2, PHOTO_COLS.indexOf('鮮明度') + 1).setValue(sharp);
+      }
+      SpreadsheetApp.flush();
+    } finally { lock.releaseLock(); }
   }
   return true;
 }

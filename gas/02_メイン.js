@@ -180,7 +180,8 @@ function armView_(a, last, steps) {
     paintPlan: a['塗装完了日'] || '', fixPlan: a['塗装後修正完了日'] || '', // 生産管理Excelの予定日
     paintSpec: paintSpec_(a),
     status: last ? last['結果'] : '', by: last ? last['確認者'] : '', at: last ? last['日時'] : '',
-    stage: stage_(last, steps),
+    // 写真なしの手入力だけの塗装完了は、一覧と同じく「未」（11/4：一覧は未塗装なのに詳細は塗装完了と食い違っていた）
+    stage: (st => st === '塗装完了' && !photoKeys_()[a['キー']] ? '未' : st)(stage_(last, steps)),
     // 一覧の絞込み用：塗装済＝刻印の写真がアプリにある（11/3 ユーザー：写真が無いものは塗ってない。記録だけでは塗装済にしない）
     // 塗装後修正済＝塗装後修正完了・タップ良・出荷のどれか
     painted: !!photoKeys_()[a['キー']],
