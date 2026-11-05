@@ -511,7 +511,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/5-5"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/5-6"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1611,17 +1611,29 @@ function punchSrc(img) {
   const w = img.naturalWidth, h = img.naturalHeight; if (!w || !h) return "";
   const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d");
   x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, w, h), p = d.data, n = w * h, g = new Float32Array(n), pad = new Uint8Array(n);
-  // 11/5 ユーザー「光の具合で見にくい、明るさ補正して揃えれる？」：大きくぼかした明るさ（＝光のむら）で割って、写真のどこでも同じ明るさに。
+  // 11/5 ユーザー「光の具合で見にくい、明るさ補正して揃えれる？」：光のむらで割って、写真のどこでも同じ明るさに。
   // 切り出しの黒いすき間（作り直しで出る）は計算から外す
   const hist = new Array(256).fill(0);
   for (let i = 0; i < n; i++) { const v = (p[i * 4] * 77 + p[i * 4 + 1] * 150 + p[i * 4 + 2] * 29) >> 8; g[i] = v; if (v < 12) pad[i] = 1; else hist[v]++; }
   let tot = 0; for (const k of hist) tot += k; if (tot < n * 0.3) return "";
-  let med = 0; for (let k = 0, acc = 0; k < 256; k++) { acc += hist[k]; if (acc >= tot / 2) { med = k; break; } }
-  for (let i = 0; i < n; i++) { const v = pad[i] ? med : g[i]; p[i * 4] = p[i * 4 + 1] = p[i * 4 + 2] = v; g[i] = v; }
-  x.putImageData(d, 0, 0);
-  const bg = blurred(c, w, h, Math.max(w, h) / 24);
+  // 光のむら＝写真全体のなだらかな明るさを、地の部分（明るさ25〜90%の画素）に2次の面を当てはめて求める。
+  // 11/5 前はぼかしで求めていたが、字の影に引っぱられて字のまわりに白い丸（ユーザー：見にくい）が出た
+  const pct = t => { for (let k = 0, acc = 0; k < 256; k++) { acc += hist[k]; if (acc >= tot * t) return k; } return 255; };
+  const g25 = pct(0.25), g90 = pct(0.9), M = Array.from({length: 6}, () => new Float64Array(7));
+  for (let y = 0; y < h; y += 3) for (let xx = 0; xx < w; xx += 3) {
+    const i = y * w + xx, v = g[i]; if (pad[i] || v < g25 || v > g90) continue;
+    const X = xx / w * 2 - 1, Y = y / h * 2 - 1, f = [1, X, Y, X * X, X * Y, Y * Y];
+    for (let r0 = 0; r0 < 6; r0++) { for (let c0 = 0; c0 < 6; c0++) M[r0][c0] += f[r0] * f[c0]; M[r0][6] += f[r0] * v; }
+  }
+  for (let col = 0; col < 6; col++) {  // ガウスの消去法
+    let pv = col; for (let r0 = col + 1; r0 < 6; r0++) if (Math.abs(M[r0][col]) > Math.abs(M[pv][col])) pv = r0;
+    [M[col], M[pv]] = [M[pv], M[col]]; if (Math.abs(M[col][col]) < 1e-9) return "";
+    for (let r0 = 0; r0 < 6; r0++) if (r0 !== col) { const k = M[r0][col] / M[col][col]; for (let c0 = col; c0 < 7; c0++) M[r0][c0] -= k * M[col][c0]; }
+  }
+  const cf = M.map((row, i) => row[6] / row[i]);
+  const bgAt = i => { const X = (i % w) / w * 2 - 1, Y = ((i / w) | 0) / h * 2 - 1; return Math.max(1, cf[0] + cf[1] * X + cf[2] * Y + cf[3] * X * X + cf[4] * X * Y + cf[5] * Y * Y); };
   const r = new Float32Array(n), vals = [];
-  for (let i = 0; i < n; i++) { r[i] = g[i] / Math.max(1, bg[i * 4]); if (!pad[i] && (i % 7) === 0) vals.push(r[i]); }
+  for (let i = 0; i < n; i++) { r[i] = g[i] / bgAt(i); if (!pad[i] && (i % 7) === 0) vals.push(r[i]); }
   vals.sort((u, v) => u - v); const q = t => vals[Math.min(vals.length - 1, Math.floor(vals.length * t))];
   const lo = q(0.01), m = q(0.5), hi = q(0.995); if (!(m - lo > 0.01) || !(hi - m > 0.005)) return "";
   // 地の色はどの写真も同じ明るさ（0.72）に、字の影は黒まで、光った縁は白まで
