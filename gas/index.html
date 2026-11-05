@@ -165,7 +165,12 @@ ul.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--edge);margi
 .tile i.plan{display:block;font-style:normal;font-size:.66rem;color:var(--sub);font-family:"Share Tech Mono","BIZ UDPGothic",monospace}
 .tile i.plan.late{color:var(--ng);font-weight:700}
 .lmode{display:flex;gap:6px;margin:0 0 10px}.lmode button{flex:1;padding:10px 6px;background:#0A0D0F;border:1px solid var(--edge-hi);color:var(--sub);font-weight:700}
-.lmode button.on{background:var(--accent);color:#fff;border-color:var(--accent)}.lmode small{margin-left:6px;font-family:"Share Tech Mono",monospace}
+.lmode button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.lmode small.tn{color:#fff;background:var(--ng);padding:0 6px;border-radius:9px}
+.todo h2 b{margin-left:10px;color:var(--ng);font-family:"Share Tech Mono",monospace}
+.todo.hot{border-color:var(--ng)}.todo.warm{border-color:#F5B800}.todo.ok h2{color:#3fd08a}
+.tday{display:flex;justify-content:space-between;align-items:center;margin:12px 0 2px;font-size:1rem}.tday b{color:var(--sub)}
+.tile b{font-size:1.15rem}.lmode small{margin-left:6px;font-family:"Share Tech Mono",monospace}
 details.sd summary em.late{font-style:normal;color:var(--ng);font-size:.75rem;margin-left:6px}
 .shipbig{margin-top:6px;font-size:1.05rem;font-weight:700}.shipq{font-size:.82rem;margin-top:2px}
 .ship1{color:var(--ng)}.ship3{color:#FFB020}.ship9{color:var(--cyan)}.ship0{color:var(--sub)}
@@ -205,6 +210,17 @@ details.sd summary em.late{font-style:normal;color:var(--ng);font-size:.75rem;ma
 .full .bar .btn.go{background:linear-gradient(180deg,#22C3D0,#00848F);color:#fff}
 .full .hint{text-align:center;font-size:.88rem;padding:10px 12px 0;color:var(--cyan);font-family:"Share Tech Mono","BIZ UDPGothic",monospace}
 #vfBox{position:relative;flex:1;overflow:hidden}
+#burstBox{position:relative;flex:1;overflow:hidden}
+#burstBox video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#burstAim{position:absolute;left:8%;right:8%;top:50%;transform:translateY(-50%);aspect-ratio:3.2/1;border:2px dashed rgba(0,200,215,.85);border-radius:6px;pointer-events:none}
+#burstFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
+#burstFlash.on{opacity:.85;transition:none}
+.bbar{display:flex;align-items:center;justify-content:space-around;padding:14px 12px 6px}
+.bshut{width:84px;height:84px;border-radius:50%;background:#fff;border:6px solid var(--accent);box-shadow:0 0 0 4px rgba(255,255,255,.25)}
+.bshut:active{transform:scale(.93);background:#d8f6f8}
+.bthumb,.bside{width:68px;height:68px;border-radius:12px;background:#1A2226;border:1px solid var(--edge-hi);color:#fff;font-weight:700;background-size:cover;background-position:center}
+.bthumb span{display:block;font-size:1.5rem;font-family:"Share Tech Mono",monospace;text-shadow:0 1px 3px #000}.bthumb small{font-size:.7rem;text-shadow:0 1px 3px #000}
+.bside.on{background:#F5B800;color:#111}
 #vfBox video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 #guide{position:absolute;left:7%;width:86%;top:50%;transform:translateY(-50%);aspect-ratio:3.2/1;border:2px solid var(--accent);box-shadow:0 0 0 9999px rgba(0,0,0,.6),0 0 14px rgba(0,200,215,.6)}
 #guide::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(63,208,255,.6);animation:scan 2s linear infinite}
@@ -367,7 +383,8 @@ h1{font-size:1.9rem}
       <button type="button" data-act="purpose" data-v="塗装完了">塗装完了</button><button type="button" data-act="purpose" data-v="塗装後チェック">塗装後チェック</button><button type="button" data-act="purpose" data-v="出荷">出荷</button>
     </div></div>
     <div class="purpose" id="meRow"><span id="meLab">確認者</span><div class="seg" id="meSeg"></div></div>
-    <button class="shoot" id="shootBtn" type="button"><svg class="bucket" viewBox="0 0 34 26" fill="none" stroke="#fff" stroke-width="2.6"><path d="M2 8 V2 H9 M25 2 H32 V8 M32 18 V24 H25 M9 24 H2 V18"/><path d="M8 13 H26" stroke-width="1.6" opacity=".9"/></svg><b class="pl" id="shootPurpose"></b>刻印を撮る<small>撮るだけでOK。続けて何枚でも。読み取りは裏でやって、終わったら知らせます</small></button>
+    <button class="shoot" id="shootBtn" type="button"><svg class="bucket" viewBox="0 0 34 26" fill="none" stroke="#fff" stroke-width="2.6"><path d="M2 8 V2 H9 M25 2 H32 V8 M32 18 V24 H25 M9 24 H2 V18"/><path d="M8 13 H26" stroke-width="1.6" opacity=".9"/></svg><b class="pl" id="shootPurpose"></b>刻印を撮る<small>カメラを開いたまま、シャッターを押すたびに1枚。読み取り・記録は裏でやります</small></button>
+    <button class="shoot alt" id="camBtn" type="button">カメラアプリで撮る<small>ピントが合いにくい時など。1枚ずつ</small></button>
     <button class="shoot alt" id="bulkBtn" type="button">撮ってある写真をまとめて読む<small>アルバムから何枚でも選べます（目的は上で選んだもの）</small></button>
     <button class="shoot alt" id="pickBtn" type="button">写真を選んで自分で枠を合わせる</button>
     <input id="cam" type="file" accept="image/*" capture="environment" class="hidden">
@@ -404,6 +421,16 @@ h1{font-size:1.9rem}
   <div class="hint">枠いっぱいに刻印を合わせて「撮る」</div>
   <div id="vfBox"><video id="video" playsinline muted autoplay></video><div id="guide"></div></div>
   <div class="bar"><button class="btn" id="vfCancel" type="button">やめる</button><button class="btn go" id="vfShot" type="button">撮る</button></div>
+</div>
+<div class="full hidden" id="burst">
+  <div class="hint" id="burstHint">刻印を画面の真ん中に。<b>シャッターを押すたびに1枚</b>。読み取りは裏でやります</div>
+  <div id="burstBox"><video id="burstVideo" playsinline muted autoplay></video><div id="burstAim"></div><div id="burstFlash"></div></div>
+  <div class="bbar">
+    <button type="button" class="bthumb" id="burstThumb" aria-label="撮った枚数"><span id="burstN">0</span><small>枚</small></button>
+    <button type="button" class="bshut" id="burstShut" aria-label="撮る"></button>
+    <button type="button" class="bside" id="burstLight" aria-label="ライト">ライト</button>
+  </div>
+  <div class="bar"><button class="btn go" id="burstDone" type="button">終わる（一覧を見る）</button></div>
 </div>
 <div class="full hidden" id="crop">
   <div class="hint">枠を刻印の2行に合わせる（ドラッグで移動、角で大きさ）</div>
@@ -484,7 +511,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/4-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/5-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -587,10 +614,32 @@ function fetchList() {
   return listFetching;
 }
 // 一覧の表示：出荷日ごと／塗装済み在庫（出荷日＝曜日ごとにまとめて全部）
-let listMode = ls.get("trace.listMode") || "day";
+// 11/5 ユーザー（一覧を見やすく）：最初は「やること」。一度だけ切り替える
+let listMode = ls.get("trace.todoV1") ? (ls.get("trace.listMode") || "todo") : "todo";
+ls.set("trace.todoV1", "1");
+const dayShift = (d, n) => { const x = new Date(d.replace(/-/g, "/")); x.setDate(x.getDate() + n); return `${x.getFullYear()}/${String(x.getMonth() + 1).padStart(2, "0")}/${String(x.getDate()).padStart(2, "0")}`; };
+// やること：①出荷が近い（あさってまで）のに未塗装 ②塗装予定日を過ぎた未塗装 ③明日までに出荷で塗装後チェックがまだ
+function todoLists() {
+  const rows = (listData && listData.rows) || [], today = boot.today, soon = dayShift(today, 2), tmr = dayShift(today, 1);
+  return {
+    ship: rows.filter(a => !isPainted(a) && a.ship && a.ship <= soon),
+    plan: rows.filter(a => !isPainted(a) && a.paintPlan && a.paintPlan <= today && !(a.ship && a.ship <= soon)),
+    fix: rows.filter(a => isPainted(a) && !isFixed(a) && a.ship && a.ship <= tmr)
+  };
+}
+function drawTodo() {
+  const el = $("listView"), t = todoLists(), n = t.ship.length + t.plan.length + t.fix.length;
+  const byShip = list => { const m = new Map(); list.forEach(a => { if (!m.has(a.ship)) m.set(a.ship, []); m.get(a.ship).push(a); }); return [...m].sort((x, y) => String(x[0]).localeCompare(String(y[0]))); };
+  const sec = (title, note, list, cls, grouped) => list.length ? `<section class="todo ${cls}"><h2>${title}<b>${list.length}本</b></h2><p class="muted">${note}</p>
+    ${grouped ? byShip(list).map(([d, l]) => `<div class="tday">${shipLabel(d)}<b>${l.length}本</b></div>${armGroups(l)}`).join("") : armGroups(list)}</section>` : "";
+  el.innerHTML = modeBar() + (n ? sec("出荷が近いのに未塗装", "あさってまでに出荷。刻印の写真がまだ無いアーム", t.ship, "hot", true)
+    + sec("塗装予定を過ぎて未塗装", "Excelの塗装予定日が今日まで（出荷はまだ先）", t.plan, "warm", false)
+    + sec("塗装後チェックがまだ", "明日までに出荷。塗装済みで、塗装後チェック（タップ）がまだ", t.fix, "fixw", true)
+    : `<section class="todo ok"><h2>やることはありません</h2><p class="muted">出荷が近い未塗装・予定を過ぎた未塗装・出荷前の塗装後チェック残りはゼロです</p></section>`);
+}
 function modeBar() {
-  const n = (listData.stock || []).length;
-  return `<div class="lmode"><button type="button" data-act="lmode" data-m="day" class="${listMode === "day" ? "on" : ""}">出荷日ごと</button><button type="button" data-act="lmode" data-m="stock" class="${listMode === "stock" ? "on" : ""}">塗装済み在庫<small>${n}本</small></button></div>`;
+  const n = (listData.stock || []).length, t = todoLists(), tn = t.ship.length + t.plan.length + t.fix.length;
+  return `<div class="lmode"><button type="button" data-act="lmode" data-m="todo" class="${listMode === "todo" ? "on" : ""}">やること<small class="${tn ? "tn" : ""}">${tn}</small></button><button type="button" data-act="lmode" data-m="day" class="${listMode === "day" ? "on" : ""}">出荷日ごと</button><button type="button" data-act="lmode" data-m="stock" class="${listMode === "stock" ? "on" : ""}">塗装済み在庫<small>${n}本</small></button></div>`;
 }
 function drawStock(keep) {
   const el = $("listView"), list = listData.stock || [], y = window.scrollY;
@@ -603,6 +652,7 @@ function drawStock(keep) {
 }
 function drawList(keep) {
   if (listMode === "stock") return drawStock(keep);
+  if (listMode === "todo") { const y = window.scrollY; drawTodo(); if (keep) window.scrollTo(0, y); return; }
   const el = $("listView"), days = listData.days.length ? listData.days : boot.days;
   if (!day || !days.some(d => d.date === day)) day = (days[0] || {}).date || boot.today;
   const y = window.scrollY, open = keep ? [...el.querySelectorAll("details.ud[open]")].map(d => d.dataset.d) : [];
@@ -942,6 +992,36 @@ async function openViewfinder() {
 }
 function camNote(m) { $("tip").textContent = "⚠ " + m + "。普通に撮ってから枠で切り抜きます。"; }
 function closeViewfinder() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; $("vf").classList.add("hidden"); }
+/* ---------- 連続撮影（カメラを開いたまま何枚でも） ---------- */
+let burstStream = null, burstCount = 0, burstTorch = false;
+async function openBurst() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
+  try { burstStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: "environment"}, width: {ideal: 3840}, height: {ideal: 2160}}, audio: false}); }
+  catch (e) { toast(e && e.name === "NotAllowedError" ? "カメラの使用が許可されていません。カメラアプリで撮ります" : "カメラを起動できませんでした。カメラアプリで撮ります"); return false; }
+  const v = $("burstVideo"); v.srcObject = burstStream; $("burst").classList.remove("hidden");
+  burstCount = 0; burstTorch = false; $("burstN").textContent = "0"; $("burstThumb").style.backgroundImage = ""; $("burstLight").classList.remove("on");
+  const track = burstStream.getVideoTracks()[0], caps = track.getCapabilities ? track.getCapabilities() : {};
+  $("burstLight").classList.toggle("hidden", !caps.torch);
+  $("burstHint").innerHTML = `【${esc(purpose)}】刻印を枠の中に。<b>シャッターを押すたびに1枚</b>。読み取り・記録は裏でやります`;
+  try { await v.play(); } catch (e) {}
+  return true;
+}
+function closeBurst() { if (burstStream) burstStream.getTracks().forEach(t => t.stop()); burstStream = null; $("burst").classList.add("hidden"); }
+function burstShot() {
+  const v = $("burstVideo"), vw = v.videoWidth, vh = v.videoHeight;
+  if (!vw) return;
+  // 映像の1コマをそのまま（長辺2000まで）写真にする。枠は目安で、刻印の場所はAIが写真全体から探す
+  const k = Math.min(1, 2000 / Math.max(vw, vh)), c = document.createElement("canvas");
+  c.width = Math.round(vw * k); c.height = Math.round(vh * k);
+  c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+  const f = $("burstFlash"); f.classList.add("on"); setTimeout(() => f.classList.remove("on"), 60);
+  if (navigator.vibrate) navigator.vibrate(40);
+  burstCount++; $("burstN").textContent = burstCount;
+  const t = document.createElement("canvas"); t.width = 136; t.height = Math.round(136 * c.height / c.width);
+  t.getContext("2d").drawImage(c, 0, 0, t.width, t.height); $("burstThumb").style.backgroundImage = `url(${t.toDataURL("image/jpeg", .6)})`;
+  const d = new Date(), p2 = n => String(n).padStart(2, "0");
+  queueAddCanvas(c, `${d.getFullYear()}/${p2(d.getMonth() + 1)}/${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`);
+}
 function shotFromViewfinder() {
   const v = $("video"), box = $("vfBox").getBoundingClientRect(), g = $("guide").getBoundingClientRect();
   const vw = v.videoWidth, vh = v.videoHeight; if (!vw) return null;
@@ -1370,16 +1450,20 @@ function exifDate(v) {
   return "";
 }
 async function queueAddFile(f) {
-  const tmp = "tmp" + (++qTmp), shotAt = await photoTakenAt(f);
+  const shotAt = await photoTakenAt(f);
   let canvas;
   try { canvas = await fullCanvas(await loadImg(URL.createObjectURL(f))); } catch (e) { toast("写真を開けませんでした"); return; }
+  await queueAddCanvas(canvas, shotAt);
+}
+async function queueAddCanvas(canvas, shotAt) {
+  const tmp = "tmp" + (++qTmp);
   const small = document.createElement("canvas"); small.width = 224; small.height = Math.round(224 * canvas.height / canvas.width);
   small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
   // 読めなかった時に見て確かめる用の大きめの写真
   const mid = document.createElement("canvas"), mw = Math.min(1000, canvas.width); mid.width = mw; mid.height = Math.round(mw * canvas.height / canvas.width);
   mid.getContext("2d").drawImage(canvas, 0, 0, mid.width, mid.height); const midUrl = mid.toDataURL("image/jpeg", .75);
   qUpdate({id: tmp, state: "送信中", purpose, thumb: small.toDataURL("image/jpeg", .7), full: midUrl});
-  qLocal[tmp] = {canvas, shotAt, purpose};
+  qLocal[tmp] = {canvas, shotAt, purpose, me};
   await qUpload(tmp);
 }
 // 写真をサーバーへ送る。電波が悪い時は2回まで自動でやり直す。送れなかった写真は「もう一度読む」で送り直す
@@ -1391,7 +1475,7 @@ async function qUpload(tmp) {
   const data = await b64(await toBlob(L.canvas, 0.85));
   for (let i = 0; ; i++) {
     try {
-      const v = await run("apiQueueAdd", data, L.purpose, L.shotAt);
+      const v = await run("apiQueueAdd", data, L.purpose, L.shotAt, L.me || "");
       // 同じ写真をもう送ってあった：新しく積まない（11/4）
       if (v.dup) { delete qLocal[tmp]; queue = queue.filter(q => q.id !== tmp); if (!queue.some(q => q.id === v.id)) qUpdate(v); renderQueue(); toast("同じ写真はもう送ってあります（はじきました）"); return; }
       qLocal[v.id] = L.canvas; delete qLocal[tmp];
@@ -1482,7 +1566,9 @@ $("q").addEventListener("input", () => {
 });
 
 /* ================= イベント ================= */
-$("shootBtn").onclick = () => $("cam").click();
+// 刻印を撮る：カメラを開いたまま続けて撮る（11/5 ユーザー：撮影をもっと楽に）。カメラを直接使えない時はいつものカメラ
+$("shootBtn").onclick = async () => { if (!me) { needMe(); return; } if (!(await openBurst())) $("cam").click(); };
+$("camBtn").onclick = () => { if (!me) { needMe(); return; } $("cam").click(); };
 $("addMulti").onclick = () => $("camMulti").click();
 $("bulkBtn").onclick = () => { if (!me) { needMe(); return; } $("camMulti").click(); };
 $("cam").onchange = e => { const fs = [...e.target.files]; e.target.value = ""; fs.forEach(queueAddFile); };
@@ -1496,6 +1582,15 @@ $("camMulti").onchange = async e => {
 };
 $("pickBtn").onclick = () => $("pick").click();
 $("vfCancel").onclick = closeViewfinder;
+$("burstShut").onclick = burstShot;
+$("burstDone").onclick = () => { closeBurst(); const q = $("queueSec"); if (q && !q.classList.contains("hidden")) q.scrollIntoView({behavior: "smooth"}); };
+$("burstThumb").onclick = $("burstDone").onclick;
+$("burstLight").onclick = async () => {
+  const track = burstStream && burstStream.getVideoTracks()[0]; if (!track) return;
+  burstTorch = !burstTorch;
+  try { await track.applyConstraints({advanced: [{torch: burstTorch}]}); $("burstLight").classList.toggle("on", burstTorch); }
+  catch (e) { burstTorch = false; toast("このスマホではライトを付けられません"); }
+};
 $("busyCancel").onclick = () => { readToken++; cancelRead(); busy(false); };
 $("vfShot").onclick = () => { const c = shotFromViewfinder(); closeViewfinder(); if (c) readCanvas(c); };
 ["pick"].forEach(id => $(id).onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; const c = await cropFromFile(f); if (c) readCanvas(c); });

@@ -204,6 +204,8 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
   t("撮影の目的：選べる", () => assert.ok(w.document.querySelector('[data-act="purpose"][data-v="出荷"]').classList.contains("on")));
   t("一覧タブに赤い数字は出さない", () => assert.ok(!w.document.getElementById("todoBadge")));
   click('[data-act="nav"][data-v="list"]'); await wait(30);
+  t("一覧：最初は「やること」", () => assert.ok(w.document.querySelector('[data-act="lmode"][data-m="todo"].on')));
+  click('[data-act="lmode"][data-m="day"]'); await wait(30);
   t("一覧：出荷日と未チェック", () => {
     assert.ok(w.document.querySelector(".days .on").textContent.includes("10/7"));
     assert.ok(w.document.getElementById("uncheckedSec").textContent.includes("1本"));

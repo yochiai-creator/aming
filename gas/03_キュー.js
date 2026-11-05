@@ -86,7 +86,7 @@ function queueHeader_() {
   if (cur.every((h, i) => !h || h === QUEUE_COLS[i])) sh.getRange(1, 1, 1, n).setValues([QUEUE_COLS]).setFontWeight('bold');
 }
 // shotAt：写真の撮影日時（画面が写真のEXIFから読む。'yyyy/MM/dd HH:mm'）。アルバムからまとめて読んだ時に、記録の日時をこれにする
-function apiQueueAdd(b64, purpose, shotAt) {
+function apiQueueAdd(b64, purpose, shotAt, person) {
   // 同じ写真を2回送ったら（まとめて読むで同じ写真を選んだ・送り直した）新しく積まずに前の行を返す（11/4 ユーザー：はじいて）
   const hash = photoHash_(b64);
   queueHeader_();
@@ -97,7 +97,7 @@ function apiQueueAdd(b64, purpose, shotAt) {
     const fullId = savePhoto_(b64, 'raw');
     const id = Utilities.getUuid().slice(0, 8);
     const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
-    const row = QUEUE_COLS.map(c => ({'ID': id, '日時': now, '目的': purpose || '', '状態': '待ち', '元写真ID': fullId, 'ハッシュ': hash,
+    const row = QUEUE_COLS.map(c => ({'ID': id, '日時': now, '目的': purpose || '', '状態': '待ち', '元写真ID': fullId, 'ハッシュ': hash, '確認者': person || '',
       '撮影日時': /^\d{4}\/\d\d\/\d\d \d\d:\d\d$/.test(shotAt || '') ? shotAt : ''})[c] || '');
     appendRows_(CONFIG.SHEETS.QUEUE, [row]);
     SpreadsheetApp.flush();
@@ -155,8 +155,20 @@ function apiQueueCrop(id, cropB64, enhB64, sharp) {
     } catch (e) { rlog_('キュー ' + id + ' 読み直し失敗 ' + e); }
     writeReadLog_(t0, row);
   }
-  if (row['状態'] === '確定' && row['キー']) apiLinkPhoto(row['切り出しID'], row['キー'], row['AI読取'], row['目的'], row['鮮明度'], row['撮影日時']);
+  if (row['状態'] === '確定' && row['キー']) { apiLinkPhoto(row['切り出しID'], row['キー'], row['AI読取'], row['目的'], row['鮮明度'], row['撮影日時']); autoRecord_(row); }
   return queueView_(row);
+}
+// 撮っただけで記録（11/5 ユーザー：撮ったら自動で記録）。目的が塗装完了・出荷で、撮った人（確認者）がわかっていて、
+// その号機のその工程がまだ記録されていない時だけ。同じ号機を2枚撮っても記録は1つ
+function autoRecord_(row) {
+  const step = row['目的'], person = row['確認者'];
+  if (row['状態'] !== '確定' || !row['キー'] || row['記録'] || !person || (step !== '塗装完了' && step !== '出荷')) return;
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    if (alreadyStep_(row, liveSteps_())) return;
+    const v = queueRecord_([row['ID']], person)[0];
+    if (v) row['記録'] = v.rec;
+  } finally { lock.releaseLock(); }
 }
 
 /** 候補から人が選んだ */
@@ -164,6 +176,7 @@ function apiQueuePick(id, key) {
   const row = queueSet_(queueFind_(id), {'キー': key, '状態': '確定'});
   const photo = row['切り出しID'] || row['元写真ID'];
   if (photo) apiLinkPhoto(photo, key, row['AI読取'], row['目的'], row['切り出しID'] ? row['鮮明度'] : '', row['撮影日時']);
+  autoRecord_(row);
   return queueView_(row);
 }
 /** 特定済みの写真から、目的の工程（塗装完了・出荷）をまとめて記録。詳細を開かずに一覧から押せる */
