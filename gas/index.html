@@ -511,7 +511,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/5-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/5-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -615,8 +615,9 @@ function fetchList() {
 }
 // 一覧の表示：出荷日ごと／塗装済み在庫（出荷日＝曜日ごとにまとめて全部）
 // 11/5 ユーザー（一覧を見やすく）：最初は「やること」。一度だけ切り替える
-let listMode = ls.get("trace.todoV1") ? (ls.get("trace.listMode") || "todo") : "todo";
-ls.set("trace.todoV1", "1");
+const TODO_ON = false; // 11/5 ユーザー「やることは今はまだいらない」。true で一覧に「やること」タブが戻る
+let listMode = ls.get("trace.listMode") || "day";
+if (listMode === "todo" && !TODO_ON) listMode = "day";
 const dayShift = (d, n) => { const x = new Date(d.replace(/-/g, "/")); x.setDate(x.getDate() + n); return `${x.getFullYear()}/${String(x.getMonth() + 1).padStart(2, "0")}/${String(x.getDate()).padStart(2, "0")}`; };
 // やること：①出荷が近い（あさってまで）のに未塗装 ②塗装予定日を過ぎた未塗装 ③明日までに出荷で塗装後チェックがまだ
 function todoLists() {
@@ -639,7 +640,7 @@ function drawTodo() {
 }
 function modeBar() {
   const n = (listData.stock || []).length, t = todoLists(), tn = t.ship.length + t.plan.length + t.fix.length;
-  return `<div class="lmode"><button type="button" data-act="lmode" data-m="todo" class="${listMode === "todo" ? "on" : ""}">やること<small class="${tn ? "tn" : ""}">${tn}</small></button><button type="button" data-act="lmode" data-m="day" class="${listMode === "day" ? "on" : ""}">出荷日ごと</button><button type="button" data-act="lmode" data-m="stock" class="${listMode === "stock" ? "on" : ""}">塗装済み在庫<small>${n}本</small></button></div>`;
+  return `<div class="lmode">${TODO_ON ? `<button type="button" data-act="lmode" data-m="todo" class="${listMode === "todo" ? "on" : ""}">やること<small class="${tn ? "tn" : ""}">${tn}</small></button>` : ""}<button type="button" data-act="lmode" data-m="day" class="${listMode === "day" ? "on" : ""}">出荷日ごと</button><button type="button" data-act="lmode" data-m="stock" class="${listMode === "stock" ? "on" : ""}">塗装済み在庫<small>${n}本</small></button></div>`;
 }
 function drawStock(keep) {
   const el = $("listView"), list = listData.stock || [], y = window.scrollY;
