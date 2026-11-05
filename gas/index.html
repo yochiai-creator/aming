@@ -511,7 +511,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/5-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/5-3"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -763,7 +763,7 @@ function renderArm(keep) {
     <div id="formMsg" class="muted"></div>
   </section>
   <section>
-    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure class="${p.many && !p.best ? "alt" : ""}"><img data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${p.many && p.best ? '<b class="adopt">採用</b>' : ""}${esc(p.at)}${p.purpose ? " " + esc(p.purpose) : ""}<button type="button" class="link" data-act="recrop" data-id="${esc(p.id)}">切り出し直す</button><button type="button" class="link" data-act="unrecrop" data-id="${esc(p.id)}">元に戻す</button><button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
+    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure class="${p.many && !p.best ? "alt" : ""}"><img class="stamp" data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${p.many && p.best ? '<b class="adopt">採用</b>' : ""}${esc(p.at)}${p.purpose ? " " + esc(p.purpose) : ""}<button type="button" class="link" data-act="recrop" data-id="${esc(p.id)}">切り出し直す</button><button type="button" class="link" data-act="unrecrop" data-id="${esc(p.id)}">元に戻す</button><button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
     <h2>工程ログ</h2>
     ${a._partial ? '<p class="muted">読み込み中…</p>' : `<ul class="tl steps">${a.steps.map(stepHtml).join("")}</ul>`}
     ${a.otherChanges.length ? `<p class="muted">${a.otherChanges.map(c => `${esc(c.col)}：${esc(c.from || "空")} → ${esc(c.to || "空")}（${esc(c.at)} 取込）`).join("<br>")}</p>` : ""}
@@ -1178,8 +1178,8 @@ function renderQueue() {
     const need = ["候補", "刻印なし", "失敗"].includes(q.state);
     // 特定できた行も、刻印と照らし合わせられるよう切り出しを横いっぱいに出す（11/3 ユーザー：小さくて刻印確認できない）
     const bigImgs = need ? (q.box && q.thumb ? [q.thumb, q.enh].filter(Boolean) : [q.full || q.thumb].filter(Boolean)) : (q.thumb ? [q.thumb] : []);
-    const big = bigImgs.length ? `<div class="qbig">${bigImgs.map(u => `<img src="${u}" data-zoom="1" alt="刻印">`).join("")}<small class="muted">タップで拡大</small></div>` : "";
-    return `<div class="qi ${q.rec ? "recd" : ""} ${big ? "need" : ""}">${chk}${big ? "" : (q.thumb ? `<img class="qt" src="${q.thumb}" data-zoom="1" alt="刻印（タップで拡大）">` : `<div class="qt"></div>`)}<div class="qb">${big}
+    const big = bigImgs.length ? `<div class="qbig">${bigImgs.map(u => `<img ${u === q.thumb ? 'class="stamp" ' : ""}src="${u}" data-zoom="1" alt="刻印">`).join("")}<small class="muted">タップで拡大</small></div>` : "";
+    return `<div class="qi ${q.rec ? "recd" : ""} ${big ? "need" : ""}">${chk}${big ? "" : (q.thumb ? `<img class="qt stamp" src="${q.thumb}" data-zoom="1" alt="刻印（タップで拡大）">` : `<div class="qt"></div>`)}<div class="qb">${big}
       <div class="qs ${lb[0]}">${lb[0] === "wait" ? '<span class="spin"></span>' : ""}${esc(lb[1])}${q.purpose ? "　" + esc(q.purpose) : ""}</div>
       <div class="qr">${esc(arm)}</div>${shipQ}${q.shotAt ? `<div class="muted" style="font-size:.72rem">📷 撮影 ${esc(q.shotAt.slice(5))}${q.shotAt.slice(0, 10) !== boot.today ? "（この日時で記録）" : ""}</div>` : ""}${warn}${lightW}${q.error ? `<div class="muted">${esc(q.error)}</div>` : ""}
       <div class="qa">${acts}</div></div>
@@ -1595,6 +1595,27 @@ $("burstLight").onclick = async () => {
 $("busyCancel").onclick = () => { readToken++; cancelRead(); busy(false); };
 $("vfShot").onclick = () => { const c = shotFromViewfinder(); closeViewfinder(); if (c) readCanvas(c); };
 ["pick"].forEach(id => $(id).onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; const c = await cropFromFile(f); if (c) readCanvas(c); });
+
+// 刻印写真の表示を濃く（11/5 ユーザー：薄くて読みにくい）。白い塗装面で字が薄いので、白黒にして明るさの幅を目いっぱい広げる。
+// 保存してある写真はそのまま、画面に出す時だけ。canvas の filter は iPhone で効かないので画素で計算
+const STAMP_PUNCH = new Map();
+function punchSrc(img) {
+  const w = img.naturalWidth, h = img.naturalHeight; if (!w || !h) return "";
+  const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d");
+  x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, w, h), p = d.data, n = w * h, hist = new Array(256).fill(0), g = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { const v = (p[i * 4] * 77 + p[i * 4 + 1] * 150 + p[i * 4 + 2] * 29) >> 8; g[i] = v; hist[v]++; }
+  const at = q => { let k = 0, t = n * q; for (let v = 0; v < 256; v++) { k += hist[v]; if (k >= t) return v; } return 255; };
+  const lo = at(0.01), hi = at(0.995); if (hi - lo < 8) return "";
+  const lut = new Uint8Array(256); for (let v = 0; v < 256; v++) lut[v] = Math.round(255 * Math.pow(Math.min(1, Math.max(0, (v - lo) / (hi - lo))), 1.4));
+  for (let i = 0; i < n; i++) { const v = lut[g[i]]; p[i * 4] = p[i * 4 + 1] = p[i * 4 + 2] = v; }
+  x.putImageData(d, 0, 0); return c.toDataURL("image/jpeg", 0.9);
+}
+document.addEventListener("load", e => {
+  const img = e.target; if (!img || img.tagName !== "IMG" || !img.classList.contains("stamp") || img.dataset.punched === img.src) return;
+  const src = img.src; let out = STAMP_PUNCH.get(src);
+  if (out === undefined) { try { out = punchSrc(img); } catch (err) { out = ""; } STAMP_PUNCH.set(src, out); if (out) STAMP_PUNCH.set(out, ""); }
+  if (out) { img.dataset.punched = out; img.src = out; }
+}, true);
 
 let lbZoom = 1;
 document.addEventListener("click", async e => {
