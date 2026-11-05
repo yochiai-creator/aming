@@ -220,9 +220,9 @@ process.on('unhandledRejection', e => { errors.push('unhandled'); console.log('N
     assert.ok(w.document.querySelector(".hist").textContent.includes("処置 33"));
   });
   await wait(30); // 写真は後から読み込まれる
-  t("刻印写真：詳細に表示", () => assert.strictEqual(w.document.querySelector(".photos img").getAttribute("src"), "data:image/jpeg;base64,AAAA"));
+  t("刻印写真：詳細の一番上に表示・下の欄は無し", () => { assert.strictEqual(w.document.querySelector(".topph img").getAttribute("src"), "data:image/jpeg;base64,AAAA"); assert.ok(!w.document.querySelector(".photos")); });
   w.confirm = () => true; click('[data-act="delPhoto"]'); await wait(30);
-  t("刻印写真：削除", () => { assert.ok(calls.includes("apiDeletePhoto")); assert.ok(!w.document.querySelector(".photos")); });
+  t("刻印写真：削除", () => { assert.ok(calls.includes("apiDeletePhoto")); assert.ok(!w.document.querySelector(".topph")); });
   t("工程ログ：日程変更の表示", () => assert.ok(w.document.querySelector(".steps .chg").textContent.includes("2026/09/30")));
   w.prompt = () => "メモ";
   click('[data-act="nav"][data-v="settings"]'); await wait(10);

@@ -284,6 +284,7 @@ h1{font-size:1.9rem}
 .shoot .bucket{display:inline-block;width:34px;height:26px;vertical-align:-5px;margin-right:8px}
 .photos{display:flex;gap:8px;overflow-x:auto;margin-bottom:14px}
 .topph{margin:0 0 10px;border:1px solid var(--edge);background:#060909}.topph img{display:block;width:100%;min-height:60px;cursor:zoom-in}
+.tpcap{display:flex;justify-content:space-between;align-items:center;gap:6px;font-family:"Share Tech Mono",monospace;font-size:.7rem;color:var(--sub);padding:2px 6px}.tpcap .link{font-size:.72rem;margin-left:8px}.tpcap .del{color:var(--ng)}
 .photos figure{margin:0;flex:0 0 auto;width:240px;border:1px solid var(--edge);background:#060909}
 .photos img{display:block;width:100%;min-height:60px;filter:contrast(1.1)}
 .photos figcaption{display:flex;justify-content:space-between;align-items:center;font-family:"Share Tech Mono",monospace;font-size:.72rem;color:var(--sub);padding:2px 6px}
@@ -512,7 +513,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/5-7"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/5-8"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -765,7 +766,6 @@ function renderArm(keep) {
     <div id="formMsg" class="muted"></div>
   </section>
   <section>
-    ${a.photos && a.photos.length ? `<h2>刻印写真</h2><div class="photos">${a.photos.map(p => `<figure class="${p.many && !p.best ? "alt" : ""}"><img class="stamp" data-photo="${esc(p.id)}" alt="刻印写真"><figcaption>${p.many && p.best ? '<b class="adopt">採用</b>' : ""}${esc(p.at)}${p.purpose ? " " + esc(p.purpose) : ""}<button type="button" class="link" data-act="recrop" data-id="${esc(p.id)}">切り出し直す</button><button type="button" class="link" data-act="unrecrop" data-id="${esc(p.id)}">元に戻す</button><button type="button" class="link del" data-act="delPhoto" data-id="${esc(p.id)}">削除</button></figcaption></figure>`).join("")}</div>` : ""}
     <h2>工程ログ</h2>
     ${a._partial ? '<p class="muted">読み込み中…</p>' : `<ul class="tl steps">${a.steps.map(stepHtml).join("")}</ul>`}
     ${a.otherChanges.length ? `<p class="muted">${a.otherChanges.map(c => `${esc(c.col)}：${esc(c.from || "空")} → ${esc(c.to || "空")}（${esc(c.at)} 取込）`).join("<br>")}</p>` : ""}
@@ -785,7 +785,8 @@ function renderArm(keep) {
 function topPhotoHtml(a) {
   const ps = a.photos || [], p = (photoId && ps.find(x => x.id === photoId)) || ps.find(x => x.best) || ps[0];
   const id = p ? p.id : photoId;
-  return id ? `<div class="topph"><img class="stamp" data-photo="${esc(id)}" data-zoom="1" alt="刻印写真（タップで拡大）"></div>` : "";
+  // 下の「刻印写真」欄は11/5 ユーザー「ここはログだけで刻印の写真はいらない」で廃止 → 切り出し直す・元に戻す・削除はこの写真の下に小さく
+  return id ? `<div class="topph"><img class="stamp" data-photo="${esc(id)}" data-zoom="1" alt="刻印写真（タップで拡大）"><div class="tpcap">${p ? esc(p.at) + (p.purpose ? " " + esc(p.purpose) : "") + (ps.length > 1 ? `（ほか${ps.length - 1}枚）` : "") : ""}<span><button type="button" class="link" data-act="recrop" data-id="${esc(id)}">切り出し直す</button><button type="button" class="link" data-act="unrecrop" data-id="${esc(id)}">元に戻す</button><button type="button" class="link del" data-act="delPhoto" data-id="${esc(id)}">削除</button></span></div></div>` : "";
 }
 async function loadPhotos() {
   const got = {};
