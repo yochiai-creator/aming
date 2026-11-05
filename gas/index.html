@@ -283,6 +283,7 @@ h1{font-size:1.9rem}
 .shoot{min-height:104px;font-size:1.25rem}
 .shoot .bucket{display:inline-block;width:34px;height:26px;vertical-align:-5px;margin-right:8px}
 .photos{display:flex;gap:8px;overflow-x:auto;margin-bottom:14px}
+.topph{margin:0 0 10px;border:1px solid var(--edge);background:#060909}.topph img{display:block;width:100%;min-height:60px;cursor:zoom-in}
 .photos figure{margin:0;flex:0 0 auto;width:240px;border:1px solid var(--edge);background:#060909}
 .photos img{display:block;width:100%;min-height:60px;filter:contrast(1.1)}
 .photos figcaption{display:flex;justify-content:space-between;align-items:center;font-family:"Share Tech Mono",monospace;font-size:.72rem;color:var(--sub);padding:2px 6px}
@@ -511,7 +512,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/5-6"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/5-7"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -725,6 +726,7 @@ function renderArm(keep) {
   $("armView").innerHTML = `
   <div class="row" style="margin:0 0 10px"><button type="button" class="btn sec mini" data-act="back">← 戻る</button></div>
   <section>
+    ${topPhotoHtml(a)}
     <div class="az" style="font-size:1.3rem">${esc(a.z)}<b>${esc(a.g)}</b>号機${stBadge(a)}</div>
     <div class="shipbig">${shipLabel(a.ship)}</div>
     ${armFromScan && photoId && scanAlt.length ? `<div class="altrow"><span class="muted">AIの特定が違う？</span>${scanAlt.map(c => `<button type="button" class="link" data-act="rearm" data-k="${esc(c.key)}">${esc(c.z)} ${esc(c.g)}号機</button>`).join("")}</div>` : ""}
@@ -779,9 +781,17 @@ function renderArm(keep) {
   syncForm();
   loadPhotos();
 }
+// 詳細の一番上に刻印の写真（11/5 ユーザー：号機の上に刻印の写真だして）。今撮った写真があればそれ、無ければ採用（一番鮮明）の写真
+function topPhotoHtml(a) {
+  const ps = a.photos || [], p = (photoId && ps.find(x => x.id === photoId)) || ps.find(x => x.best) || ps[0];
+  const id = p ? p.id : photoId;
+  return id ? `<div class="topph"><img class="stamp" data-photo="${esc(id)}" data-zoom="1" alt="刻印写真（タップで拡大）"></div>` : "";
+}
 async function loadPhotos() {
+  const got = {};
   for (const img of document.querySelectorAll("#armView img[data-photo]")) {
-    try { img.src = await run("apiPhoto", img.dataset.photo); } catch (e) { img.alt = "写真を読み込めませんでした"; }
+    const id = img.dataset.photo;
+    try { img.src = got[id] || (got[id] = await run("apiPhoto", id)); } catch (e) { img.alt = "写真を読み込めませんでした"; }
   }
 }
 function goalHtml(a) {
