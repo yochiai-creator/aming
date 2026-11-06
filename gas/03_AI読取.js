@@ -264,6 +264,13 @@ function apiPhoto(photoId) {
   return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
 }
 
+/** 写真をまとめて（11/6 ユーザー：一覧で写真が出るのが遅い＝1枚ずつ40回呼んでいた）。{写真ID: data URL}、読めないものは '' */
+function apiPhotos(ids) {
+  const out = {};
+  (ids || []).slice(0, 12).forEach(id => { try { out[id] = apiPhoto(id); } catch (e) { out[id] = ''; } });
+  return out;
+}
+
 function savePhoto_(b64, prefix) {
   if (!cfg_('PHOTO_FOLDER_ID')) return '';
   const name = (prefix || 'kokuin') + '_' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss') + '_' + Utilities.getUuid().slice(0, 4) + '.jpg';

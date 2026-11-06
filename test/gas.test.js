@@ -162,6 +162,7 @@ const api = {
   apiQueueUnrecord: id => ({id, state: "確定", key: arm.key, purpose: "塗装完了", cands: [arm], rec: ""}),
   apiDeletePhoto: () => Object.assign(api.apiArm(), {photos: []}),
   apiPhoto: () => "data:image/jpeg;base64,AAAA",
+  apiPhotos: ids => Object.fromEntries(ids.map(id => [id, "data:image/jpeg;base64,AAAA"])),
   apiSaveStep: rec => { const v = api.apiArm(); v.steps[1].recs.push({id: "s1", at: "2026/10/07 10:00", by: rec.person, note: rec.note, canceled: false}); return v; },
   apiSaveTap: rec => Object.assign(api.apiArm(), {status: rec.result, taps: [{id: "x", at: "2026/10/07 10:00", result: rec.result, holes: rec.holes, treated: rec.treated, by: rec.person, note: "", photo: "", canceled: false}]})
 };

@@ -513,7 +513,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/5-8"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/6-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -789,11 +789,8 @@ function topPhotoHtml(a) {
   return id ? `<div class="topph"><img class="stamp" data-photo="${esc(id)}" data-zoom="1" alt="刻印写真（タップで拡大）"><div class="tpcap">${p ? esc(p.at) + (p.purpose ? " " + esc(p.purpose) : "") + (ps.length > 1 ? `（ほか${ps.length - 1}枚）` : "") : ""}<span><button type="button" class="link" data-act="recrop" data-id="${esc(id)}">切り出し直す</button><button type="button" class="link" data-act="unrecrop" data-id="${esc(id)}">元に戻す</button><button type="button" class="link del" data-act="delPhoto" data-id="${esc(id)}">削除</button></span></div></div>` : "";
 }
 async function loadPhotos() {
-  const got = {};
-  for (const img of document.querySelectorAll("#armView img[data-photo]")) {
-    const id = img.dataset.photo;
-    try { img.src = got[id] || (got[id] = await run("apiPhoto", id)); } catch (e) { img.alt = "写真を読み込めませんでした"; }
-  }
+  const imgs = [...document.querySelectorAll("#armView img[data-photo]")];
+  await getPhotos(imgs.map(im => im.dataset.photo), m => imgs.forEach(im => { const u = m[im.dataset.photo]; if (u && im.src !== u) im.src = u; else if (m[im.dataset.photo] === "") im.alt = "写真を読み込めませんでした"; }));
 }
 function goalHtml(a) {
   if (!scanPurpose) return "";
@@ -1552,21 +1549,62 @@ async function recropOne(it) {
     const imgs = await prepare(cv);
     if (it.sharp && imgs.light.sharp < it.sharp * 0.85) { await run("apiRecropSave", it.cropId, "", null, true); return ""; }
     await run("apiRecropSave", it.cropId, await b64(imgs.orig), imgs.light.sharp, true);
+    photoForget(it.cropId);
     return cv.toDataURL("image/jpeg", .8);
   }
   else { try { cv = straightCrop(src, it.box, false, oneLine(it.read)); } catch (e) { cv = cropByBox(src, it.box); } }
   const imgs = await prepare(cv);
   await run("apiRecropSave", it.cropId, await b64(imgs.orig), imgs.light.sharp, !!it.whole);
-  return cv.toDataURL("image/jpeg", .8);
+  const url = cv.toDataURL("image/jpeg", .8); photoRemember(it.cropId, url);
+  const q = queue.find(x => x.cropId === it.cropId); if (q) q.thumb = url;
+  return url;
+}
+/* 写真の取り置き（11/6 ユーザー：一覧で写真が出るのが遅い）
+ * 前は1枚ずつ apiPhoto を40回・毎回ドライブから取り直していた → 端末の IndexedDB に14日覚えておき、無い分だけ8枚ずつまとめて取る */
+const PCACHE = (() => {
+  let dbp = null;
+  const db = () => dbp || (dbp = new Promise((res, rej) => {
+    try { const r = indexedDB.open("aming", 1); r.onupgradeneeded = () => r.result.createObjectStore("photos"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }
+    catch (e) { rej(e); }
+  }));
+  const tx = async (mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction("photos", mode), r = fn(t.objectStore("photos")); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); };
+  return {
+    get: id => tx("readonly", st => st.get(id)).then(v => (v && Date.now() - v.t < 14 * 864e5 ? v.u : null)).catch(() => null),
+    put: (id, u) => tx("readwrite", st => st.put({u, t: Date.now()}, id)).catch(() => {}),
+    del: id => tx("readwrite", st => st.delete(id)).catch(() => {}),
+  };
+})();
+const photoMem = {};
+let photosLoading = false;
+function photoRemember(id, u) { if (!id || !u) return; photoMem[id] = u; PCACHE.put(id, u); }
+function photoForget(id) { delete photoMem[id]; PCACHE.del(id); }
+// 覚えている分はすぐ返し、無い分は8枚ずつまとめて取って onGot({id: url}) を呼ぶ
+async function getPhotos(ids, onGot) {
+  const have = {}, need = [];
+  for (const id of [...new Set(ids.filter(Boolean))]) {
+    const u = photoMem[id] || await PCACHE.get(id);
+    if (u) { photoMem[id] = u; have[id] = u; } else need.push(id);
+  }
+  if (Object.keys(have).length) onGot(have);
+  for (let i = 0; i < need.length; i += 8) {
+    let m = {};
+    try { m = await run("apiPhotos", need.slice(i, i + 8)); } catch (e) { continue; }
+    for (const id in m) photoRemember(id, m[id]);
+    onGot(m);
+  }
 }
 async function qBoot() {
   try { queue = await run("apiQueueList"); } catch (e) { return; }
   renderQueue();
-  for (const q of queue) {
-    if (q.cropId && !q.thumb) run("apiPhoto", q.cropId).then(u => { q.thumb = u; renderQueue(); }).catch(() => {});
-    if (q.box && !q.cropId && ["確定", "候補"].includes(q.state)) qAfter(q);
-  }
+  for (const q of queue) if (q.box && !q.cropId && ["確定", "候補"].includes(q.state)) qAfter(q);
   qPump();
+  photosLoading = true;
+  try {
+    await getPhotos(queue.filter(q => q.cropId && !q.thumb && !q.seen).map(q => q.cropId), m => {
+      let hit = false; for (const q of queue) if (q.cropId && m[q.cropId] && !q.thumb) { q.thumb = m[q.cropId]; hit = true; }
+      if (hit) renderQueue();
+    });
+  } finally { photosLoading = false; }
 }
 
 /* ================= 検索 ================= */
@@ -1733,7 +1771,7 @@ document.addEventListener("click", async e => {
   else if (act === "unrecrop") {
     if (!confirm("この写真を切り出し直す前の元の画像に戻しますか？")) return;
     b.disabled = true;
-    try { const url = await run("apiRecropRevert", b.dataset.id); const im = document.querySelector(`img[data-photo="${CSS.escape(b.dataset.id)}"]`); if (im) im.src = url; toast("元の画像に戻しました"); }
+    try { const url = await run("apiRecropRevert", b.dataset.id); photoRemember(b.dataset.id, url); const im = document.querySelector(`img[data-photo="${CSS.escape(b.dataset.id)}"]`); if (im) im.src = url; toast("元の画像に戻しました"); }
     catch (e) { toast("戻せませんでした：" + errMsg(e)); b.disabled = false; }
   }
   else if (act === "recropAll") {
@@ -1789,7 +1827,7 @@ document.addEventListener("click", async e => {
   else if (act === "delPhoto") {
     if (!confirm("この写真を消しますか？（ドライブのゴミ箱に移します。30日間は戻せます）")) return;
     b.disabled = true;
-    try { armData = await run("apiDeletePhoto", b.dataset.id, armData.key); toast("写真を消しました"); renderArm(); }
+    try { armData = await run("apiDeletePhoto", b.dataset.id, armData.key); photoForget(b.dataset.id); toast("写真を消しました"); renderArm(); }
     catch (err) { toast(errMsg(err)); b.disabled = false; }
   }
   else if (act === "cancelStep") {
@@ -1847,7 +1885,7 @@ async function autoRecrop() {
     show();
     for (const it of l) {
       if (document.hidden) break;            // 画面を閉じたらやめる（次に開いた時に続き）
-      while (qBusy || busyOn()) await new Promise(r => setTimeout(r, 3000)); // 読取中は待つ
+      while (qBusy || busyOn() || photosLoading) await new Promise(r => setTimeout(r, 3000)); // 読取中・一覧の写真を取っている間は待つ
       try { await recropOne(it); } catch (e) { console.warn("切り出し直し失敗", it.cropId, e); }
       left--; show();
     }
