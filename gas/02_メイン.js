@@ -283,7 +283,7 @@ function apiArm(key) {
   view.holes = loadHoles_()[a['図番']] || '';
   // 同じ目的（塗装完了など）の写真が何枚もある時は、一番鮮明なものを「採用」にして先頭へ
   const ph = readTable_(sheet_(CONFIG.SHEETS.PHOTOS)).filter(r => r['キー'] === key)
-    .map(r => ({id: r['写真ID'], at: r['日時'], name: r['ファイル名'], purpose: r['目的'] || '', score: photoScore_(r, a)})).reverse();
+    .map(r => ({id: r['写真ID'], at: r['日時'], name: r['ファイル名'], purpose: r['目的'] || '', ver: String(r['切り出し版'] || ''), score: photoScore_(r, a)})).reverse();
   const best = {};
   ph.forEach(p => { if (!best[p.purpose] || p.score > best[p.purpose].score) best[p.purpose] = p; });
   ph.forEach(p => { p.best = best[p.purpose] === p; p.many = ph.filter(x => x.purpose === p.purpose).length > 1; });

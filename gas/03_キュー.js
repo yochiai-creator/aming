@@ -67,7 +67,7 @@ function queueView_(r, st) {
   let box = null;
   try { box = r['枠'] ? JSON.parse(r['枠']) : null; } catch (e) {}
   return {id: r['ID'], at: r['日時'], shotAt: r['撮影日時'] || '', purpose: r['目的'], state: r['状態'], fullId: r['元写真ID'], cropId: r['切り出しID'],
-    box: box, read: r['AI読取'], key: r['キー'], cands: cands, error: r['エラー'], seen: r['確認'] === '済', rec: r['記録'] || '',
+    box: box, read: r['AI読取'], key: r['キー'], cropVer: String(r['切り出し版'] || ''), cands: cands, error: r['エラー'], seen: r['確認'] === '済', rec: r['記録'] || '',
     already: alreadyStep_(r, st)};
 }
 
@@ -275,11 +275,13 @@ function apiRecropSave(cropId, b64, sharp, whole) {
       if (n > 0) {
         const ids = sh.getRange(2, PHOTO_COLS.indexOf('写真ID') + 1, n, 1).getDisplayValues().map(r => r[0]), i = ids.indexOf(cropId);
         if (i >= 0) sh.getRange(i + 2, PHOTO_COLS.indexOf('鮮明度') + 1).setValue(sharp);
+        // 切り出しの版も残す（画面が端末に覚えた古い写真を使わないよう、版で見分ける。11/8）
+        if (i >= 0 && !whole && b64) sh.getRange(i + 2, PHOTO_COLS.indexOf('切り出し版') + 1).setValue(CROP_VER);
       }
       SpreadsheetApp.flush();
     } finally { lock.releaseLock(); }
   }
-  return true;
+  return CROP_VER;
 }
 /** その場で撮った写真（黄色い枠の中だけ）の刻印の範囲をAIに探させる（撮るだけと同じ仕上がりにするため。10/27 ユーザー：LQ12B10421F1_102 の仕上がりに）。無ければ null */
 function apiPhotoBox(photoId) {

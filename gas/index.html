@@ -513,7 +513,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/6-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/8-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -781,16 +781,18 @@ function renderArm(keep) {
   syncForm();
   loadPhotos();
 }
+// 写真の版：撮るだけ一覧に同じ写真があればその版（新しい）、無ければ刻印写真シートの版
+function verOfPhoto(id, p) { const q = queue.find(x => x.cropId === id); return q ? q.cropVer || "" : (p && p.ver) || ""; }
 // 詳細の一番上に刻印の写真（11/5 ユーザー：号機の上に刻印の写真だして）。今撮った写真があればそれ、無ければ採用（一番鮮明）の写真
 function topPhotoHtml(a) {
   const ps = a.photos || [], p = (photoId && ps.find(x => x.id === photoId)) || ps.find(x => x.best) || ps[0];
   const id = p ? p.id : photoId;
   // 下の「刻印写真」欄は11/5 ユーザー「ここはログだけで刻印の写真はいらない」で廃止 → 切り出し直す・元に戻す・削除はこの写真の下に小さく
-  return id ? `<div class="topph"><img class="stamp" data-photo="${esc(id)}" data-zoom="1" alt="刻印写真（タップで拡大）"><div class="tpcap">${p ? esc(p.at) + (p.purpose ? " " + esc(p.purpose) : "") + (ps.length > 1 ? `（ほか${ps.length - 1}枚）` : "") : ""}<span><button type="button" class="link" data-act="recrop" data-id="${esc(id)}">切り出し直す</button><button type="button" class="link" data-act="unrecrop" data-id="${esc(id)}">元に戻す</button><button type="button" class="link del" data-act="delPhoto" data-id="${esc(id)}">削除</button></span></div></div>` : "";
+  return id ? `<div class="topph"><img class="stamp" data-photo="${esc(id)}" data-ver="${esc(verOfPhoto(id, p))}" data-zoom="1" alt="刻印写真（タップで拡大）"><div class="tpcap">${p ? esc(p.at) + (p.purpose ? " " + esc(p.purpose) : "") + (ps.length > 1 ? `（ほか${ps.length - 1}枚）` : "") : ""}<span><button type="button" class="link" data-act="recrop" data-id="${esc(id)}">切り出し直す</button><button type="button" class="link" data-act="unrecrop" data-id="${esc(id)}">元に戻す</button><button type="button" class="link del" data-act="delPhoto" data-id="${esc(id)}">削除</button></span></div></div>` : "";
 }
 async function loadPhotos() {
   const imgs = [...document.querySelectorAll("#armView img[data-photo]")];
-  await getPhotos(imgs.map(im => im.dataset.photo), m => imgs.forEach(im => { const u = m[im.dataset.photo]; if (u && im.src !== u) im.src = u; else if (m[im.dataset.photo] === "") im.alt = "写真を読み込めませんでした"; }));
+  await getPhotos(imgs.map(im => ({id: im.dataset.photo, ver: im.dataset.ver || ""})), m => imgs.forEach(im => { const u = m[im.dataset.photo]; if (u && im.src !== u) im.src = u; else if (m[im.dataset.photo] === "") im.alt = "写真を読み込めませんでした"; }));
 }
 function goalHtml(a) {
   if (!scanPurpose) return "";
@@ -1377,22 +1379,28 @@ function straightCrop(src, box, whole, single) {
   if (ow > 4000 || oh > 2000 || ow < bw * (whole ? 0.15 : 0.3)) return whole ? src : straightCropRot(src, box);
   // ⑦ 1画素ずつ元の写真から拾う（バイリニア）
   const sd = R.getContext("2d").getImageData(0, 0, R.width, R.height).data, RW = R.width, RH = R.height;
-  const out = document.createElement("canvas"); out.width = ow; out.height = oh;
-  const ox = out.getContext("2d"), od = ox.createImageData(ow, oh), o = od.data;
+  // 写真の外：灰色（11/5 まで）→ 端の色をのばす（11/5）は右端が横じまになった（11/8 ユーザー：画像の右側がおかしい YY12B10167F1_1403）
+  // → 地の色（写真の真ん中あたりの中央値）で平らに埋め、半分以上が写真の外の列は左右から切り落とす
+  const bgc = [0, 1, 2].map(c => { const v = []; for (let k = 0; k < 400; k++) { const xx = (RW * (0.2 + 0.6 * ((k * 37) % 400) / 400)) | 0, yy = (RH * (0.2 + 0.6 * ((k * 91) % 400) / 400)) | 0; v.push(sd[(yy * RW + xx) * 4 + c]); } v.sort((a, b) => a - b); return v[v.length >> 1]; });
+  const full = document.createElement("canvas"); full.width = ow; full.height = oh;
+  const fx_ = full.getContext("2d"), od = fx_.createImageData(ow, oh), o = od.data, outCol = new Uint32Array(ow);
   for (let j = 0; j < oh; j++) {
     const Y = Y0 + j + 0.5;
     for (let i = 0; i < ow; i++) {
       const u = u0 + i + 0.5 + kb * (Y - ym), x = xOf(u), lt = Lt(x), y = lt + (Lb(x) - lt) * Y / D;
       const sx = x * cs + y * sn + cx, sy = -x * sn + y * cs + cy;  // 回転を戻す
-      const p = (j * ow + i) * 4;
-      // 写真の外は灰色で埋めていた → 斜めの三角が目立つ（11/5）ので一番近い端の色をのばす
-      const cxp = Math.min(RW - 1.001, Math.max(0, sx)), cyp = Math.min(RH - 1.001, Math.max(0, sy));
-      const xi = cxp | 0, yi = cyp | 0, fx = cxp - xi, fy = cyp - yi, q00 = (yi * RW + xi) * 4, q10 = q00 + 4, q01 = q00 + RW * 4, q11 = q01 + 4;
+      const p = (j * ow + i) * 4; o[p + 3] = 255;
+      if (sx < 0 || sy < 0 || sx >= RW - 1 || sy >= RH - 1) { o[p] = bgc[0]; o[p + 1] = bgc[1]; o[p + 2] = bgc[2]; outCol[i]++; continue; }
+      const xi = sx | 0, yi = sy | 0, fx = sx - xi, fy = sy - yi, q00 = (yi * RW + xi) * 4, q10 = q00 + 4, q01 = q00 + RW * 4, q11 = q01 + 4;
       for (let c = 0; c < 3; c++) o[p + c] = (sd[q00 + c] * (1 - fx) + sd[q10 + c] * fx) * (1 - fy) + (sd[q01 + c] * (1 - fx) + sd[q11 + c] * fx) * fy;
-      o[p + 3] = 255;
     }
   }
-  ox.putImageData(od, 0, 0);
+  fx_.putImageData(od, 0, 0);
+  let cl = 0, cr = ow;
+  while (cl < ow * 0.3 && outCol[cl] > oh * 0.5) cl++;
+  while (cr > ow * 0.7 && outCol[cr - 1] > oh * 0.5) cr--;
+  const out = document.createElement("canvas"); out.width = cr - cl; out.height = oh;
+  out.getContext("2d").drawImage(full, cl, 0, cr - cl, oh, 0, 0, cr - cl, oh);
   out.dataset.angle = ang.toFixed(1) + " 斜" + kb.toFixed(2) + " 行" + F.length;
   return out;
 }
@@ -1554,9 +1562,9 @@ async function recropOne(it) {
   }
   else { try { cv = straightCrop(src, it.box, false, oneLine(it.read)); } catch (e) { cv = cropByBox(src, it.box); } }
   const imgs = await prepare(cv);
-  await run("apiRecropSave", it.cropId, await b64(imgs.orig), imgs.light.sharp, !!it.whole);
-  const url = cv.toDataURL("image/jpeg", .8); photoRemember(it.cropId, url);
-  const q = queue.find(x => x.cropId === it.cropId); if (q) q.thumb = url;
+  const ver = String(await run("apiRecropSave", it.cropId, await b64(imgs.orig), imgs.light.sharp, !!it.whole));
+  const url = cv.toDataURL("image/jpeg", .8); photoRemember(it.cropId, url, ver);
+  const q = queue.find(x => x.cropId === it.cropId); if (q) { q.thumb = url; q.cropVer = ver; }
   return url;
 }
 /* 写真の取り置き（11/6 ユーザー：一覧で写真が出るのが遅い）
@@ -1569,27 +1577,29 @@ const PCACHE = (() => {
   }));
   const tx = async (mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction("photos", mode), r = fn(t.objectStore("photos")); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); };
   return {
-    get: id => tx("readonly", st => st.get(id)).then(v => (v && Date.now() - v.t < 14 * 864e5 ? v.u : null)).catch(() => null),
-    put: (id, u) => tx("readwrite", st => st.put({u, t: Date.now()}, id)).catch(() => {}),
+    get: (id, ver) => tx("readonly", st => st.get(id)).then(v => (v && v.v === ver && Date.now() - v.t < 14 * 864e5 ? v.u : null)).catch(() => null),
+    put: (id, u, ver) => tx("readwrite", st => st.put({u, v: ver, t: Date.now()}, id)).catch(() => {}),
     del: id => tx("readwrite", st => st.delete(id)).catch(() => {}),
   };
 })();
+// 写真は切り出し直すと中身が変わる（IDは同じ）→ 切り出しの版（ver）が違えば覚えた写真は使わない（11/8）
 const photoMem = {};
 let photosLoading = false;
-function photoRemember(id, u) { if (!id || !u) return; photoMem[id] = u; PCACHE.put(id, u); }
+function photoRemember(id, u, ver) { if (!id || !u) return; photoMem[id] = {u, ver: ver || ""}; PCACHE.put(id, u, ver || ""); }
 function photoForget(id) { delete photoMem[id]; PCACHE.del(id); }
-// 覚えている分はすぐ返し、無い分は8枚ずつまとめて取って onGot({id: url}) を呼ぶ
-async function getPhotos(ids, onGot) {
-  const have = {}, need = [];
-  for (const id of [...new Set(ids.filter(Boolean))]) {
-    const u = photoMem[id] || await PCACHE.get(id);
-    if (u) { photoMem[id] = u; have[id] = u; } else need.push(id);
+// items＝[{id, ver}]。覚えている分はすぐ返し、無い分は8枚ずつまとめて取って onGot({id: url}) を呼ぶ
+async function getPhotos(items, onGot) {
+  const have = {}, need = [], verOf = {};
+  for (const it of items) if (it.id && !(it.id in verOf)) verOf[it.id] = it.ver || "";
+  for (const id in verOf) {
+    const ver = verOf[id], m = photoMem[id], u = m && m.ver === ver ? m.u : await PCACHE.get(id, ver);
+    if (u) { photoMem[id] = {u, ver}; have[id] = u; } else need.push(id);
   }
   if (Object.keys(have).length) onGot(have);
   for (let i = 0; i < need.length; i += 8) {
     let m = {};
     try { m = await run("apiPhotos", need.slice(i, i + 8)); } catch (e) { continue; }
-    for (const id in m) photoRemember(id, m[id]);
+    for (const id in m) photoRemember(id, m[id], verOf[id]);
     onGot(m);
   }
 }
@@ -1600,7 +1610,7 @@ async function qBoot() {
   qPump();
   photosLoading = true;
   try {
-    await getPhotos(queue.filter(q => q.cropId && !q.thumb && !q.seen).map(q => q.cropId), m => {
+    await getPhotos(queue.filter(q => q.cropId && !q.thumb && !q.seen).map(q => ({id: q.cropId, ver: q.cropVer})), m => {
       let hit = false; for (const q of queue) if (q.cropId && m[q.cropId] && !q.thumb) { q.thumb = m[q.cropId]; hit = true; }
       if (hit) renderQueue();
     });
@@ -1771,7 +1781,7 @@ document.addEventListener("click", async e => {
   else if (act === "unrecrop") {
     if (!confirm("この写真を切り出し直す前の元の画像に戻しますか？")) return;
     b.disabled = true;
-    try { const url = await run("apiRecropRevert", b.dataset.id); photoRemember(b.dataset.id, url); const im = document.querySelector(`img[data-photo="${CSS.escape(b.dataset.id)}"]`); if (im) im.src = url; toast("元の画像に戻しました"); }
+    try { const url = await run("apiRecropRevert", b.dataset.id); photoForget(b.dataset.id); const im = document.querySelector(`img[data-photo="${CSS.escape(b.dataset.id)}"]`); if (im) im.src = url; toast("元の画像に戻しました"); }
     catch (e) { toast("戻せませんでした：" + errMsg(e)); b.disabled = false; }
   }
   else if (act === "recropAll") {
