@@ -513,7 +513,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/9-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/9-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -659,6 +659,8 @@ function drawList(keep) {
   const el = $("listView"), days = listData.days.length ? listData.days : boot.days;
   if (!day || !days.some(d => d.date === day)) day = (days[0] || {}).date || boot.today;
   const y = window.scrollY, open = keep ? [...el.querySelectorAll("details.ud[open]")].map(d => d.dataset.d) : [];
+  // 裏で取り直して描き直すと出荷日の帯が左端（今日）に戻っていた（11/9 ユーザー：勝手に戻る）→ 横の位置を覚えて戻す
+  const oldDays = el.querySelector(".days"), dx = oldDays ? oldDays.scrollLeft : null;
   // 日付の下の「未N」＝その出荷日の未塗装の本数（10/24 ユーザー）
   const unp = {}; listData.rows.forEach(a => { if (!isPainted(a)) unp[a.ship] = (unp[a.ship] || 0) + 1; });
   el.innerHTML = modeBar() + `<div class="days">${days.map(d => `<button type="button" data-act="day" data-d="${d.date}" class="${d.date === day ? "on" : ""} ${unp[d.date] ? "has-todo" : ""}">${md(d.date)}(${wd(d.date)})<small>${unp[d.date] ? "未" + unp[d.date] + " / " : ""}${d.total}本</small></button>`).join("")}</div>
@@ -672,8 +674,9 @@ function drawList(keep) {
     $("uncheckedSec").innerHTML = `<h2>出荷前で未チェック ${un.length}本</h2>${[...byDay].map(([d, list]) =>
       `<details class="ud" data-d="${esc(d)}" ${open.includes(d) ? "open" : ""}><summary><span>${esc(md(d))}(${esc(wd(d))}) 出荷</span><b>${list.length}本</b></summary>${armGroups(list)}</details>`).join("")}`;
   }
-  if (keep) window.scrollTo(0, y);
-  else { const on = el.querySelector(".days .on"); if (on) on.scrollIntoView({inline: "center", block: "nearest"}); }
+  const strip = el.querySelector(".days"), on = el.querySelector(".days .on");
+  if (keep) { window.scrollTo(0, y); if (strip && dx !== null) strip.scrollLeft = dx; }
+  else if (strip && on) strip.scrollLeft += on.getBoundingClientRect().left - strip.getBoundingClientRect().left - (strip.clientWidth - on.offsetWidth) / 2; // 選んだ日を真ん中に（ページは動かさない）
 }
 async function renderList(noFetch) {
   if (listData) { drawList(false); if (noFetch) return; }
