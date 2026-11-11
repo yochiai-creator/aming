@@ -513,7 +513,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/9-2"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/11-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -1493,8 +1493,28 @@ async function queueAddCanvas(canvas, shotAt) {
   const mid = document.createElement("canvas"), mw = Math.min(1000, canvas.width); mid.width = mw; mid.height = Math.round(mw * canvas.height / canvas.width);
   mid.getContext("2d").drawImage(canvas, 0, 0, mid.width, mid.height); const midUrl = mid.toDataURL("image/jpeg", .75);
   qUpdate({id: tmp, state: "送信中", purpose, thumb: small.toDataURL("image/jpeg", .7), full: midUrl});
-  qLocal[tmp] = {canvas, shotAt, purpose, me};
+  const pk = "p" + Date.now() + "_" + qTmp;
+  qLocal[tmp] = {canvas, shotAt, purpose, me, pk};
+  try { const data = await b64(await toBlob(canvas, 0.85)); qLocal[tmp].data = data; await PCACHE.pendPut(pk, {pk, data, shotAt, purpose, me, thumb: small.toDataURL("image/jpeg", .7), full: midUrl, at: Date.now()}); } catch (e) {}
   await qUpload(tmp);
+}
+// 前に送れなかった写真（途中で画面を閉じた・電波が切れた）を送り直す（11/11）
+let pendRunning = false;
+async function resendPending() {
+  if (pendRunning) return; pendRunning = true;
+  try {
+    const list = (await PCACHE.pendAll()) || [];
+    const mine = list.filter(p => !Object.values(qLocal).some(L => L && L.pk === p.pk));
+    if (!mine.length) return;
+    toast(`前に送れなかった写真 ${mine.length}枚を送り直します`);
+    for (const p of mine) {
+      if (Date.now() - (p.at || 0) > 14 * 864e5) { PCACHE.pendDel(p.pk); continue; }
+      const tmp = "tmp" + (++qTmp);
+      qUpdate({id: tmp, state: "送信中", purpose: p.purpose, thumb: p.thumb, full: p.full});
+      qLocal[tmp] = {data: p.data, shotAt: p.shotAt, purpose: p.purpose, me: p.me, pk: p.pk};
+      await qUpload(tmp);
+    }
+  } finally { pendRunning = false; }
 }
 // 写真をサーバーへ送る。電波が悪い時は2回まで自動でやり直す。送れなかった写真は「もう一度読む」で送り直す
 // （10/27 送れていない写真の「もう一度読む」がサーバーに無いIDで読もうとして「キューにありません: tmp10」になっていた）
@@ -1502,13 +1522,14 @@ async function qUpload(tmp) {
   const L = qLocal[tmp];
   if (!L) return;
   qUpdate({id: tmp, state: "送信中", error: ""});
-  const data = await b64(await toBlob(L.canvas, 0.85));
+  const data = L.data || await b64(await toBlob(L.canvas, 0.85));
   for (let i = 0; ; i++) {
     try {
       const v = await run("apiQueueAdd", data, L.purpose, L.shotAt, L.me || "");
       // 同じ写真をもう送ってあった：新しく積まない（11/4）
+      if (L.pk) PCACHE.pendDel(L.pk);
       if (v.dup) { delete qLocal[tmp]; queue = queue.filter(q => q.id !== tmp); if (!queue.some(q => q.id === v.id)) qUpdate(v); renderQueue(); toast("同じ写真はもう送ってあります（はじきました）"); return; }
-      qLocal[v.id] = L.canvas; delete qLocal[tmp];
+      if (L.canvas) qLocal[v.id] = L.canvas; delete qLocal[tmp];
       v._tmp = tmp; qUpdate(v); delete queue.find(q => q.id === v.id)._tmp;
       qPump(); return;
     } catch (e) {
@@ -1577,14 +1598,18 @@ async function recropOne(it) {
 const PCACHE = (() => {
   let dbp = null;
   const db = () => dbp || (dbp = new Promise((res, rej) => {
-    try { const r = indexedDB.open("aming", 1); r.onupgradeneeded = () => r.result.createObjectStore("photos"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }
+    try { const r = indexedDB.open("aming", 2); r.onupgradeneeded = () => { const d = r.result; for (const n of ["photos", "pending"]) if (!d.objectStoreNames.contains(n)) d.createObjectStore(n); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }
     catch (e) { rej(e); }
   }));
-  const tx = async (mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction("photos", mode), r = fn(t.objectStore("photos")); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); };
+  const tx = async (mode, fn, store) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(store || "photos", mode), r = fn(t.objectStore(store || "photos")); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); };
   return {
     get: (id, ver) => tx("readonly", st => st.get(id)).then(v => (v && v.v === ver && Date.now() - v.t < 14 * 864e5 ? v.u : null)).catch(() => null),
     put: (id, u, ver) => tx("readwrite", st => st.put({u, v: ver, t: Date.now()}, id)).catch(() => {}),
     del: id => tx("readwrite", st => st.delete(id)).catch(() => {}),
+    // まだ送れていない写真（11/11 ユーザー：アップしたのに落ちる）。送れたら消す。次に開いた時に送り直す
+    pendPut: (k, v) => tx("readwrite", st => st.put(v, k), "pending").catch(() => {}),
+    pendDel: k => tx("readwrite", st => st.delete(k), "pending").catch(() => {}),
+    pendAll: () => tx("readonly", st => st.getAll(), "pending").catch(() => []),
   };
 })();
 // 写真は切り出し直すと中身が変わる（IDは同じ）→ 切り出しの版（ver）が違えば覚えた写真は使わない（11/8）
@@ -1613,6 +1638,7 @@ async function qBoot() {
   renderQueue();
   for (const q of queue) if (q.box && !q.cropId && ["確定", "候補"].includes(q.state)) qAfter(q);
   qPump();
+  resendPending();
   photosLoading = true;
   try {
     await getPhotos(queue.filter(q => q.cropId && !q.thumb && !q.seen).map(q => ({id: q.cropId, ver: q.cropVer})), m => {
@@ -1645,12 +1671,14 @@ $("camBtn").onclick = () => { if (!me) { needMe(); return; } $("cam").click(); }
 $("addMulti").onclick = () => $("camMulti").click();
 $("bulkBtn").onclick = () => { if (!me) { needMe(); return; } $("camMulti").click(); };
 $("cam").onchange = e => { const fs = [...e.target.files]; e.target.value = ""; fs.forEach(queueAddFile); };
+// 送信中に画面を閉じようとしたら止める（閉じても次に開いた時に送り直すが、念のため）
+window.addEventListener("beforeunload", e => { if (queue.some(q => q.state === "送信中")) { e.preventDefault(); e.returnValue = ""; } });
 // まとめて選んだ写真は1枚ずつ順に送る（一度に送ると通信が詰まって失敗しやすい）
 $("camMulti").onchange = async e => {
   const fs = [...e.target.files]; e.target.value = "";
   if (!fs.length) return;
   toast(`${fs.length}枚を順に送ります`);
-  for (let i = 0; i < fs.length; i++) { $("qCount").textContent = `送信中 ${i + 1}/${fs.length}`; await queueAddFile(fs[i]); }
+  for (let i = 0; i < fs.length; i++) { $("qCount").textContent = `送信中 ${i + 1}/${fs.length}（終わるまで画面を閉じないで）`; await queueAddFile(fs[i]); }
   renderQueue(); toast(`${fs.length}枚 送りました。読み取りは裏で進みます`);
 };
 $("pickBtn").onclick = () => $("pick").click();
@@ -1759,7 +1787,7 @@ document.addEventListener("click", async e => {
     return;
   }
   if (act === "qclear") { queue.filter(q => !q.seen && (q.rec || (q.already && q.state === "確定"))).forEach(q => { q.seen = true; run("apiQueueDone", q.id).catch(() => {}); }); renderQueue(); return; }
-  if (act === "qdone") { const q = queue.find(x => x.id === b.dataset.id); if (q) { q.seen = true; renderQueue(); run("apiQueueDone", q.id).catch(() => {}); } return; }
+  if (act === "qdone") { const q = queue.find(x => x.id === b.dataset.id); const L = qLocal[b.dataset.id]; if (L && L.pk) PCACHE.pendDel(L.pk); if (q) { q.seen = true; renderQueue(); run("apiQueueDone", q.id).catch(() => {}); } return; }
   if (act === "qretry") {
     const q = queue.find(x => x.id === b.dataset.id); if (!q) return;
     if (/^tmp/.test(q.id)) { if (qLocal[q.id]) qUpload(q.id); else { toast("この写真はもう手元にありません。×で消して撮り直してください"); } return; } // まだ送れていない写真は送り直す
