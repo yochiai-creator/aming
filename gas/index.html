@@ -513,7 +513,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/11-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/17-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -948,7 +948,23 @@ async function prepare(cv) {
   const top = gr.slice(0, Math.max(1, Math.floor(gr.length * 0.1)));
   const sharp = Math.round(top.reduce((s, v) => s + v, 0) / top.length * 10) / 10;
   const light = {clip: Math.round(clip / (w * h) * 100) / 100, relief: raw[Math.floor(raw.length * 0.995)], sharp};
-  return {orig, enh: await toBlob(c, 0.85), light};
+  const enh = await toBlob(c, 0.85); freeCanvas(c); freeCanvas(amp);
+  return {orig, enh, light};
+}
+// iPhone の Safari は canvas に使える記憶の上限があり、超えると新しい canvas が真っ黒になる（11/17 まとめて読んだ写真の切り出しが真っ黒で保存された）。
+// 使い終わった canvas は大きさ0にしてすぐ返す
+function freeCanvas(c) { try { if (c && c.getContext) { c.width = 0; c.height = 0; } } catch (e) {} }
+// 真っ黒・まっ平らな画像（描けなかった canvas）か
+function isBlankCanvas(cv) {
+  try {
+    if (!cv || !cv.width || !cv.height) return true;
+    const t = document.createElement("canvas"); t.width = 32; t.height = Math.max(4, Math.round(32 * cv.height / cv.width));
+    const x = t.getContext("2d"); if (!x) return true; x.drawImage(cv, 0, 0, t.width, t.height);
+    const d = x.getImageData(0, 0, t.width, t.height).data; let mx = 0, mn = 765;
+    for (let i = 0; i < d.length; i += 4) { const v = d[i] + d[i + 1] + d[i + 2]; if (v > mx) mx = v; if (v < mn) mn = v; }
+    freeCanvas(t);
+    return mx < 30 || mx - mn < 6;
+  } catch (e) { return false; }
 }
 
 /* ---------- 膜厚計の画面を撮って数値を入れる ---------- */
@@ -1406,6 +1422,7 @@ function straightCrop(src, box, whole, single) {
   while (cr > ow * 0.7 && outCol[cr - 1] > oh * 0.5) cr--;
   const out = document.createElement("canvas"); out.width = cr - cl; out.height = oh;
   out.getContext("2d").drawImage(full, cl, 0, cr - cl, oh, 0, 0, cr - cl, oh);
+  freeCanvas(full); freeCanvas(R); freeCanvas(E);
   out.dataset.angle = ang.toFixed(1) + " 斜" + kb.toFixed(2) + " 行" + F.length;
   return out;
 }
@@ -1492,10 +1509,11 @@ async function queueAddCanvas(canvas, shotAt) {
   // 読めなかった時に見て確かめる用の大きめの写真
   const mid = document.createElement("canvas"), mw = Math.min(1000, canvas.width); mid.width = mw; mid.height = Math.round(mw * canvas.height / canvas.width);
   mid.getContext("2d").drawImage(canvas, 0, 0, mid.width, mid.height); const midUrl = mid.toDataURL("image/jpeg", .75);
-  qUpdate({id: tmp, state: "送信中", purpose, thumb: small.toDataURL("image/jpeg", .7), full: midUrl});
+  const smallUrl = small.toDataURL("image/jpeg", .7); freeCanvas(small); freeCanvas(mid);
+  qUpdate({id: tmp, state: "送信中", purpose, thumb: smallUrl, full: midUrl});
   const pk = "p" + Date.now() + "_" + qTmp;
   qLocal[tmp] = {canvas, shotAt, purpose, me, pk};
-  try { const data = await b64(await toBlob(canvas, 0.85)); qLocal[tmp].data = data; await PCACHE.pendPut(pk, {pk, data, shotAt, purpose, me, thumb: small.toDataURL("image/jpeg", .7), full: midUrl, at: Date.now()}); } catch (e) {}
+  try { const data = await b64(await toBlob(canvas, 0.85)); qLocal[tmp].data = data; await PCACHE.pendPut(pk, {pk, data, shotAt, purpose, me, thumb: smallUrl, full: midUrl, at: Date.now()}); } catch (e) {}
   await qUpload(tmp);
 }
 // 前に送れなかった写真（途中で画面を閉じた・電波が切れた）を送り直す（11/11）
@@ -1554,9 +1572,19 @@ async function qAfter(q) {
   if (!src && q.fullId) { try { src = await fullCanvas(await loadImg(await run("apiPhoto", q.fullId))); } catch (e) {} }
   if (!src) { qNotify(q); return; }
   let cv;
-  try { cv = straightCrop(src, q.box, false, oneLine(q.read)); } catch (e) { cv = cropByBox(src, q.box); }
+  const crop = sc => { try { return straightCrop(sc, q.box, false, oneLine(q.read)); } catch (e) { return cropByBox(sc, q.box); } };
+  cv = crop(src);
+  // 真っ黒（記憶が足りず描けなかった）なら、手元の写真を捨ててサーバーの写真でもう一度（11/17）
+  if (isBlankCanvas(cv) || isBlankCanvas(src)) {
+    freeCanvas(cv); if (qLocal[q.id] === src) { freeCanvas(src); delete qLocal[q.id]; }
+    await new Promise(r => setTimeout(r, 500));
+    src = null; if (q.fullId) { try { src = await fullCanvas(await loadImg(await run("apiPhoto", q.fullId))); } catch (e) {} }
+    cv = src ? crop(src) : null;
+    if (!cv || isBlankCanvas(cv)) { q.error = "切り出しに失敗しました（あとで作り直します）"; qNotify(q); return; }
+  }
   q.thumb = cv.toDataURL("image/jpeg", .7); renderQueue();
   const imgs = await prepare(cv);
+  freeCanvas(cv); if (qLocal[q.id] === src) delete qLocal[q.id]; freeCanvas(src);
   q.enh = URL.createObjectURL(imgs.enh);
   q.light = lightAdvice(imgs.light); renderQueue();
   try {
@@ -1587,7 +1615,8 @@ async function recropOne(it) {
     return cv.toDataURL("image/jpeg", .8);
   }
   else { try { cv = straightCrop(src, it.box, false, oneLine(it.read)); } catch (e) { cv = cropByBox(src, it.box); } }
-  const imgs = await prepare(cv);
+  if (isBlankCanvas(cv)) { freeCanvas(cv); freeCanvas(src); return ""; } // 真っ黒は保存しない（次の機会に作り直す）
+  const imgs = await prepare(cv); freeCanvas(src);
   const ver = String(await run("apiRecropSave", it.cropId, await b64(imgs.orig), imgs.light.sharp, !!it.whole));
   const url = cv.toDataURL("image/jpeg", .8); photoRemember(it.cropId, url, ver);
   const q = queue.find(x => x.cropId === it.cropId); if (q) { q.thumb = url; q.cropVer = ver; }
@@ -1733,7 +1762,7 @@ function punchSrc(img) {
     const v = pad[i] ? 0 : r[i] < m ? 0.72 - (m - r[i]) / (m - lo) * 0.67 : 0.72 + (r[i] - m) / (hi - m) * 0.26;
     p[i * 4] = p[i * 4 + 1] = p[i * 4 + 2] = Math.round(255 * Math.min(1, Math.max(0, v)));
   }
-  x.putImageData(d, 0, 0); return c.toDataURL("image/jpeg", 0.9);
+  x.putImageData(d, 0, 0); const url = c.toDataURL("image/jpeg", 0.9); freeCanvas(c); return url;
 }
 document.addEventListener("load", e => {
   const img = e.target; if (!img || img.tagName !== "IMG" || !img.classList.contains("stamp") || img.dataset.punched === img.src) return;
