@@ -130,6 +130,8 @@ function apiQueueProcess(id) {
     queueSet_(row, {'枠': box ? JSON.stringify(box) : '', 'AI読取': read.trim(), '候補': JSON.stringify(m.cands),
       'キー': m.sure && m.cands[0] ? m.cands[0].key : '', '状態': m.sure ? '確定' : (box ? '候補' : '刻印なし'), 'エラー': ''});
     rlog_('キュー ' + id + ' → ' + row['状態'] + ' ' + read);
+    // 切り出し済みの写真を読み直して確定した時（取込のあとの読み直し＝requeueCandidates_）は、ここでひも付けと記録まで
+    if (row['状態'] === '確定' && row['キー'] && row['切り出しID']) { apiLinkPhoto(row['切り出しID'], row['キー'], row['AI読取'], row['目的'], row['鮮明度'], row['撮影日時']); autoRecord_(row); }
   } catch (e) {
     queueSet_(row, {'状態': '失敗', 'エラー': String(e.message || e).slice(0, 300)});
     rlog_('キュー ' + id + ' 失敗 ' + e);

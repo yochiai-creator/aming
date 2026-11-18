@@ -12,13 +12,15 @@ function importLatest(force) {
   const props = PropertiesService.getScriptProperties();
   // トリガーから呼ばれると force にイベントが入るので true のときだけ強制
   // 台帳の列を増やしたら、同じファイルでも1回は取り込み直す
-  const colsVer = String(ARM_COLS.length);
+  // 読み方を変えた時（PARSE_VER）も同じファイルを1回取り込み直す
+  const colsVer = String(ARM_COLS.length) + (PARSE_VER > 1 ? ':p' + PARSE_VER : '');
   if (props.getProperty('ARM_COLS_VER') !== colsVer) force = true;
   if (force !== true && props.getProperty('LAST_IMPORTED') === stamp) {
     console.log('取込済み: %s', f.getName());
     return {file: f.getName(), skipped: true};
   }
   const res = importFile_(f);
+  try { requeueCandidates_(14); } catch (e) { console.warn('候補の読み直しに失敗: ' + e.message); }
   props.setProperty('LAST_IMPORTED', stamp);
   props.setProperty('ARM_COLS_VER', colsVer);
   return res;
@@ -70,6 +72,15 @@ function importFile_(file) {
  * 同じ図番+号機が複数行ある場合は出荷日が新しい方を採用し、dups に記録する。
  */
 const OPTIONAL_SRC = ['塗装指定', '情報①'];
+// 2＝11/18 図番の末尾の改訂記号（YN16B00044F1R01 の R01）を外して取り込む。刻印には R01 が無く、前は図番の形に合わず読み飛ばしていた（B165テレスコのアーム 66・67）
+const PARSE_VER = 2;
+const zubanBase_ = z => String(z || '').trim().toUpperCase().replace(/R\d{1,2}$/, '');
+/** 取込のあと：台帳に無くて「候補」止まりだった最近の写真をもう一度読む（台帳に後から入ったアームを拾う） */
+function requeueCandidates_(days) {
+  const from = Utilities.formatDate(new Date(Date.now() - days * 864e5), 'Asia/Tokyo', 'yyyy/MM/dd');
+  queueRows_().filter(r => r['状態'] === '候補' && !r['キー'] && r['確認'] !== '済' && String(r['日時']) >= from)
+    .forEach(r => queueSet_(r, {'状態': '待ち'}));
+}
 function parseShipValues_(values) {
   const hi = values.findIndex(r => String(r[0]).trim() === CONFIG.SRC_HEADER_MARK);
   if (hi < 0) throw new Error('ヘッダー行（' + CONFIG.SRC_HEADER_MARK + '）が見つかりません');
@@ -85,7 +96,7 @@ function parseShipValues_(values) {
   let skipped = 0;
   for (let r = hi + 1; r < values.length; r++) {
     const row = values[r];
-    const z = String(row[col['図番']] || '').trim().toUpperCase();
+    const z = zubanBase_(row[col['図番']]);
     const g = row[col['号機']];
     const kishu = String(row[col['機種']] || '').trim();
     if (!CONFIG.ZUBAN_RE.test(z) || !/^\d+$/.test(String(g).trim()) || exclude.indexOf(kishu) >= 0) { if (z) skipped++; continue; }
