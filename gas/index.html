@@ -513,7 +513,7 @@ let scanAlt = [], armFromScan = false; // 自動で特定した時のほかの�
 try { lastArm = JSON.parse(ls.get("trace.last") || "null"); } catch (e) {}
 
 /* ================= 表示部品 ================= */
-const APP_VER = "11/17-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
+const APP_VER = "11/18-1"; // 更新が端末に届いているかの確認用（デプロイごとに上げる）
 const STAGE_CLS = {"未": "todo", "塗装完了": "mid", "塗装後チェック済": "good", "要処置": "bad", "出荷済": "done"};
 function stBadge(a) {
   const st = a.stage || (a.status === "良" ? "塗装後チェック済" : a.status === "否" ? "要処置" : "未");
@@ -802,7 +802,8 @@ function goalHtml(a) {
   const step = scanPurpose === "塗装完了" ? "塗装完了" : scanPurpose === "出荷" ? "出荷" : "";
   const done = step && a.steps.some(st => st.step === step && st.recs.some(r => !r.canceled));
   return `<section class="goal"><h2>撮影の目的：${esc(scanPurpose)}</h2>
-    ${step ? (done ? `<p class="muted">このアームは「${esc(step)}」記録済みです。もう一度記録もできます。</p>` : "") + `<button type="button" class="btn go" style="width:100%;min-height:56px;font-size:1.05rem" data-act="step" data-s="${esc(step)}">${esc(step)}を記録</button>`
+    ${step ? (done ? `<p class="qdone" style="font-size:1.05rem">✔ このアームは「${esc(step)}」記録済みです</p>` /* 11/18 撮り直して2回記録していた（7件）→ 記録済みならボタンを出さない。必要なら下の工程ログから記録できる */
+        : `<button type="button" class="btn go" style="width:100%;min-height:56px;font-size:1.05rem" data-act="step" data-s="${esc(step)}">${esc(step)}を記録</button>`)
       : `<button type="button" class="btn go" style="width:100%;min-height:52px" data-act="goal">↓ 下でねじ穴タップを記録</button>`}
   </section>`;
 }

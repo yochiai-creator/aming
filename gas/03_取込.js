@@ -78,7 +78,7 @@ const zubanBase_ = z => String(z || '').trim().toUpperCase().replace(/R\d{1,2}$/
 /** 取込のあと：台帳に無くて「候補」止まりだった最近の写真をもう一度読む（台帳に後から入ったアームを拾う） */
 function requeueCandidates_(days) {
   const from = Utilities.formatDate(new Date(Date.now() - days * 864e5), 'Asia/Tokyo', 'yyyy/MM/dd');
-  queueRows_().filter(r => r['状態'] === '候補' && !r['キー'] && r['確認'] !== '済' && String(r['日時']) >= from)
+  queueRows_().filter(r => r['状態'] === '候補' && !r['キー'] && String(r['日時']) >= from)
     .forEach(r => queueSet_(r, {'状態': '待ち'}));
 }
 function parseShipValues_(values) {
