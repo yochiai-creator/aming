@@ -56,7 +56,7 @@ var POLL_INTERVAL_MINUTES = 15;  // 対象ファイルの更新チェック間�
 var NOTIFY_EMAIL  = Session.getEffectiveUser().getEmail(); // 対象ファイルが見つからない時の通知先
 
 // 出荷明細シートの列(1-based)
-var COL = { insp:5, kk:6, zu:9, go:12, spec:13, ship:33, info:40, dest:43 };
+var COL = { insp:5, kk:6, zu:9, go:12, spec:13, ship:33, info:40, dest:43, kenki:7, order:1 }; // kenki＝建機号機・order＝注文番号（写し）：号機・図番の変更を見つける用（11/19）
 
 var LAST_SOURCE_KEY   = 'ARM_LAST_SOURCE_SIGNATURE';
 var LAST_NOTIFY_KEY   = 'ARM_LAST_NOTIFY_DATE';
@@ -134,6 +134,8 @@ function generateArmPDF_core_(src){
     var ship = sh.getRange(6,COL.ship,n,1).getValues();
     var info = sh.getRange(6,COL.info,n,1).getValues();
     var dest = sh.getRange(6,COL.dest,n,1).getValues();
+    var kenki = sh.getRange(6,COL.kenki,n,1).getValues();
+    var order = sh.getRange(6,COL.order,n,1).getValues();
 
     var start = midnight_(new Date());
     var end = new Date(start.getTime()); end.setDate(end.getDate()+DAYS);
@@ -150,7 +152,8 @@ function generateArmPDF_core_(src){
       if(p>=0){ kiki=kkv.substring(0,p); kishu=kkv.substring(p+1); }
       rows.push({ insp:mdOrStr_(insp[i][0]), kiki:kiki, kishu:kishu, zu:strv_(zu[i][0]),
                   go:numi_(go[i][0]), spec:specv, ship:sd, info:strv_(info[i][0]),
-                  dest:strv_(dest[i][0]), is13:(kkv.indexOf('13')===0) });
+                  dest:strv_(dest[i][0]), is13:(kkv.indexOf('13')===0),
+                  kenki:strv_(kenki[i][0]), order:strv_(order[i][0]) });
     }
     if(rows.length===0){ Logger.log('該当データ0件のためPDFは作成しません'); return false; }
 
@@ -160,6 +163,16 @@ function generateArmPDF_core_(src){
     var prevSnapshot = sameSrc ? loadSnapshot_(SNAPSHOT_BASE_NAME) : loadSnapshot_();
     if (!sameSrc) writeSnapshotFile_(SNAPSHOT_BASE_NAME, prevSnapshot);
     markChanges_(rows, prevSnapshot);
+    // 前回のスナップショットに建機号機・注文番号が無い（11/19 より前に作った）分は aming の台帳から補う
+    if (prevSnapshot) { try {
+      var byKey = null;
+      Object.keys(prevSnapshot).forEach(function(k){
+        var o = prevSnapshot[k]; if (o.kenki || o.order) return;
+        if (!byKey) { byKey = {}; loadArms_().forEach(function(a){ byKey[a['キー']] = a; }); }
+        var a = byKey[k.replace('||', '_')]; if (a) { o.kenki = String(a['建機号機'] || ''); o.order = String(a['注文番号'] || ''); }
+      });
+    } catch (e) { Logger.log('台帳から補えず: ' + e.message); } }
+    var idChanges = idChanges_(rows, prevSnapshot); // aming 11/19：号機・図番が変わったアームの一覧（PDFの1枚目）
     // aming：塗装済みは号機に○（11/4 ユーザー：○は要らない＝PDF_MARU=false）
     var painted = PDF_MARU ? armPaintedKeys_() : {};
     rows.forEach(function(x){ x.painted = !!painted[x.zu + '_' + x.go]; });
@@ -186,7 +199,7 @@ function generateArmPDF_core_(src){
     if(cur.length) pages.push(cur);
 
     var rng = fmtJ_(start)+' 〜 '+fmtJ_(new Date(end.getTime()-86400000));
-    var html = buildHtml_(pages, rng);
+    var html = buildHtml_(pages, rng, idChanges);
 
     var srcTag = srcDateTag_(src.getName()); // 日程表変更ファイル名に埋め込まれた日付（例:9月16日）
     var pdfName='アーム出荷明細'+(srcTag?'('+srcTag+')':'')+'_'+Utilities.formatDate(new Date(),TZ,'yyyy-MM-dd')+'.pdf';
@@ -209,7 +222,7 @@ function generateArmPDF_core_(src){
 
 
 // ==== HTML生成 ====
-function buildHtml_(pages, rng){
+function buildHtml_(pages, rng, idChanges){
   var css =
     '@page{size:A4 portrait;margin:6mm;}'
   // 印刷エンジンは既定でbackground(塗り)を「インク節約」のため印刷しない。
@@ -287,6 +300,19 @@ function buildHtml_(pages, rng){
         +'<div class="sub">出荷日 '+esc_(rng)+'（直近1ヶ月）'+(PDF_MARU ? '　号機の○＝塗装済み（aming の記録）' : '')+'</div>'
         +'<table>'+thead+tbodies+'</table></div>';
   }
+  // aming 11/19（ユーザー：出荷明細で変更があった号機の一覧を入れてほしい。号機が変わったり、仕様が変わって図番が変わったりする）
+  // 前回のPDFから「同じアーム（建機号機、無ければ注文番号が同じ）なのに号機・図番が変わった」ものを1枚目に一覧で出す
+  if (idChanges && idChanges.length) {
+    var ctr = idChanges.map(function(c){
+      return '<tr><td>'+esc_(c.kind)+'</td><td>'+esc_(c.oldZu)+' <b>'+esc_(c.oldGo)+'</b></td><td>→</td><td>'+esc_(c.zu)+' <b>'+esc_(c.go)+'</b></td>'
+        +'<td>'+esc_(c.by)+'</td><td>'+esc_(fmtJ_(c.ship))+'</td><td>'+esc_(c.dest)+'</td></tr>';
+    }).join('');
+    body = '<div class="page brk"><div class="title">号機・図番の変更（前回のPDFから）</div>'
+      +'<div class="sub">'+idChanges.length+'件　同じ建機号機（無ければ注文番号）で、号機や図番が変わったもの。刻印・塗装の記録と照らし合わせてください</div>'
+      +'<table class="chgt"><thead><tr><th style="width:24mm">変更</th><th style="width:40mm">前</th><th style="width:6mm"></th><th style="width:40mm">今</th>'
+      +'<th style="width:32mm">建機号機／注文番号</th><th style="width:20mm">出荷日</th><th>出荷先</th></tr></thead><tbody>'+ctr+'</tbody></table></div>' + body;
+  }
+  css += '.chgt td{font-size:9.5pt;padding:3px 4px;color:#d90000}.chgt td b{font-size:10.5pt}';
   return '<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>'+css+'</style></head><body>'+body+'</body></html>';
 }
 
@@ -427,6 +453,34 @@ function safeRemove_(id){ try{ Drive.Files.remove(id); }catch(e){ try{ DriveApp.
 function snapshotKey_(zu, go){ return zu+'||'+go; }
 
 /**
+ * 号機・図番の変更を見つける（aming 11/19）。前回のスナップショットと今回の行を、建機号機（YC14022016 のような本物の号機だけ）
+ * →無ければ注文番号で突き合わせ、図番か号機が違えば一覧に入れる。どちらも同じ値が複数あるものは使わない（単品出荷などで取り違えないように）。
+ * 例（11/12→11/16 版）：建機号機 YC14022016 が LC12B10249F1 445 → LC12B10246F1 445、注文番号 A5000018643300170002 が 445 → 457
+ */
+function idChanges_(rows, prevMap){
+  if(!prevMap) return [];
+  var okKenki = function(v){ return /^[A-Z]{2}\d{6,}$/.test(String(v||'')); };
+  var okOrder = function(v){ v = String(v||''); return v.length >= 8 && v !== '0'; };
+  var uniq = function(list, f, ok){ var m={}, dup={}; list.forEach(function(o){ var k=f(o); if(!ok(k)) return; if(m[k]) dup[k]=1; else m[k]=o; }); Object.keys(dup).forEach(function(k){ delete m[k]; }); return m; };
+  var prevList = Object.keys(prevMap).map(function(k){ var o=prevMap[k], p=k.split('||'); return {zu:o.zu||p[0], go:o.go||p[1], kenki:o.kenki, order:o.order}; });
+  var pK = uniq(prevList, function(o){return o.kenki;}, okKenki), pO = uniq(prevList, function(o){return o.order;}, okOrder);
+  var cK = uniq(rows, function(o){return o.kenki;}, okKenki), cO = uniq(rows, function(o){return o.order;}, okOrder);
+  var out=[], seen={}, num = function(v){ return /^\d+$/.test(String(v)); };
+  rows.forEach(function(x){
+    if(!num(x.go)) return; // 号機が「仮」などはまだ決まっていないので出さない
+    var p=null, by='';
+    if(okKenki(x.kenki) && cK[x.kenki] && pK[x.kenki]){ p=pK[x.kenki]; by=x.kenki; }
+    else if(okOrder(x.order) && cO[x.order] && pO[x.order]){ p=pO[x.order]; by=x.order; }
+    if(!p || !num(p.go) || (p.zu===x.zu && String(p.go)===String(x.go))) return;
+    var k = x.zu+'_'+x.go; if(seen[k]) return; seen[k]=1;
+    var kind = p.zu!==x.zu && String(p.go)!==String(x.go) ? '図番・号機' : (p.zu!==x.zu ? '図番' : '号機');
+    out.push({kind:kind, oldZu:p.zu, oldGo:String(p.go), zu:x.zu, go:String(x.go), by:by, ship:x.ship, dest:x.dest});
+  });
+  out.sort(function(a,b){ return a.ship.getTime()-b.ship.getTime(); });
+  return out;
+}
+
+/**
  * 前回生成時の内容と比較し、変更があった行・新規行に x.chg=true を立てる（赤字用、1回だけ光る）。
  * 出荷日については別に、最初に見つけた時点の日付(origShip)とも比較し、ズレていれば
  * x.prevShip に元の日付(Date)を入れる（表示用）。こちらはorigShipに一致するまでは
@@ -467,7 +521,8 @@ function saveSnapshot_(rows, prevMap){
       var prev = prevMap && prevMap[key];
       var origShip = (prev && prev.origShip!=null) ? prev.origShip : x.ship.getTime();
       map[key] = { origShip:origShip, kiki:x.kiki, kishu:x.kishu,
-        spec:x.spec, ship:x.ship.getTime(), info:x.info, dest:x.dest, is13:x.is13 };
+        spec:x.spec, ship:x.ship.getTime(), info:x.info, dest:x.dest, is13:x.is13,
+        zu:x.zu, go:x.go, kenki:x.kenki, order:x.order };
     }
     writeSnapshotFile_(SNAPSHOT_FILE_NAME, map);
   }catch(e){
