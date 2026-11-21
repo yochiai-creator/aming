@@ -219,7 +219,12 @@ function apiQueueDone(id) { return queueView_(queueSet_(queueFind_(id), {'確認
 /** 未確認のもの（新しい順・最大40件） */
 function apiQueueList() {
   const st = liveSteps_();
-  return queueRows_().filter(r => r['確認'] !== '済').slice(-40).reverse().map(r => queueView_(r, st));
+  const rows = queueRows_(), live = rows.filter(r => r['確認'] !== '済').slice(-40);
+  // 切り出す前に「詳細」を開いて済になり、そのまま画面を閉じた写真は切り出し・ひも付けされずに残る（11/20 YY12B00902F1G2_2159）
+  // → 14日以内の分は seen のまま返して、画面が裏で切り出す（一覧には出ない）
+  const from = Utilities.formatDate(new Date(Date.now() - 14 * 86400000), 'Asia/Tokyo', 'yyyy/MM/dd');
+  const miss = rows.filter(r => live.indexOf(r) < 0 && !r['切り出しID'] && r['元写真ID'] && r['枠'] && (r['状態'] === '確定' || r['状態'] === '候補') && r['日時'] >= from);
+  return live.concat(miss).reverse().map(r => queueView_(r, st));
 }
 
 /** トリガー用：画面を閉じても残った「待ち」を読む（2分以上前のもの） */
